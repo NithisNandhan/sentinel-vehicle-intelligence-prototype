@@ -6,10 +6,14 @@ import base64
 import json
 import urllib.error
 import urllib.request
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from urllib.parse import quote, urlparse, urlsplit, urlunsplit
 
 from .config import Config
+
+
+class CatalogueUnavailable(ValueError):
+    """The catalogue could not be read as authorised camera JSON."""
 
 
 @dataclass(frozen=True)
@@ -25,7 +29,8 @@ class Camera:
 
 def _camera_rows(data: object) -> list[dict]:
     if isinstance(data, list):
-        return [row for row in data if isinstance(row, dict)]
+        return [row if isinstance(row, dict) else {"id": row}
+                for row in data if isinstance(row, (dict, str, int)) and not isinstance(row, bool)]
     if isinstance(data, dict):
         for key in ("cameras", "items", "data", "streams"):
             if key in data:
@@ -75,31 +80,58 @@ def parse_catalogue(data: object, *, include_without_urls: bool = False) -> list
     return cameras
 
 
-def discover(config: Config, *, include_without_urls: bool = False) -> list[Camera]:
+def discover(config: Config) -> list[Camera]:
     token = base64.b64encode(f"{config.sentinel_email}:{config.sentinel_password}".encode()).decode()
-    headers = {"Authorization": "Basic " + token, "Accept": "application/json"}
-    if config.sentinel_cookie:
-        headers["Cookie"] = config.sentinel_cookie
     request = urllib.request.Request(
-        config.sentinel_base_url + "/api/ingest",
-        headers=headers,
+        config.sentinel_base_url + "/cameras.json",
+        headers={"Accept": "application/json"},
     )
+    # Never forward local credentials if the catalogue redirects to sign-in.
+    request.add_unredirected_header("Authorization", "Basic " + token)
+    if config.sentinel_cookie:
+        request.add_unredirected_header("Cookie", config.sentinel_cookie)
     try:
         with urllib.request.urlopen(request, timeout=10) as response:
-            cameras = parse_catalogue(json.load(response), include_without_urls=include_without_urls)
+            cameras = parse_catalogue(json.load(response), include_without_urls=True)
     except urllib.error.HTTPError as error:
-        raise ValueError(f"Sentinel catalogue HTTP {error.code}; authorised API access is required") from None
+        raise CatalogueUnavailable(f"Sentinel catalogue HTTP {error.code}; authorised access is required") from None
     except json.JSONDecodeError:
-        raise ValueError("Sentinel catalogue did not return JSON; authorised API access is required") from None
+        raise CatalogueUnavailable("Sentinel catalogue did not return JSON; authorised access is required") from None
     if not cameras:
         raise ValueError("Camera catalogue contains no valid camera IDs")
-    return cameras
+    result = []
+    for camera in cameras:
+        rtsp, hls = documented_stream_urls(config, camera.camera_id)
+        result.append(replace(camera, rtsp_url=camera.rtsp_url or rtsp,
+                              hls_url=camera.hls_url or hls))
+    return result
+
+
+def documented_stream_urls(config: Config, camera_id: str) -> tuple[str, str]:
+    """Use the public-grid path pattern only for IDs validated from JSON or manual pair."""
+    escaped = quote(camera_id, safe="")
+    return (f"rtsp://{config.sentinel_rtsp_host}:8554/stream/{escaped}",
+            f"{config.sentinel_base_url}/{escaped}/index.m3u8")
+
+
+def discover_live_pair(config: Config) -> tuple[list[Camera], bool]:
+    """Use JSON first; only CAM01/CAM02 may use the documented fallback."""
+    try:
+        catalogue = discover(config)
+    except (CatalogueUnavailable, OSError):
+        if len(config.camera_ids) != 2 or set(config.camera_ids) != {"cam01", "cam02"}:
+            raise ValueError("Catalogue unavailable; manual fallback requires CAMERA_IDS=cam01,cam02") from None
+        names = {"cam01": "Chiman bhai Bridge", "cam02": "Janpath"}
+        cameras = [Camera(camera_id, names[camera_id], *documented_stream_urls(config, camera_id))
+                   for camera_id in config.camera_ids]
+        return cameras, True
+    return select_two(catalogue, config.camera_ids, require_requested=True), False
 
 
 def select_two(catalogue: list[Camera], requested: tuple[str, ...], *,
                require_requested: bool = False) -> list[Camera]:
-    if require_requested and len(requested) != 2:
-        raise ValueError("Set CAMERA_IDS to two exact authorised catalogue IDs before live processing")
+    if require_requested and (len(requested) != 2 or len(set(requested)) != 2):
+        raise ValueError("Set CAMERA_IDS to two distinct authorised catalogue IDs before live processing")
     by_id = {camera.camera_id: camera for camera in catalogue if camera.live}
     if requested:
         missing = set(requested) - set(by_id)
@@ -114,7 +146,7 @@ def select_two(catalogue: list[Camera], requested: tuple[str, ...], *,
 
 
 def source_urls(camera: Camera) -> tuple[str | None, str | None]:
-    """Use catalogue URLs; endpoint patterns are not a stable contract."""
+    """Return catalogue URLs or explicitly documented public-grid patterns."""
     return camera.rtsp_url, camera.hls_url
 
 

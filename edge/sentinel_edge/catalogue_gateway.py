@@ -52,7 +52,7 @@ class CatalogueState:
                  ready: Callable[[str], bool] | None = None,
                  clock: Callable[[], float] = time.monotonic):
         self.config = config
-        self.fetcher = fetcher or (lambda cfg: discover(cfg, include_without_urls=True))
+        self.fetcher = fetcher or discover
         self.relay = relay
         self.ready = ready or self._hls_ready
         self.clock = clock

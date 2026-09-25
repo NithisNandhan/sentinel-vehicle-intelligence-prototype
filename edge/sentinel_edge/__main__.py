@@ -8,7 +8,7 @@ import os
 import threading
 from pathlib import Path
 
-from .cameras import discover, select_two
+from .cameras import discover_live_pair
 from .config import Config
 
 
@@ -55,8 +55,9 @@ def main() -> None:
             from .catalogue_gateway import run_gateway
             run_gateway(config)
         else:
-            catalogue = discover(config)
-            cameras = select_two(catalogue, config.camera_ids, require_requested=True)
+            cameras, used_fallback = discover_live_pair(config)
+            if used_fallback:
+                logging.warning("Camera catalogue unavailable; using documented CAM01/CAM02 paths only")
             from .api import CentralClient
             from .outbox import Outbox
             try:

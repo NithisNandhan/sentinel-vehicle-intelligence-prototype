@@ -27,9 +27,9 @@ Run these commands in the same PowerShell window. On a per-user Docker Desktop i
 
 Open <http://localhost:5173>. The operator key is in the uncommitted `.env` file as `OPERATOR_API_KEY`; enter it in the dashboard unlock field. The demo injector and operator actions require that key. API documentation is at <http://localhost:8000/docs>.
 
-Online mode requires authorised `/api/ingest` JSON access as well as `SENTINEL_EMAIL` and `SENTINEL_PASSWORD` in `.env`; use `SENTINEL_COOKIE` only if the provider approves a session-based API connection. YOLOv8n and FastALPR weights are downloaded automatically into persistent Docker volumes. After the catalogue confirms two exact camera IDs, set `CAMERA_IDS` and start the two-feed system:
+Online mode requires the registered Sentinel email and access password in `.env`; a catalogue or HLS session may additionally require `SENTINEL_COOKIE`. YOLOv8n and FastALPR weights are downloaded automatically into persistent Docker volumes. `CAMERA_IDS=cam01,cam02` selects the first two portal cameras for this prototype:
 
-For direct RTSP access, the adapter uses the catalogue-supplied port and stream path and adds the registered email/password to URLs on `SENTINEL_RTSP_HOST` (default `103.250.160.189`), percent-encoding characters such as `@`. It never adds local credentials to a different host. HLS remains on the supplied CDN URL with authenticated request headers. The RTSP host setting does not invent a stream path or bypass the catalogue prerequisite.
+For direct RTSP access, the adapter first reads `cameras.json`, preserving any supplied stream URLs. For catalogue IDs without URLs, it uses the documented `rtsp://103.250.160.189:8554/stream/<id>` and `https://cctv.corp8.cloud/<id>/index.m3u8` patterns. It percent-encodes credentials and adds them only to `SENTINEL_RTSP_HOST` (default `103.250.160.189`), never to unrelated hosts.
 
 ```powershell
 docker compose --profile online run --no-deps --rm edge-worker python -m sentinel_edge prepare-models
@@ -38,9 +38,11 @@ docker compose --profile online up --build
 
 If Docker cannot expose the GPU to the AI container, start the central services and CPU media relay with `docker compose --profile native up --build`, then run the edge package on Windows with the same `.env` keys and `CENTRAL_API_URL=http://localhost:8000`, `MEDIA_RELAY_BASE_URL=rtsp://localhost:8554`. The native worker setup is documented in `edge/README.md`.
 
-Only two cameras are selected for processing. The worker reads the official `/api/ingest` catalogue and uses the URLs it supplies; it does not construct stream URLs from IDs. `CAMERA_IDS` must contain two exact IDs from that catalogue before live or relay startup, preventing an arbitrary first-two selection. Online mode does not start without Sentinel credentials. Avoid starting both profiles together, since that mixes synthetic and live activity.
+Only two cameras are selected for AI processing. The worker tries the newer public-grid `/cameras.json` catalogue first. If it is unavailable, **only the explicitly configured `cam01,cam02` pair** may use the documented URL patterns as a temporary prototype fallback; a valid catalogue that omits a selected camera still rejects that selection. Online mode does not start without Sentinel credentials. Avoid starting both online and offline profiles together, since that mixes synthetic and live activity.
 
-The selected portal cards are CAM01 (Chiman bhai Bridge) and CAM02 (Janpath), but the local `CAMERA_IDS` setting is currently blank. Their portal preview paths use `/cam01/` and `/cam02/`; the authenticated catalogue must confirm the exact API IDs before starting the live profile. Do not let a blank setting silently select a different pair. The offline simulator has its own synthetic route and does not use `CAMERA_IDS`.
+The selected portal cards are CAM01 (Chiman bhai Bridge) and CAM02 (Janpath); their documented public-grid IDs are `cam01` and `cam02`. The local `.env` is pinned to those IDs. The offline simulator has its own synthetic route and does not use `CAMERA_IDS`.
+
+Current access check: this account still receives a sign-in redirect from `/cameras.json`, an unauthorized response from the CAM01 RTSP endpoint, and HTTP 403 from the CAM01 HLS endpoint. The fallback selects URLs but cannot turn those responses into live video. Do not run the online profile unattended expecting camera processing until the provider confirms access-list permission and the correct access-password/session method.
 
 Stop the current profile with `docker compose --profile offline down` or `docker compose --profile online down`. The database and outbox use persistent Docker volumes; `down` does not erase them.
 
@@ -65,7 +67,7 @@ The worker writes sightings to its SQLite outbox before sending them. The API de
 
 After unlocking the dashboard, the home page can search the authorised Sentinel catalogue by ID, camera name, or place name. Results are paged and include offline cameras, which cannot be previewed. Opening a live result starts a temporary MediaMTX preview; it does not change the two AI-monitored feeds. At most two temporary previews run at once, and idle previews stop after one minute. Source URLs and Sentinel credentials stay in the internal gateway, not in catalogue search responses.
 
-The catalogue gateway is available only in the online or native profile. The official `/api/ingest` endpoint must return authenticated JSON. If it redirects to an HTML sign-in page, the dashboard shows a catalogue-unavailable message rather than scraping portal cards or showing the two monitored cameras as a false full-catalogue result. The offline demonstration remains usable without catalogue search.
+The catalogue gateway is available only in the online or native profile. `/cameras.json` must return authorised JSON. If it redirects to an HTML sign-in page, the dashboard shows a catalogue-unavailable message rather than scraping portal cards or showing the two monitored cameras as a false full-catalogue result. The offline demonstration remains usable without catalogue search.
 
 ## Privacy and evidence
 

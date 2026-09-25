@@ -13,7 +13,8 @@ import urllib.error
 
 from sentinel_edge.api import CentralClient
 from sentinel_edge.benchmark import latency_summary
-from sentinel_edge.cameras import Camera, discover, parse_catalogue, rtsp_access_url, select_two, source_urls
+from sentinel_edge.cameras import (Camera, CatalogueUnavailable, discover, discover_live_pair,
+                                   parse_catalogue, rtsp_access_url, select_two, source_urls)
 from sentinel_edge.catalogue_gateway import CatalogueState, GatewayError, GatewayHandler
 from sentinel_edge.config import Config
 from sentinel_edge.events import sighting
@@ -65,6 +66,8 @@ class CameraTests(unittest.TestCase):
         self.assertEqual([c.camera_id for c in select_two(cameras, ())], ["2", "3"])
         with self.assertRaisesRegex(ValueError, "CAMERA_IDS"):
             select_two(cameras, (), require_requested=True)
+        with self.assertRaisesRegex(ValueError, "distinct"):
+            select_two(cameras, ("2", "2"), require_requested=True)
 
     def test_full_catalogue_keeps_offline_cameras_without_stream_urls(self):
         rows = {"cameras": [{"id": "cam01", "name": "Bridge", "location": "Ahmedabad",
@@ -116,22 +119,87 @@ class CameraTests(unittest.TestCase):
                                   "SENTINEL_BASE_URL": "https://grid.test"}, clear=True):
             config = Config.from_env(live=True)
         response = io.BytesIO(json.dumps({"cameras": [
-            {"id": 1, "rtsp": "rtsp://grid.test:8554/stream/1"}
+            {"id": "cam01", "name": "Bridge", "status": "live"},
+            {"id": "cam02", "name": "Janpath", "status": "offline"},
         ]}).encode())
         with patch("sentinel_edge.cameras.urllib.request.urlopen", return_value=response) as open_url:
             cameras = discover(config)
-        self.assertEqual(open_url.call_args.args[0].full_url, "https://grid.test/api/ingest")
-        self.assertEqual(cameras[0].camera_id, "1")
+        self.assertEqual(open_url.call_args.args[0].full_url, "https://grid.test/cameras.json")
+        self.assertNotIn("Authorization", open_url.call_args.args[0].headers)
+        self.assertIn("Authorization", open_url.call_args.args[0].unredirected_hdrs)
+        self.assertEqual([camera.camera_id for camera in cameras], ["cam01", "cam02"])
+        self.assertEqual(cameras[0].rtsp_url, "rtsp://103.250.160.189:8554/stream/cam01")
+        self.assertEqual(cameras[0].hls_url, "https://grid.test/cam01/index.m3u8")
+        self.assertFalse(cameras[1].live)
+
+    def test_public_catalogue_accepts_id_only_list(self):
+        with patch.dict(os.environ, {"EDGE_API_KEY": "a", "WATCHLIST_HMAC_KEY": "b",
+                                  "SENTINEL_EMAIL": "team@test.invalid", "SENTINEL_PASSWORD": "test"}, clear=True):
+            config = Config.from_env(live=True)
+        with patch("sentinel_edge.cameras.urllib.request.urlopen",
+                   return_value=io.BytesIO(b'["cam01", "cam02"]')):
+            cameras = discover(config)
+        self.assertEqual([camera.camera_id for camera in cameras], ["cam01", "cam02"])
+        self.assertEqual(cameras[0].hls_url, "https://cctv.corp8.cloud/cam01/index.m3u8")
 
     def test_discovery_reports_forbidden_without_exposing_credentials(self):
         with patch.dict(os.environ, {"EDGE_API_KEY": "a", "WATCHLIST_HMAC_KEY": "b",
                                   "SENTINEL_EMAIL": "team@test.invalid", "SENTINEL_PASSWORD": "secret"}, clear=True):
             config = Config.from_env(live=True)
-        failure = urllib.error.HTTPError("https://grid.test/api/ingest", 403, "Forbidden", None, None)
+        failure = urllib.error.HTTPError("https://grid.test/cameras.json", 403, "Forbidden", None, None)
         with patch("sentinel_edge.cameras.urllib.request.urlopen", side_effect=failure):
-            with self.assertRaisesRegex(ValueError, "HTTP 403") as context:
+            with self.assertRaisesRegex(CatalogueUnavailable, "HTTP 403") as context:
                 discover(config)
         self.assertNotIn("secret", str(context.exception))
+
+    def test_only_selected_pair_uses_documented_fallback(self):
+        with patch.dict(os.environ, {"EDGE_API_KEY": "a", "WATCHLIST_HMAC_KEY": "b",
+                                  "SENTINEL_EMAIL": "team@test.invalid", "SENTINEL_PASSWORD": "test",
+                                  "CAMERA_IDS": "cam01,cam02"}, clear=True):
+            config = Config.from_env(live=True)
+        with patch("sentinel_edge.cameras.discover", side_effect=CatalogueUnavailable("sign-in")):
+            cameras, fallback = discover_live_pair(config)
+        self.assertTrue(fallback)
+        self.assertEqual([camera.camera_id for camera in cameras], ["cam01", "cam02"])
+        self.assertEqual(cameras[1].rtsp_url, "rtsp://103.250.160.189:8554/stream/cam02")
+        self.assertEqual(cameras[1].hls_url, "https://cctv.corp8.cloud/cam02/index.m3u8")
+
+        with patch.dict(os.environ, {"EDGE_API_KEY": "a", "WATCHLIST_HMAC_KEY": "b",
+                                  "SENTINEL_EMAIL": "team@test.invalid", "SENTINEL_PASSWORD": "test",
+                                  "CAMERA_IDS": "cam01,cam03"}, clear=True):
+            other = Config.from_env(live=True)
+        with patch("sentinel_edge.cameras.discover", side_effect=CatalogueUnavailable("sign-in")):
+            with self.assertRaisesRegex(ValueError, "cam01,cam02"):
+                discover_live_pair(other)
+
+    def test_valid_catalogue_missing_selected_camera_never_falls_back(self):
+        with patch.dict(os.environ, {"EDGE_API_KEY": "a", "WATCHLIST_HMAC_KEY": "b",
+                                  "SENTINEL_EMAIL": "team@test.invalid", "SENTINEL_PASSWORD": "test",
+                                  "CAMERA_IDS": "cam01,cam02"}, clear=True):
+            config = Config.from_env(live=True)
+        with patch("sentinel_edge.cameras.discover", return_value=[Camera("cam01", "Bridge")]):
+            with self.assertRaisesRegex(ValueError, "cam02"):
+                discover_live_pair(config)
+
+    def test_valid_catalogue_uses_selected_pair_without_fallback(self):
+        with patch.dict(os.environ, {"EDGE_API_KEY": "a", "WATCHLIST_HMAC_KEY": "b",
+                                  "SENTINEL_EMAIL": "team@test.invalid", "SENTINEL_PASSWORD": "test",
+                                  "CAMERA_IDS": "cam01,cam02"}, clear=True):
+            config = Config.from_env(live=True)
+        catalogue = [Camera("cam02", "Janpath"), Camera("cam01", "Bridge"), Camera("cam03", "Other")]
+        with patch("sentinel_edge.cameras.discover", return_value=catalogue):
+            cameras, fallback = discover_live_pair(config)
+        self.assertFalse(fallback)
+        self.assertEqual([camera.camera_id for camera in cameras], ["cam01", "cam02"])
+
+    def test_valid_empty_catalogue_does_not_trigger_manual_fallback(self):
+        with patch.dict(os.environ, {"EDGE_API_KEY": "a", "WATCHLIST_HMAC_KEY": "b",
+                                  "SENTINEL_EMAIL": "team@test.invalid", "SENTINEL_PASSWORD": "test",
+                                  "CAMERA_IDS": "cam01,cam02"}, clear=True):
+            config = Config.from_env(live=True)
+        with patch("sentinel_edge.cameras.urllib.request.urlopen", return_value=io.BytesIO(b'[]')):
+            with self.assertRaisesRegex(ValueError, "no valid camera IDs"):
+                discover_live_pair(config)
 
     def test_live_requires_credentials(self):
         with patch.dict(os.environ, {"EDGE_API_KEY": "a", "WATCHLIST_HMAC_KEY": "b",
@@ -238,6 +306,15 @@ class RelayTests(unittest.TestCase):
 
 
 class CatalogueGatewayTests(unittest.TestCase):
+    def test_full_catalogue_search_never_uses_manual_pair(self):
+        config = SimpleNamespace(edge_api_key="test")
+        with patch("sentinel_edge.catalogue_gateway.discover",
+                   side_effect=CatalogueUnavailable("sign-in")):
+            state = CatalogueState(config)
+            with self.assertRaisesRegex(GatewayError, "unavailable"):
+                state.search("cam01", 0, 25)
+        self.assertEqual(state.cameras, {})
+
     def test_internal_gateway_requires_service_key(self):
         handler = GatewayHandler.__new__(GatewayHandler)
         handler.state = SimpleNamespace(config=SimpleNamespace(edge_api_key="expected"))
