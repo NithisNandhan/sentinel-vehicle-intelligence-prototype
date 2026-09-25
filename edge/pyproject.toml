@@ -1,0 +1,22 @@
+[build-system]
+requires = ["setuptools>=69", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "sentinel-edge"
+version = "0.1.0"
+description = "Privacy-preserving Sentinel edge vehicle intelligence worker"
+requires-python = ">=3.11"
+dependencies = []
+
+[project.optional-dependencies]
+live = ["av>=12,<17", "numpy>=1.26,<3", "opencv-python-headless>=4.9,<5", "ultralytics>=8.2,<9", "fast-alpr>=0.2,<2", "onnxruntime-gpu>=1.18,<2"]
+test = ["pytest>=8,<10"]
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["sentinel_edge*"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+

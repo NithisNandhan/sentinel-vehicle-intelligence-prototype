@@ -1,0 +1,15 @@
+logLevel: warn
+rtsp: yes
+rtspAddress: :8554
+rtspTransports: [tcp]
+hls: yes
+hlsAddress: :8888
+hlsAlwaysRemux: no
+webrtc: yes
+webrtcAddress: :8889
+pathDefaults:
+  record: no
+paths:
+  all_others:
+    source: publisher
+
