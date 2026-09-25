@@ -140,6 +140,48 @@ def test_camera_sync_preserves_approximate_demo_coordinates(client):
     assert after["source_mode"] == "live"
 
 
+def test_catalogue_search_requires_operator_and_strips_stream_urls(client, monkeypatch):
+    calls = []
+    def fake_gateway(method, path, payload=None):
+        calls.append((method, path, payload))
+        return {"total": 1, "offset": 0, "limit": 25, "items": [{
+            "id": "cam03", "name": "Janpath North", "location": "Janpath", "codec": "h265",
+            "live": True, "rtsp_url": "rtsp://secret.invalid/private",
+        }]}
+    monkeypatch.setattr("app.main.gateway_request", fake_gateway)
+    assert client.get("/v1/catalogue/search?q=Janpath").status_code == 401
+    response = client.get("/v1/catalogue/search?q=Janpath", headers=OPERATOR)
+    assert response.status_code == 200, response.text
+    assert response.json()["items"][0]["location"] == "Janpath"
+    assert "rtsp_url" not in response.text
+    assert "secret.invalid" not in response.text
+    assert calls[0][0] == "GET"
+
+
+def test_catalogue_preview_is_operator_protected(client, monkeypatch):
+    session_id = "a" * 32
+    def fake_gateway(method, path, payload=None):
+        if method == "DELETE":
+            return {"stopped": True}
+        return {"id": session_id, "camera_id": "cam03", "status": "ready",
+                "preview_url": f"/media/preview-{session_id}/index.m3u8",
+                "rtsp_url": "rtsp://secret.invalid/private"}
+    monkeypatch.setattr("app.main.gateway_request", fake_gateway)
+    assert client.post("/v1/catalogue/cam03/preview").status_code == 401
+    started = client.post("/v1/catalogue/cam03/preview", headers=OPERATOR)
+    assert started.status_code == 200, started.text
+    assert "rtsp_url" not in started.text
+    assert client.get(f"/v1/previews/{session_id}", headers=OPERATOR).json()["status"] == "ready"
+    assert client.post(f"/v1/previews/{session_id}/heartbeat", headers=OPERATOR).status_code == 200
+    assert client.delete(f"/v1/previews/{session_id}", headers=OPERATOR).json() == {"stopped": True}
+
+
+def test_catalogue_search_is_unavailable_without_gateway(client):
+    response = client.get("/v1/catalogue/search?q=cam01", headers=OPERATOR)
+    assert response.status_code == 503
+    assert "unavailable" in response.json()["detail"].lower()
+
+
 def test_output_timestamps_remain_utc_with_sqlite(client):
     created = client.post("/v1/sightings", json=sighting(), headers=EDGE)
     assert created.status_code == 200, created.text

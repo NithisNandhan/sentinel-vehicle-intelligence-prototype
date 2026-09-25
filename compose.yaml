@@ -24,6 +24,7 @@ services:
       OPERATOR_API_KEY: ${OPERATOR_API_KEY:?Run scripts/init-env.ps1 first}
       WATCHLIST_HMAC_KEY: ${WATCHLIST_HMAC_KEY:?Run scripts/init-env.ps1 first}
       DEMO_MODE: ${DEMO_MODE:-true}
+      CATALOGUE_GATEWAY_URL: http://catalogue-gateway:8765
       CORS_ORIGINS: http://localhost:5173,http://127.0.0.1:5173
     ports:
       - 127.0.0.1:8000:8000
@@ -98,6 +99,55 @@ services:
       SENTINEL_BASE_URL: ${SENTINEL_BASE_URL:-https://cctv.corp8.cloud}
       CAMERA_IDS: ${CAMERA_IDS:-}
       MEDIA_RELAY_BASE_URL: rtsp://mediamtx:8554
+    depends_on:
+      - mediamtx
+    restart: unless-stopped
+
+  catalogue-gateway:
+    build:
+      context: .
+      dockerfile: edge/Dockerfile
+      target: live
+    command: ["python", "-m", "sentinel_edge", "gateway"]
+    profiles: [online]
+    environment:
+      EDGE_API_KEY: ${EDGE_API_KEY:?Run scripts/init-env.ps1 first}
+      WATCHLIST_HMAC_KEY: ${WATCHLIST_HMAC_KEY:?Run scripts/init-env.ps1 first}
+      SENTINEL_EMAIL: ${SENTINEL_EMAIL:-}
+      SENTINEL_PASSWORD: ${SENTINEL_PASSWORD:-}
+      SENTINEL_COOKIE: ${SENTINEL_COOKIE:-}
+      SENTINEL_BASE_URL: ${SENTINEL_BASE_URL:-https://cctv.corp8.cloud}
+      MEDIAMTX_PUBLISH_URL: rtsp://mediamtx:8554
+    depends_on:
+      - mediamtx
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: 1
+              capabilities: [gpu]
+    restart: unless-stopped
+
+  catalogue-gateway-cpu:
+    build:
+      context: .
+      dockerfile: edge/Dockerfile
+      target: live
+    command: ["python", "-m", "sentinel_edge", "gateway"]
+    profiles: [native]
+    environment:
+      EDGE_API_KEY: ${EDGE_API_KEY:?Run scripts/init-env.ps1 first}
+      WATCHLIST_HMAC_KEY: ${WATCHLIST_HMAC_KEY:?Run scripts/init-env.ps1 first}
+      SENTINEL_EMAIL: ${SENTINEL_EMAIL:-}
+      SENTINEL_PASSWORD: ${SENTINEL_PASSWORD:-}
+      SENTINEL_COOKIE: ${SENTINEL_COOKIE:-}
+      SENTINEL_BASE_URL: ${SENTINEL_BASE_URL:-https://cctv.corp8.cloud}
+      MEDIAMTX_PUBLISH_URL: rtsp://mediamtx:8554
+    networks:
+      default:
+        aliases:
+          - catalogue-gateway
     depends_on:
       - mediamtx
     restart: unless-stopped

@@ -1,5 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { cameraPreview, formatTime, getAlerts, getHourlyReports, injectDemo, setOperatorKey } from './api';
+import { cameraPreview, formatTime, getAlerts, getHourlyReports, injectDemo,
+  searchCatalogue, setOperatorKey, startCataloguePreview } from './api';
 
 const values = new Map<string, string>();
 
@@ -42,6 +43,31 @@ describe('operator API boundary', () => {
     vi.stubGlobal('fetch', fetcher);
     await injectDemo();
     expect((fetcher.mock.calls[0][1] as RequestInit).body).toBe('{}');
+  });
+
+  it('searches the catalogue with the operator key and pagination', async () => {
+    setOperatorKey('test-operator-key');
+    const fetcher = vi.fn().mockResolvedValue({ ok: true, status: 200, json: async () => ({
+      total: 1, offset: 25, limit: 25,
+      items: [{ id: 'cam03', name: 'Janpath', location: 'Janpath', codec: 'h264', live: true }],
+    }) });
+    vi.stubGlobal('fetch', fetcher);
+    expect((await searchCatalogue(' Janpath ', 25)).items[0].id).toBe('cam03');
+    expect(fetcher.mock.calls[0][0]).toContain('q=Janpath&offset=25&limit=25');
+    expect(((fetcher.mock.calls[0][1] as RequestInit).headers as Headers).get('X-Operator-Key'))
+      .toBe('test-operator-key');
+  });
+
+  it('starts an on-demand preview without sending a source URL', async () => {
+    setOperatorKey('test-operator-key');
+    const fetcher = vi.fn().mockResolvedValue({ ok: true, status: 200, json: async () => ({
+      id: 'a'.repeat(32), camera_id: 'cam03', status: 'starting',
+      preview_url: `/media/preview-${'a'.repeat(32)}/index.m3u8`,
+    }) });
+    vi.stubGlobal('fetch', fetcher);
+    await startCataloguePreview('cam03');
+    expect(fetcher.mock.calls[0][0]).toBe('/v1/catalogue/cam03/preview');
+    expect((fetcher.mock.calls[0][1] as RequestInit).method).toBe('POST');
   });
 });
 

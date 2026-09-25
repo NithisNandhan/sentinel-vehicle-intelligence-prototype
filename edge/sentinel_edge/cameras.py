@@ -18,6 +18,8 @@ class Camera:
     rtsp_url: str | None = None
     hls_url: str | None = None
     live: bool = True
+    location: str = ""
+    codec: str = ""
 
 
 def _camera_rows(data: object) -> list[dict]:
@@ -33,7 +35,7 @@ def _camera_rows(data: object) -> list[dict]:
     return []
 
 
-def parse_catalogue(data: object) -> list[Camera]:
+def parse_catalogue(data: object, *, include_without_urls: bool = False) -> list[Camera]:
     cameras: list[Camera] = []
     seen: set[str] = set()
     for row in _camera_rows(data):
@@ -55,16 +57,24 @@ def parse_catalogue(data: object) -> list[Camera]:
             return None
         rtsp = get_url("rtsp_url", "rtspUrl", "rtsp", schemes=("rtsp", "rtsps"))
         hls = get_url("hls_url", "hlsUrl", "hls", schemes=("http", "https"))
-        if not (rtsp or hls):
+        if not (rtsp or hls) and not include_without_urls:
             continue
         status = row.get("live", row.get("is_live", row.get("status", True)))
         live = status if isinstance(status, bool) else str(status).strip().lower() not in {"false", "0", "offline", "inactive", "down"}
         seen.add(camera_id)
-        cameras.append(Camera(camera_id, str(row.get("name") or row.get("location") or camera_id), rtsp, hls, live))
+        raw_location = row.get("location")
+        if isinstance(raw_location, dict):
+            location = ", ".join(str(raw_location[key]).strip() for key in ("name", "area", "city", "district", "region")
+                                  if raw_location.get(key))
+        else:
+            location = str(raw_location or row.get("area") or row.get("region") or "").strip()
+        codec = str(row.get("codec") or row.get("video_codec") or "").strip()
+        cameras.append(Camera(camera_id, str(row.get("name") or location or camera_id), rtsp, hls, live,
+                              location, codec))
     return cameras
 
 
-def discover(config: Config) -> list[Camera]:
+def discover(config: Config, *, include_without_urls: bool = False) -> list[Camera]:
     token = base64.b64encode(f"{config.sentinel_email}:{config.sentinel_password}".encode()).decode()
     headers = {"Authorization": "Basic " + token, "Accept": "application/json"}
     if config.sentinel_cookie:
@@ -74,7 +84,7 @@ def discover(config: Config) -> list[Camera]:
         headers=headers,
     )
     with urllib.request.urlopen(request, timeout=10) as response:
-        cameras = parse_catalogue(json.load(response))
+        cameras = parse_catalogue(json.load(response), include_without_urls=include_without_urls)
     if not cameras:
         raise ValueError("Camera catalogue contains no valid camera IDs")
     return cameras

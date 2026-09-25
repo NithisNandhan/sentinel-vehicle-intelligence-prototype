@@ -13,6 +13,8 @@ From this directory after installing `pip install -e '.[live]'`:
 
 Docker build context is the repository root. Build `docker build --target offline -f edge/Dockerfile .` for the simulator without CV dependencies, or `docker build --target live -f edge/Dockerfile .` for relay and AI. Mount persistent volumes at `/data` for the outbox and `/models` for model downloads. FFmpeg never records footage.
 
+`python -m sentinel_edge gateway` serves an internal, edge-key-protected catalogue search and temporary preview controller on port 8765. It caches the machine-readable Sentinel catalogue for five minutes, returns only ID/name/location/codec/live metadata, and relays selected feeds to MediaMTX under temporary paths. It is not exposed on a host port. HTML sign-in responses fail closed; valid authorised JSON access is required for full-catalogue search.
+
 Copy `.env.example` to a local untracked secret file and fill `EDGE_API_KEY`, `WATCHLIST_HMAC_KEY`, and for live/relay `SENTINEL_EMAIL` and `SENTINEL_PASSWORD`. If the catalogue or HLS endpoint requires the portal session, supply `SENTINEL_COOKIE` locally as well. Never put Sentinel credentials into Compose YAML or committed files. `CAMERA_IDS` can hold two exact IDs from the catalogue, including numeric IDs. `PREVIEW_BASE_URL` is a credential-free browser-reachable MediaMTX HLS origin. A live worker must have credentials even when reading the local relay, because it verifies the Sentinel catalogue on startup.
 
 The simulator defaults to a route through `cam01` and `cam04` with suspicious plate `GJ01AB1234`. Its HMAC key and demo plate must match the central watchlist seed. It contains no video data.

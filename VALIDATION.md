@@ -50,3 +50,18 @@ The Docker outage exceeded the planned five-minute interruption. Its reported qu
 - Repeated browser-render latency distribution, OCR accuracy on a permitted labelled plate set, and load capacity. One browser-visible synthetic alert was observed within three seconds, but no distribution or live-OCR timing has been measured.
 
 The local map uses deliberately approximate demo coordinates for cam01 and cam04. They are not authoritative camera locations. PostGIS is enabled in the PostgreSQL migration; this first build displays the supplied latitude/longitude columns and does not yet rely on spatial indexes or GIS queries.
+
+## Home-page catalogue search validation on 2026-09-25/26 (local time)
+
+The new catalogue gateway is separate from the two-camera AI worker. It searches cached authorised camera metadata, withholds source URLs from operator responses, and starts at most two temporary preview relays. The offline profile does not start this gateway.
+
+| Check | Result | Evidence / boundary |
+| --- | --- | --- |
+| Edge catalogue and preview tests | Passed | 24 edge unit tests, including an 8,000-camera fixture, exact-ID/prefix/name/location ranking, pagination, URL exclusion, HTML sign-in rejection, offline and URL-less cameras, relay failure, heartbeat, idle cleanup, and the two-preview cap. |
+| Central API tests | Passed | 17 backend tests, including operator-key rejection and response URL stripping. |
+| Dashboard tests and build | Passed | 7 frontend tests; production build passed with the existing bundle-size warning. |
+| Compose configuration and images | Passed | Online and native Compose configuration checks passed; the catalogue gateway, API, and dashboard images built successfully. |
+| Containerized catalogue prerequisite | Expected unavailable | The gateway started, but the current Sentinel request returned sign-in HTML rather than authenticated `/api/ingest` JSON. The protected central search endpoint returned HTTP 503 without presenting the monitored-camera list as a full catalogue. |
+| Existing offline workflow after refresh | Passed | The offline API/dashboard were recreated from updated images; the synthetic end-to-end smoke test passed. |
+
+An authorised camera outside CAM01/CAM02 has **not** been opened, and actual on-demand HLS playback has **not** been verified. Those acceptance checks require the authorised JSON catalogue and a reachable third live stream. No claim of live full-catalogue readiness follows from the unit tests or the expected 503 response.

@@ -16,6 +16,28 @@ export interface Camera {
   coordinates_approximate?: boolean;
 }
 
+export interface CatalogueCamera {
+  id: string;
+  name: string;
+  location: string;
+  codec: string;
+  live: boolean;
+}
+
+export interface CatalogueSearchResponse {
+  total: number;
+  offset: number;
+  limit: number;
+  items: CatalogueCamera[];
+}
+
+export interface PreviewSession {
+  id: string;
+  camera_id: string;
+  status: 'starting' | 'ready' | 'failed';
+  preview_url: string;
+}
+
 export interface Alert {
   id: string;
   sighting_id: string;
@@ -124,6 +146,30 @@ async function request<T>(path: string, init?: RequestInit, protectedRequest = f
 
 export async function getCameras(): Promise<Camera[]> {
   return unwrapList<Camera>(await request<unknown>('/v1/cameras', undefined, true), ['cameras', 'items']);
+}
+
+export async function searchCatalogue(query: string, offset = 0): Promise<CatalogueSearchResponse> {
+  const params = new URLSearchParams({ q: query.trim(), offset: String(offset), limit: '25' });
+  return request<CatalogueSearchResponse>(`/v1/catalogue/search?${params}`, undefined, true);
+}
+
+export async function startCataloguePreview(cameraId: string): Promise<PreviewSession> {
+  return request<PreviewSession>(`/v1/catalogue/${encodeURIComponent(cameraId)}/preview`,
+    { method: 'POST' }, true);
+}
+
+export async function getCataloguePreview(sessionId: string): Promise<PreviewSession> {
+  return request<PreviewSession>(`/v1/previews/${encodeURIComponent(sessionId)}`, undefined, true);
+}
+
+export async function heartbeatCataloguePreview(sessionId: string): Promise<PreviewSession> {
+  return request<PreviewSession>(`/v1/previews/${encodeURIComponent(sessionId)}/heartbeat`,
+    { method: 'POST' }, true);
+}
+
+export async function stopCataloguePreview(sessionId: string): Promise<void> {
+  await request<{ stopped: boolean }>(`/v1/previews/${encodeURIComponent(sessionId)}`,
+    { method: 'DELETE' }, true);
 }
 
 export async function getAlerts(): Promise<Alert[]> {

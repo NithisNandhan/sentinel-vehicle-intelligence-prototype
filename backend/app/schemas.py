@@ -77,6 +77,28 @@ class CameraSyncIn(BaseModel):
     cameras: list[CameraIn] = Field(min_length=1, max_length=10000)
 
 
+class CatalogueCameraOut(BaseModel):
+    id: str
+    name: str
+    location: str = ""
+    codec: str = ""
+    live: bool
+
+
+class CatalogueSearchOut(BaseModel):
+    total: int
+    offset: int
+    limit: int
+    items: list[CatalogueCameraOut]
+
+
+class PreviewOut(BaseModel):
+    id: str = Field(pattern=r"^[a-f0-9]{32}$")
+    camera_id: str = Field(min_length=1, max_length=80)
+    status: Literal["starting", "ready", "failed"]
+    preview_url: str = Field(pattern=r"^/media/preview-[a-f0-9]{32}/index\.m3u8$")
+
+
 class AlertPatch(BaseModel):
     status: Literal["acknowledged", "resolved", "false_positive"]
     actor: str = Field(default="local-operator", min_length=1, max_length=100)

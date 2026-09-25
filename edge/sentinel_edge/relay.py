@@ -52,13 +52,13 @@ def _ffmpeg_args(url: str, transport: str, headers: dict[str, str] | None,
     return args + ["-f", "rtsp", "-rtsp_transport", "tcp", target]
 
 
-def relay_camera(config: Config, camera: Camera, stop: threading.Event) -> None:
+def relay_camera(config: Config, camera: Camera, stop: threading.Event, *, path: str | None = None) -> None:
     if not shutil.which("ffmpeg"):
         raise RuntimeError("ffmpeg executable not found")
     rtsp, hls = source_urls(camera)
     sources = [(url, transport, headers) for url, transport, headers in
                ((rtsp, "rtsp", None), (hls, "hls", hls_headers(config))) if url]
-    target = config.mediamtx_publish_url + "/" + camera.camera_id
+    target = config.mediamtx_publish_url + "/" + (path or camera.camera_id)
     backoff = 2
     while not stop.is_set():
         for url, transport, headers in sources:

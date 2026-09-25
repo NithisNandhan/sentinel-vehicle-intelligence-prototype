@@ -13,11 +13,11 @@ from .config import Config
 
 def main() -> None:
     parser = argparse.ArgumentParser(prog="python -m sentinel_edge")
-    parser.add_argument("mode", choices=("live", "relay", "simulate", "prepare-models"))
+    parser.add_argument("mode", choices=("live", "relay", "gateway", "simulate", "prepare-models"))
     parser.add_argument("--once", action="store_true", help="Send offline events once and exit")
     args = parser.parse_args()
     logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
-    config = Config.from_env(live=args.mode in {"live", "relay"})
+    config = Config.from_env(live=args.mode in {"live", "relay", "gateway"})
     config.model_cache_dir.mkdir(parents=True, exist_ok=True)
     os.environ.setdefault("XDG_CACHE_HOME", str(config.model_cache_dir / "cache"))
     os.environ.setdefault("HF_HOME", str(config.model_cache_dir / "huggingface"))
@@ -33,6 +33,9 @@ def main() -> None:
             from ultralytics import YOLO
             YOLO("yolov8n.pt")
             VisionPipeline(config.model_cache_dir / "yolov8n.pt")
+        elif args.mode == "gateway":
+            from .catalogue_gateway import run_gateway
+            run_gateway(config)
         else:
             catalogue = discover(config)
             cameras = select_two(catalogue, config.camera_ids)

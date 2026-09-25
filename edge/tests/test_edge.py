@@ -12,6 +12,7 @@ import threading
 
 from sentinel_edge.api import CentralClient
 from sentinel_edge.cameras import Camera, discover, parse_catalogue, select_two, source_urls
+from sentinel_edge.catalogue_gateway import CatalogueState, GatewayError, GatewayHandler
 from sentinel_edge.config import Config
 from sentinel_edge.events import sighting
 from sentinel_edge.outbox import Outbox
@@ -60,6 +61,13 @@ class CameraTests(unittest.TestCase):
             {"id": 4, "live": True},
         ]})
         self.assertEqual([c.camera_id for c in select_two(cameras, ())], ["2", "3"])
+
+    def test_full_catalogue_keeps_offline_cameras_without_stream_urls(self):
+        rows = {"cameras": [{"id": "cam01", "name": "Bridge", "location": "Ahmedabad",
+                              "live": False, "codec": "h265"}]}
+        self.assertEqual(parse_catalogue(rows), [])
+        camera = parse_catalogue(rows, include_without_urls=True)[0]
+        self.assertEqual((camera.location, camera.codec, camera.live), ("Ahmedabad", "h265", False))
 
     def test_configured_first_two_portal_cameras(self):
         with patch.dict(os.environ, {"EDGE_API_KEY": "a", "WATCHLIST_HMAC_KEY": "b",
@@ -182,6 +190,110 @@ class RelayTests(unittest.TestCase):
             transport, frame = next(read_camera(config, camera, stop=threading.Event()))
         self.assertEqual(transport, "hls")
         self.assertEqual(frame.pts_ms, 1000)
+
+
+class CatalogueGatewayTests(unittest.TestCase):
+    def test_internal_gateway_requires_service_key(self):
+        handler = GatewayHandler.__new__(GatewayHandler)
+        handler.state = SimpleNamespace(config=SimpleNamespace(edge_api_key="expected"))
+        rejected = []
+        handler._reply = lambda status, body: rejected.append((status, body))
+        handler.headers = {"X-Edge-Key": "wrong"}
+        self.assertFalse(handler._authorised())
+        self.assertEqual(rejected[0][0], 401)
+        handler.headers = {"X-Edge-Key": "expected"}
+        self.assertTrue(handler._authorised())
+
+    def test_search_eight_thousand_cameras_and_hide_stream_urls(self):
+        cameras = [Camera(f"cam{index:04d}", f"Camera {index}",
+                          rtsp_url=f"rtsp://private.invalid/secret/{index}", live=True,
+                          location="Janpath" if index % 100 == 0 else "Elsewhere", codec="h264")
+                   for index in range(8000)]
+        state = CatalogueState(SimpleNamespace(edge_api_key="test"), fetcher=lambda _cfg: cameras)
+        result = state.search("Janpath", 25, 25)
+        self.assertEqual(result["total"], 80)
+        self.assertEqual(len(result["items"]), 25)
+        self.assertNotIn("rtsp://", json.dumps(result))
+        self.assertEqual(result["items"][0]["id"], "cam2500")
+        self.assertEqual(state.search("cam0000", 0, 25)["items"][0]["id"], "cam0000")
+
+    def test_exact_id_then_prefix_then_name_or_location_ranking(self):
+        cameras = [Camera("z1", "Cam office", location="Elsewhere"),
+                   Camera("cam42", "Bridge", location="Elsewhere"),
+                   Camera("cam", "Exact", location="Elsewhere"),
+                   Camera("a1", "Bridge", location="Cam circle")]
+        state = CatalogueState(SimpleNamespace(edge_api_key="test"), fetcher=lambda _cfg: cameras)
+        self.assertEqual([item["id"] for item in state.search("CAM", 0, 25)["items"]],
+                         ["cam", "cam42", "a1", "z1"])
+
+    def test_sign_in_html_fails_closed_without_repeated_fetch(self):
+        calls = []
+        def html_response(_cfg):
+            calls.append(1)
+            raise ValueError("Sign in HTML, not JSON")
+        state = CatalogueState(SimpleNamespace(edge_api_key="test"), fetcher=html_response,
+                               clock=lambda: 1000.0)
+        for _ in range(2):
+            with self.assertRaisesRegex(GatewayError, "authorised JSON access"):
+                state.search("cam", 0, 25)
+        self.assertEqual(len(calls), 1)
+
+    def test_actual_html_catalogue_response_is_unavailable(self):
+        with patch.dict(os.environ, {"EDGE_API_KEY": "a", "WATCHLIST_HMAC_KEY": "b",
+                                  "SENTINEL_EMAIL": "team@test.invalid", "SENTINEL_PASSWORD": "test"}, clear=True):
+            config = Config.from_env(live=True)
+        state = CatalogueState(config, fetcher=lambda cfg: discover(cfg, include_without_urls=True))
+        with patch("sentinel_edge.cameras.urllib.request.urlopen",
+                   return_value=io.BytesIO(b"<html><title>Sign in</title></html>")):
+            with self.assertRaisesRegex(GatewayError, "authorised JSON access"):
+                state.search("cam", 0, 25)
+
+    def test_offline_camera_cannot_start_preview(self):
+        camera = Camera("cam04", "Circle", live=False, location="Paldi Circle")
+        state = CatalogueState(SimpleNamespace(edge_api_key="test"), fetcher=lambda _cfg: [camera])
+        self.assertFalse(state.search("Paldi", 0, 25)["items"][0]["live"])
+        with self.assertRaisesRegex(GatewayError, "offline"):
+            state.start_preview("cam04")
+
+    def test_live_camera_without_stream_cannot_start_preview(self):
+        camera = Camera("cam05", "Missing stream", live=True)
+        state = CatalogueState(SimpleNamespace(edge_api_key="test"), fetcher=lambda _cfg: [camera])
+        with self.assertRaisesRegex(GatewayError, "stream is unavailable"):
+            state.start_preview("cam05")
+
+    def test_relay_failure_reports_failed_preview(self):
+        camera = Camera("cam03", "Other", rtsp_url="rtsp://private.invalid/cam03")
+        def broken_relay(_config, _camera, _stop, *, path):
+            raise RuntimeError("sensitive source URL")
+        state = CatalogueState(SimpleNamespace(edge_api_key="test"), fetcher=lambda _cfg: [camera],
+                               relay=broken_relay, ready=lambda _path: False)
+        preview = state.start_preview("cam03")
+        state.previews[preview["id"]].thread.join(timeout=1)
+        self.assertEqual(state.preview_status(preview["id"])["status"], "failed")
+        state.stop_preview(preview["id"])
+
+    def test_preview_cap_heartbeat_and_idle_cleanup(self):
+        now = [1000.0]
+        camera = Camera("cam03", "Other", rtsp_url="rtsp://private.invalid/cam03", live=True)
+        def waiting_relay(_config, _camera, stop, *, path):
+            self.assertTrue(path.startswith("preview-"))
+            stop.wait()
+        state = CatalogueState(SimpleNamespace(edge_api_key="test"), fetcher=lambda _cfg: [camera],
+                               relay=waiting_relay, ready=lambda _path: True, clock=lambda: now[0])
+        first = state.start_preview("cam03")
+        second = state.start_preview("cam03")
+        self.assertEqual(first["status"], "ready")
+        self.assertNotEqual(first["preview_url"], second["preview_url"])
+        with self.assertRaisesRegex(GatewayError, "Two previews"):
+            state.start_preview("cam03")
+        now[0] += 40
+        state.heartbeat(first["id"])
+        now[0] += 21
+        state.reap_idle()
+        self.assertIn(first["id"], state.previews)
+        self.assertNotIn(second["id"], state.previews)
+        state.stop_preview(first["id"])
+        self.assertEqual(state.previews, {})
 
 
 class VisionTests(unittest.TestCase):

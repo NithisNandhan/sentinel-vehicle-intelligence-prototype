@@ -52,10 +52,18 @@ Stop the current profile with `docker compose --profile offline down` or `docker
 | `mediamtx` | On-demand live media gateway; recording disabled |
 | `stream-adapter` | Online FFmpeg relay and codec adaptation |
 | `stream-adapter-cpu` | Relay for the native Windows AI-worker fallback |
+| `catalogue-gateway` | Authenticated full-catalogue search and temporary previews in online mode |
+| `catalogue-gateway-cpu` | The same search/preview service for the native-worker fallback |
 | `edge-worker` | Online vehicle detection, tracking, plate OCR, durable outbox |
 | `demo-simulator` | Offline synthetic sightings and health events |
 
 The worker writes sightings to its SQLite outbox before sending them. The API deduplicates on event UUID. Operator actions have an audit trail. All timestamps are stored in UTC and displayed in India time.
+
+## Find any authorised camera
+
+After unlocking the dashboard, the home page can search the authorised Sentinel catalogue by ID, camera name, or place name. Results are paged and include offline cameras, which cannot be previewed. Opening a live result starts a temporary MediaMTX preview; it does not change the two AI-monitored feeds. At most two temporary previews run at once, and idle previews stop after one minute. Source URLs and Sentinel credentials stay in the internal gateway, not in catalogue search responses.
+
+The catalogue gateway is available only in the online or native profile. The official `/api/ingest` endpoint must return authenticated JSON. If it redirects to an HTML sign-in page, the dashboard shows a catalogue-unavailable message rather than scraping portal cards or showing the two monitored cameras as a false full-catalogue result. The offline demonstration remains usable without catalogue search.
 
 ## Privacy and evidence
 

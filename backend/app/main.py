@@ -2,6 +2,7 @@ import asyncio
 import hmac
 from datetime import datetime, timedelta, timezone
 from html import escape
+from urllib.parse import quote, urlencode
 from uuid import uuid4
 
 from fastapi import Depends, FastAPI, HTTPException, Query, WebSocket, WebSocketDisconnect
@@ -12,9 +13,11 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session, selectinload
 
 from .config import get_settings
+from .catalogue import gateway_request
 from .db import Base, SessionLocal, engine, get_db
 from .models import Alert, AlertAudit, Camera, HealthReport, Sighting, WatchlistEntry, utc_now
-from .schemas import AlertOut, AlertPatch, AuditOut, CameraSyncIn, DemoInject, HealthIn, RouteSearch, SightingIn
+from .schemas import (AlertOut, AlertPatch, AuditOut, CameraSyncIn, CatalogueSearchOut,
+                      DemoInject, HealthIn, PreviewOut, RouteSearch, SightingIn)
 from .security import check_edge_key, check_operator_key, plate_token
 
 
@@ -209,6 +212,33 @@ def sync_cameras(payload: CameraSyncIn, session: Session = Depends(get_db)) -> d
 def list_cameras(session: Session = Depends(get_db)) -> list[dict]:
     cameras = session.scalars(select(Camera).order_by(Camera.id)).all()
     return [camera_dict(camera) for camera in cameras]
+
+
+@app.get("/v1/catalogue/search", dependencies=[Depends(check_operator_key)])
+def search_catalogue(q: str = Query(min_length=2, max_length=120),
+                     offset: int = Query(0, ge=0), limit: int = Query(25, ge=1, le=25)) -> dict:
+    result = gateway_request("GET", "/search?" + urlencode({"q": q, "offset": offset, "limit": limit}))
+    return CatalogueSearchOut.model_validate(result).model_dump()
+
+
+@app.post("/v1/catalogue/{camera_id}/preview", dependencies=[Depends(check_operator_key)])
+def start_catalogue_preview(camera_id: str) -> dict:
+    return PreviewOut.model_validate(gateway_request("POST", "/previews", {"camera_id": camera_id})).model_dump()
+
+
+@app.get("/v1/previews/{session_id}", dependencies=[Depends(check_operator_key)])
+def catalogue_preview_status(session_id: str) -> dict:
+    return PreviewOut.model_validate(gateway_request("GET", "/previews/" + quote(session_id, safe=""))).model_dump()
+
+
+@app.post("/v1/previews/{session_id}/heartbeat", dependencies=[Depends(check_operator_key)])
+def catalogue_preview_heartbeat(session_id: str) -> dict:
+    return PreviewOut.model_validate(gateway_request("POST", "/previews/" + quote(session_id, safe="") + "/heartbeat")).model_dump()
+
+
+@app.delete("/v1/previews/{session_id}", dependencies=[Depends(check_operator_key)])
+def stop_catalogue_preview(session_id: str) -> dict:
+    return gateway_request("DELETE", "/previews/" + quote(session_id, safe=""))
 
 
 @app.post("/v1/sightings", dependencies=[Depends(check_edge_key)])
