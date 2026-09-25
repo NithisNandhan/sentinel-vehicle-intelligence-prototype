@@ -6,6 +6,7 @@ import argparse
 import logging
 import os
 import threading
+from pathlib import Path
 
 from .cameras import discover, select_two
 from .config import Config
@@ -13,8 +14,10 @@ from .config import Config
 
 def main() -> None:
     parser = argparse.ArgumentParser(prog="python -m sentinel_edge")
-    parser.add_argument("mode", choices=("live", "relay", "gateway", "simulate", "prepare-models"))
+    parser.add_argument("mode", choices=("live", "relay", "gateway", "simulate", "prepare-models", "benchmark-models", "probe-stream", "probe-two-streams"))
     parser.add_argument("--once", action="store_true", help="Send offline events once and exit")
+    parser.add_argument("--probe-camera-id", default="probe-bus", help="Local MediaMTX path used only for probe-stream")
+    parser.add_argument("--probe-seconds", type=int, default=20, help="Duration of local stream probe")
     args = parser.parse_args()
     logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
     config = Config.from_env(live=args.mode in {"live", "relay", "gateway"})
@@ -22,6 +25,7 @@ def main() -> None:
     os.environ.setdefault("XDG_CACHE_HOME", str(config.model_cache_dir / "cache"))
     os.environ.setdefault("HF_HOME", str(config.model_cache_dir / "huggingface"))
     os.environ.setdefault("YOLO_CONFIG_DIR", str(config.model_cache_dir / "ultralytics"))
+    Path(os.environ["YOLO_CONFIG_DIR"]).mkdir(parents=True, exist_ok=True)
     stop = threading.Event()
     try:
         if args.mode == "simulate":
@@ -33,12 +37,26 @@ def main() -> None:
             from ultralytics import YOLO
             YOLO("yolov8n.pt")
             VisionPipeline(config.model_cache_dir / "yolov8n.pt")
+        elif args.mode == "benchmark-models":
+            from .benchmark import run_model_benchmark
+            run_model_benchmark(config.model_cache_dir / "yolov8n.pt")
+        elif args.mode in {"probe-stream", "probe-two-streams"}:
+            if not 1 <= args.probe_seconds <= 300:
+                parser.error("--probe-seconds must be between 1 and 300")
+            if args.mode == "probe-stream":
+                from .benchmark import run_stream_probe
+                run_stream_probe(config, camera_id=args.probe_camera_id, seconds=args.probe_seconds)
+            else:
+                from .benchmark import run_two_stream_probe
+                run_two_stream_probe(config, camera_ids=(args.probe_camera_id,
+                                                         args.probe_camera_id + "-2"),
+                                     seconds=args.probe_seconds)
         elif args.mode == "gateway":
             from .catalogue_gateway import run_gateway
             run_gateway(config)
         else:
             catalogue = discover(config)
-            cameras = select_two(catalogue, config.camera_ids)
+            cameras = select_two(catalogue, config.camera_ids, require_requested=True)
             from .api import CentralClient
             from .outbox import Outbox
             try:

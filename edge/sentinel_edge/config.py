@@ -16,6 +16,7 @@ class Config:
     db_path: Path
     model_cache_dir: Path
     sentinel_base_url: str
+    sentinel_rtsp_host: str
     sentinel_email: str = field(repr=False)
     sentinel_password: str = field(repr=False)
     sentinel_cookie: str = field(repr=False)
@@ -42,6 +43,7 @@ class Config:
             db_path=Path(os.getenv("EDGE_DB_PATH", "./data/outbox.sqlite3")),
             model_cache_dir=Path(os.getenv("MODEL_CACHE_DIR", "./models")),
             sentinel_base_url=os.getenv("SENTINEL_BASE_URL", "https://cctv.corp8.cloud").rstrip("/"),
+            sentinel_rtsp_host=os.getenv("SENTINEL_RTSP_HOST", "103.250.160.189").strip().lower(),
             sentinel_email=os.getenv("SENTINEL_EMAIL", ""),
             sentinel_password=os.getenv("SENTINEL_PASSWORD", ""),
             sentinel_cookie=os.getenv("SENTINEL_COOKIE", ""),

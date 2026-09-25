@@ -10,6 +10,15 @@ from pathlib import Path
 from .privacy import normalize_plate
 
 
+def preferred_onnx_providers(available: list[str]) -> list[str]:
+    """Use CUDA when present without probing an uninstalled TensorRT runtime."""
+    providers = [name for name in ("CUDAExecutionProvider", "CPUExecutionProvider")
+                 if name in available]
+    if not providers:
+        raise RuntimeError("ONNX Runtime has no usable execution provider")
+    return providers
+
+
 @dataclass(frozen=True)
 class PlateObservation:
     plate: str
@@ -37,14 +46,17 @@ class VisionPipeline:
             raise FileNotFoundError(f"Missing model at {model_path}; cache yolov8n.pt before running live mode")
         try:
             import cv2
+            import onnxruntime as ort
             from fast_alpr import ALPR
             from ultralytics import YOLO
         except ImportError as exc:
             raise RuntimeError("Live AI dependencies are unavailable; install edge[live]") from exc
         self.cv2 = cv2
         self.model = YOLO(str(model_path))
+        providers = preferred_onnx_providers(ort.get_available_providers())
         self.alpr = ALPR(detector_model="yolo-v9-t-384-license-plate-end2end",
-                         ocr_model="cct-xs-v2-global-model", ocr_device="auto")
+                         ocr_model="cct-xs-v2-global-model", ocr_device="auto",
+                         detector_providers=providers, ocr_providers=providers)
         self.ocr_min_confidence = ocr_min_confidence
         self.dedup_seconds = dedup_seconds
         self.tracks: dict[str, _Track] = {}

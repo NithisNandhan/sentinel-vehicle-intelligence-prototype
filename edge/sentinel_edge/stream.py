@@ -6,7 +6,7 @@ import time
 from dataclasses import dataclass
 from typing import Iterator
 
-from .cameras import Camera, hls_headers, source_urls
+from .cameras import Camera, hls_headers, rtsp_access_url, source_urls
 from .config import Config
 
 
@@ -41,6 +41,7 @@ def _decode(url: str, *, transport: str, headers: dict[str, str] | None = None) 
 def read_camera(config: Config, camera: Camera, *, stop=None) -> Iterator[tuple[str, VideoFrame]]:
     """Prefer local relay if configured; else try RTSP then HLS, with bounded backoff."""
     rtsp, hls = source_urls(camera)
+    rtsp = rtsp_access_url(config, rtsp)
     sources = [(config.media_relay_base_url + "/" + camera.camera_id, "rtsp", None)] if config.media_relay_base_url else [
         (url, transport, headers) for url, transport, headers in
         ((rtsp, "rtsp", None), (hls, "hls", hls_headers(config))) if url

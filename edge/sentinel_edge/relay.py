@@ -8,7 +8,7 @@ import threading
 import time
 from concurrent.futures import ThreadPoolExecutor, as_completed
 
-from .cameras import Camera, hls_headers, source_urls
+from .cameras import Camera, hls_headers, rtsp_access_url, source_urls
 from .config import Config
 
 
@@ -56,6 +56,7 @@ def relay_camera(config: Config, camera: Camera, stop: threading.Event, *, path:
     if not shutil.which("ffmpeg"):
         raise RuntimeError("ffmpeg executable not found")
     rtsp, hls = source_urls(camera)
+    rtsp = rtsp_access_url(config, rtsp)
     sources = [(url, transport, headers) for url, transport, headers in
                ((rtsp, "rtsp", None), (hls, "hls", hls_headers(config))) if url]
     target = config.mediamtx_publish_url + "/" + (path or camera.camera_id)

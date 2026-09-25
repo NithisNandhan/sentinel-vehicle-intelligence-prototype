@@ -27,7 +27,9 @@ Run these commands in the same PowerShell window. On a per-user Docker Desktop i
 
 Open <http://localhost:5173>. The operator key is in the uncommitted `.env` file as `OPERATOR_API_KEY`; enter it in the dashboard unlock field. The demo injector and operator actions require that key. API documentation is at <http://localhost:8000/docs>.
 
-Online mode requires `SENTINEL_EMAIL` and `SENTINEL_PASSWORD` in `.env`; use `SENTINEL_COOKIE` only if the portal requires an authenticated session. First cache the model files in the persistent model volume, then start the two-feed system:
+Online mode requires authorised `/api/ingest` JSON access as well as `SENTINEL_EMAIL` and `SENTINEL_PASSWORD` in `.env`; use `SENTINEL_COOKIE` only if the provider approves a session-based API connection. YOLOv8n and FastALPR weights are downloaded automatically into persistent Docker volumes. After the catalogue confirms two exact camera IDs, set `CAMERA_IDS` and start the two-feed system:
+
+For direct RTSP access, the adapter uses the catalogue-supplied port and stream path and adds the registered email/password to URLs on `SENTINEL_RTSP_HOST` (default `103.250.160.189`), percent-encoding characters such as `@`. It never adds local credentials to a different host. HLS remains on the supplied CDN URL with authenticated request headers. The RTSP host setting does not invent a stream path or bypass the catalogue prerequisite.
 
 ```powershell
 docker compose --profile online run --no-deps --rm edge-worker python -m sentinel_edge prepare-models
@@ -36,9 +38,9 @@ docker compose --profile online up --build
 
 If Docker cannot expose the GPU to the AI container, start the central services and CPU media relay with `docker compose --profile native up --build`, then run the edge package on Windows with the same `.env` keys and `CENTRAL_API_URL=http://localhost:8000`, `MEDIA_RELAY_BASE_URL=rtsp://localhost:8554`. The native worker setup is documented in `edge/README.md`.
 
-Only two cameras are selected for processing. The worker reads the official `/api/ingest` catalogue and uses the URLs it supplies; it does not construct stream URLs from IDs. Set `CAMERA_IDS` to two exact IDs from that catalogue after checking their feed quality, or leave it blank for the first two reported live entries. Online mode does not start without Sentinel credentials. Avoid starting both profiles together, since that mixes synthetic and live activity.
+Only two cameras are selected for processing. The worker reads the official `/api/ingest` catalogue and uses the URLs it supplies; it does not construct stream URLs from IDs. `CAMERA_IDS` must contain two exact IDs from that catalogue before live or relay startup, preventing an arbitrary first-two selection. Online mode does not start without Sentinel credentials. Avoid starting both profiles together, since that mixes synthetic and live activity.
 
-The local, untracked `.env` currently selects `cam01,cam02` (the first two portal cards, Chiman bhai Bridge and Janpath). Their portal preview paths use `/cam01/` and `/cam02/`; the authenticated catalogue must still confirm that these are the exact API IDs before starting the live profile. The offline simulator has its own synthetic route and does not use `CAMERA_IDS`.
+The selected portal cards are CAM01 (Chiman bhai Bridge) and CAM02 (Janpath), but the local `CAMERA_IDS` setting is currently blank. Their portal preview paths use `/cam01/` and `/cam02/`; the authenticated catalogue must confirm the exact API IDs before starting the live profile. Do not let a blank setting silently select a different pair. The offline simulator has its own synthetic route and does not use `CAMERA_IDS`.
 
 Stop the current profile with `docker compose --profile offline down` or `docker compose --profile online down`. The database and outbox use persistent Docker volumes; `down` does not erase them.
 

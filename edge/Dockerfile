@@ -20,6 +20,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 RUN --mount=type=cache,target=/models/cache/pip pip install -e '.[live]'
 
 FROM live-deps AS live
+RUN --mount=type=cache,target=/models/cache/pip pip install 'lap>=0.5.12,<1'
 COPY edge/sentinel_edge ./sentinel_edge
 CMD ["python", "-m", "sentinel_edge", "live"]
 

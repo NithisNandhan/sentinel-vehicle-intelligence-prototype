@@ -4,9 +4,10 @@ from __future__ import annotations
 
 import base64
 import json
+import urllib.error
 import urllib.request
 from dataclasses import dataclass
-from urllib.parse import urlparse
+from urllib.parse import quote, urlparse, urlsplit, urlunsplit
 
 from .config import Config
 
@@ -83,14 +84,22 @@ def discover(config: Config, *, include_without_urls: bool = False) -> list[Came
         config.sentinel_base_url + "/api/ingest",
         headers=headers,
     )
-    with urllib.request.urlopen(request, timeout=10) as response:
-        cameras = parse_catalogue(json.load(response), include_without_urls=include_without_urls)
+    try:
+        with urllib.request.urlopen(request, timeout=10) as response:
+            cameras = parse_catalogue(json.load(response), include_without_urls=include_without_urls)
+    except urllib.error.HTTPError as error:
+        raise ValueError(f"Sentinel catalogue HTTP {error.code}; authorised API access is required") from None
+    except json.JSONDecodeError:
+        raise ValueError("Sentinel catalogue did not return JSON; authorised API access is required") from None
     if not cameras:
         raise ValueError("Camera catalogue contains no valid camera IDs")
     return cameras
 
 
-def select_two(catalogue: list[Camera], requested: tuple[str, ...]) -> list[Camera]:
+def select_two(catalogue: list[Camera], requested: tuple[str, ...], *,
+               require_requested: bool = False) -> list[Camera]:
+    if require_requested and len(requested) != 2:
+        raise ValueError("Set CAMERA_IDS to two exact authorised catalogue IDs before live processing")
     by_id = {camera.camera_id: camera for camera in catalogue if camera.live}
     if requested:
         missing = set(requested) - set(by_id)
@@ -107,6 +116,23 @@ def select_two(catalogue: list[Camera], requested: tuple[str, ...]) -> list[Came
 def source_urls(camera: Camera) -> tuple[str | None, str | None]:
     """Use catalogue URLs; endpoint patterns are not a stable contract."""
     return camera.rtsp_url, camera.hls_url
+
+
+def rtsp_access_url(config: Config, url: str | None) -> str | None:
+    """Add registered-user credentials only to the approved direct RTSP host.
+
+    A catalogue URL may already carry its own userinfo. Never send the local
+    password to a different host supplied by a catalogue response.
+    """
+    if not url:
+        return None
+    parsed = urlsplit(url)
+    if (parsed.scheme not in {"rtsp", "rtsps"} or parsed.username is not None or
+            parsed.hostname != config.sentinel_rtsp_host):
+        return url
+    user = quote(config.sentinel_email, safe="")
+    password = quote(config.sentinel_password, safe="")
+    return urlunsplit(parsed._replace(netloc=f"{user}:{password}@{parsed.netloc}"))
 
 
 def hls_headers(config: Config) -> dict[str, str]:

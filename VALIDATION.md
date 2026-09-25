@@ -42,10 +42,10 @@ The Docker outage exceeded the planned five-minute interruption. Its reported qu
 
 ## Not yet verified
 
-- Cached model loading and live YOLO/FastALPR throughput; GPU device visibility alone is verified.
-- The [official Sentinel resource guide](https://sentinel.gujarat.gov.in/resource) identifies `/api/ingest` as the catalogue and says its camera IDs and supplied RTSP/HLS URLs are the contract. The live adapter was corrected to use those values, and 13 edge tests pass. The authenticated JSON shape, authentication, RTSP/HLS connectivity, two concurrent feeds, preview playback, and 15-minute stability remain unverified.
-- The user selected the first two visible portal cameras: CAM01 (Chiman bhai Bridge) and CAM02 (Janpath). The portal preview video elements used `/cam01/index.m3u8` and `/cam02/index.m3u8`, so local `CAMERA_IDS` is pinned to `cam01,cam02`. This is not yet a verified mapping to catalogue IDs; the authenticated catalogue and worker still need testing.
-- The live AI image build was interrupted while downloading CUDA dependencies and did not produce an image. The corrected camera adapter is present in the rebuilt offline image only; the live image still needs a successful build.
+- Sentinel-camera model accuracy and sustained live throughput remain unverified; a later section records model loading and local RTSP fixture benchmarks.
+- The [official Sentinel resource guide](https://sentinel.gujarat.gov.in/resource) identifies `/api/ingest` as the catalogue and says its camera IDs and supplied RTSP/HLS URLs are the contract. The authenticated JSON shape, Sentinel RTSP/HLS connectivity, preview playback, and 15-minute live stability remain unverified. A later authenticated request returned HTTP 403.
+- The user selected the first two visible portal cameras: CAM01 (Chiman bhai Bridge) and CAM02 (Janpath). Their portal preview paths used `/cam01/` and `/cam02/`, but local `CAMERA_IDS` is currently blank and the mapping to authorised catalogue IDs is not confirmed. Live startup now requires two explicit IDs.
+- The live AI image was subsequently built successfully and loaded the three models; that does not validate access to a Sentinel feed.
 - A full database-volume stop/start was not exercised. API container restart and queued-event recovery with persistent Docker volumes were verified.
 - Repeated browser-render latency distribution, OCR accuracy on a permitted labelled plate set, and load capacity. One browser-visible synthetic alert was observed within three seconds, but no distribution or live-OCR timing has been measured.
 
@@ -65,3 +65,20 @@ The new catalogue gateway is separate from the two-camera AI worker. It searches
 | Existing offline workflow after refresh | Passed | The offline API/dashboard were recreated from updated images; the synthetic end-to-end smoke test passed. |
 
 An authorised camera outside CAM01/CAM02 has **not** been opened, and actual on-demand HLS playback has **not** been verified. Those acceptance checks require the authorised JSON catalogue and a reachable third live stream. No claim of live full-catalogue readiness follows from the unit tests or the expected 503 response.
+
+## Live-model preparation and local-stream checks on 2026-09-26 (local time)
+
+Configuration: the built live worker image on the same RTX 3050 laptop, persistent `model_cache` and `alpr_cache` volumes, and two short-lived FFmpeg publishers of Ultralytics' bundled `bus.jpg` image into local MediaMTX. The publishers were stopped after testing. No Sentinel frame was saved or analysed in these checks, and no OCR text was printed or stored.
+
+| Check | Measured result | Boundary |
+| --- | --- | --- |
+| Model load and cache | YOLOv8n, FastALPR plate detector and OCR model initialized. A second preparation run reused both plate-model files without downloading. | This proves model initialization, not recognition accuracy. |
+| Execution providers | YOLO used `cuda:0`; plate detector and OCR sessions reported `CUDAExecutionProvider` with CPU fallback. | ONNX Runtime provider availability and active session configuration were checked, not overall GPU utilization. |
+| Bundled-image model benchmark | 20 timed runs after three warm-ups: YOLOv8n/ByteTrack median 31.40 ms, p95 56.86 ms; FastALPR full-image median 37.97 ms, p95 50.64 ms. One vehicle box and zero plates were detected in the last run. | One bundled still image, not a labelled Sentinel dataset or end-to-end camera latency. |
+| One paced local RTSP feed | Over a 20-second probe: 94 frames decoded and 94 inference calls; warmed vision-call median 56.09 ms, p95 113.85 ms. Model warm-up was 9.99 s and stream startup 6.03 s. | Local repeated-image feed at about 5 fps, not Sentinel. |
+| Two concurrent paced local RTSP feeds | Over 20 seconds: 98/98 decoded/inferred frames on one feed and 94/94 on the other. Vision-call medians were 126.77/127.86 ms; p95s were 180.19/184.98 ms. | Two independent vision pipelines in one worker container, but the scene was the same repeated image on each feed. |
+| Authenticated Sentinel catalogue | HTTP 403 from `/api/ingest` with the current local configuration. The authenticated JSON, exact CAM01/CAM02 API IDs, and supplied stream URLs remain unavailable. | No authorised Sentinel camera could be decoded; no live-feed or watchlist claim follows. |
+| Direct RTSP access rule | The provided access note says RTSP/WebRTC use the public gateway rather than the HLS CDN, and RTSP requires registered-user credentials in the URL. The adapter now percent-encodes credentials and adds them only to the configured direct-stream host; focused tests pass. TCP port 8554 on the stated gateway was reachable from this laptop. | A reachable port is not a successful camera connection. Without an authorised catalogue path, no Sentinel stream could be decoded. |
+| Regression and deployment | 29 edge, 17 backend and 7 frontend tests passed; the online Compose configuration and live worker image built. The offline end-to-end smoke test passed with 154.4 ms synthetic ingest latency. A model preparation reused cached FastALPR files. ByteTrack's `lap` dependency is now in the image. | Synthetic and local fixture checks remain separate from real footage acceptance. |
+
+The local fixture establishes that the current models can load and execute on two concurrent 5-fps test feeds. It does **not** establish vehicle/plate recall, false-positive rate, or a need for tuning on Sentinel imagery. A permitted labelled image set or authorised live feeds with ground truth are required to decide that. No tuning was performed.

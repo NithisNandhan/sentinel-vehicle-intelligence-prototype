@@ -9,9 +9,11 @@ from pathlib import Path
 from types import SimpleNamespace
 from unittest.mock import patch
 import threading
+import urllib.error
 
 from sentinel_edge.api import CentralClient
-from sentinel_edge.cameras import Camera, discover, parse_catalogue, select_two, source_urls
+from sentinel_edge.benchmark import latency_summary
+from sentinel_edge.cameras import Camera, discover, parse_catalogue, rtsp_access_url, select_two, source_urls
 from sentinel_edge.catalogue_gateway import CatalogueState, GatewayError, GatewayHandler
 from sentinel_edge.config import Config
 from sentinel_edge.events import sighting
@@ -20,7 +22,7 @@ from sentinel_edge.privacy import mask_plate, normalize_plate, plate_hmac
 from sentinel_edge.relay import _ffmpeg_args
 from sentinel_edge.simulator import seed_events
 from sentinel_edge.stream import VideoFrame, read_camera
-from sentinel_edge.vision import VisionPipeline
+from sentinel_edge.vision import VisionPipeline, preferred_onnx_providers
 
 
 class PrivacyTests(unittest.TestCase):
@@ -61,6 +63,8 @@ class CameraTests(unittest.TestCase):
             {"id": 4, "live": True},
         ]})
         self.assertEqual([c.camera_id for c in select_two(cameras, ())], ["2", "3"])
+        with self.assertRaisesRegex(ValueError, "CAMERA_IDS"):
+            select_two(cameras, (), require_requested=True)
 
     def test_full_catalogue_keeps_offline_cameras_without_stream_urls(self):
         rows = {"cameras": [{"id": "cam01", "name": "Bridge", "location": "Ahmedabad",
@@ -91,6 +95,21 @@ class CameraTests(unittest.TestCase):
                          ("rtsp://grid.test:8554/stream/CAM-A",
                           "https://grid.test/live/stream/CAM-A/index.m3u8"))
 
+    def test_direct_rtsp_credentials_are_encoded_and_host_scoped(self):
+        with patch.dict(os.environ, {"EDGE_API_KEY": "a", "WATCHLIST_HMAC_KEY": "b",
+                                  "SENTINEL_EMAIL": "alice@example.com",
+                                  "SENTINEL_PASSWORD": "a@b:c/1",
+                                  "SENTINEL_RTSP_HOST": "103.250.160.189"}, clear=True):
+            config = Config.from_env(live=True)
+        source = "rtsp://103.250.160.189:8554/live/cam01"
+        self.assertEqual(rtsp_access_url(config, source),
+                         "rtsp://alice%40example.com:a%40b%3Ac%2F1@103.250.160.189:8554/live/cam01")
+        self.assertEqual(rtsp_access_url(config, "rtsp://outside.test/live/cam01"),
+                         "rtsp://outside.test/live/cam01")
+        self.assertEqual(rtsp_access_url(config, "rtsp://token@103.250.160.189:8554/live/cam01"),
+                         "rtsp://token@103.250.160.189:8554/live/cam01")
+        self.assertIsNone(rtsp_access_url(config, None))
+
     def test_discovery_uses_official_catalogue_endpoint(self):
         with patch.dict(os.environ, {"EDGE_API_KEY": "a", "WATCHLIST_HMAC_KEY": "b",
                                   "SENTINEL_EMAIL": "team@test.invalid", "SENTINEL_PASSWORD": "secret",
@@ -103,6 +122,16 @@ class CameraTests(unittest.TestCase):
             cameras = discover(config)
         self.assertEqual(open_url.call_args.args[0].full_url, "https://grid.test/api/ingest")
         self.assertEqual(cameras[0].camera_id, "1")
+
+    def test_discovery_reports_forbidden_without_exposing_credentials(self):
+        with patch.dict(os.environ, {"EDGE_API_KEY": "a", "WATCHLIST_HMAC_KEY": "b",
+                                  "SENTINEL_EMAIL": "team@test.invalid", "SENTINEL_PASSWORD": "secret"}, clear=True):
+            config = Config.from_env(live=True)
+        failure = urllib.error.HTTPError("https://grid.test/api/ingest", 403, "Forbidden", None, None)
+        with patch("sentinel_edge.cameras.urllib.request.urlopen", side_effect=failure):
+            with self.assertRaisesRegex(ValueError, "HTTP 403") as context:
+                discover(config)
+        self.assertNotIn("secret", str(context.exception))
 
     def test_live_requires_credentials(self):
         with patch.dict(os.environ, {"EDGE_API_KEY": "a", "WATCHLIST_HMAC_KEY": "b",
@@ -190,6 +219,22 @@ class RelayTests(unittest.TestCase):
             transport, frame = next(read_camera(config, camera, stop=threading.Event()))
         self.assertEqual(transport, "hls")
         self.assertEqual(frame.pts_ms, 1000)
+
+    def test_direct_reader_uses_encoded_rtsp_url(self):
+        with patch.dict(os.environ, {"EDGE_API_KEY": "a", "WATCHLIST_HMAC_KEY": "b",
+                                  "SENTINEL_EMAIL": "alice@example.com", "SENTINEL_PASSWORD": "p@ss",
+                                  "MEDIA_RELAY_BASE_URL": ""}, clear=True):
+            config = Config.from_env(live=True)
+        received = []
+        def fake_decode(url, *, transport, headers=None):
+            received.append((url, transport))
+            yield VideoFrame(object(), 1000, False)
+        with patch("sentinel_edge.stream._decode", side_effect=fake_decode):
+            next(read_camera(config, Camera("cam01", "Bridge",
+                       "rtsp://103.250.160.189:8554/live/cam01"), stop=threading.Event()))
+        self.assertEqual(received, [
+            ("rtsp://alice%40example.com:p%40ss@103.250.160.189:8554/live/cam01", "rtsp")
+        ])
 
 
 class CatalogueGatewayTests(unittest.TestCase):
@@ -297,6 +342,16 @@ class CatalogueGatewayTests(unittest.TestCase):
 
 
 class VisionTests(unittest.TestCase):
+    def test_latency_summary_reports_median_and_95th_percentile(self):
+        self.assertEqual(latency_summary([10, 20, 30, 40, 50]),
+                         {"median_ms": 30, "p95_ms": 50})
+
+    def test_preferred_onnx_providers_skip_uninstalled_tensorrt(self):
+        self.assertEqual(preferred_onnx_providers([
+            "TensorrtExecutionProvider", "CUDAExecutionProvider", "CPUExecutionProvider",
+        ]), ["CUDAExecutionProvider", "CPUExecutionProvider"])
+        self.assertEqual(preferred_onnx_providers(["CPUExecutionProvider"]), ["CPUExecutionProvider"])
+
     def test_two_read_consensus_and_dedup(self):
         class Image:
             shape = (200, 300, 3)

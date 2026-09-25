@@ -69,6 +69,7 @@ services:
       SENTINEL_PASSWORD: ${SENTINEL_PASSWORD:-}
       SENTINEL_COOKIE: ${SENTINEL_COOKIE:-}
       SENTINEL_BASE_URL: ${SENTINEL_BASE_URL:-https://cctv.corp8.cloud}
+      SENTINEL_RTSP_HOST: ${SENTINEL_RTSP_HOST:-103.250.160.189}
       CAMERA_IDS: ${CAMERA_IDS:-}
       MEDIA_RELAY_BASE_URL: rtsp://mediamtx:8554
     depends_on:
@@ -97,6 +98,7 @@ services:
       SENTINEL_PASSWORD: ${SENTINEL_PASSWORD:-}
       SENTINEL_COOKIE: ${SENTINEL_COOKIE:-}
       SENTINEL_BASE_URL: ${SENTINEL_BASE_URL:-https://cctv.corp8.cloud}
+      SENTINEL_RTSP_HOST: ${SENTINEL_RTSP_HOST:-103.250.160.189}
       CAMERA_IDS: ${CAMERA_IDS:-}
       MEDIA_RELAY_BASE_URL: rtsp://mediamtx:8554
     depends_on:
@@ -117,6 +119,7 @@ services:
       SENTINEL_PASSWORD: ${SENTINEL_PASSWORD:-}
       SENTINEL_COOKIE: ${SENTINEL_COOKIE:-}
       SENTINEL_BASE_URL: ${SENTINEL_BASE_URL:-https://cctv.corp8.cloud}
+      SENTINEL_RTSP_HOST: ${SENTINEL_RTSP_HOST:-103.250.160.189}
       MEDIAMTX_PUBLISH_URL: rtsp://mediamtx:8554
     depends_on:
       - mediamtx
@@ -143,6 +146,7 @@ services:
       SENTINEL_PASSWORD: ${SENTINEL_PASSWORD:-}
       SENTINEL_COOKIE: ${SENTINEL_COOKIE:-}
       SENTINEL_BASE_URL: ${SENTINEL_BASE_URL:-https://cctv.corp8.cloud}
+      SENTINEL_RTSP_HOST: ${SENTINEL_RTSP_HOST:-103.250.160.189}
       MEDIAMTX_PUBLISH_URL: rtsp://mediamtx:8554
     networks:
       default:
@@ -168,6 +172,7 @@ services:
       SENTINEL_PASSWORD: ${SENTINEL_PASSWORD:-}
       SENTINEL_COOKIE: ${SENTINEL_COOKIE:-}
       SENTINEL_BASE_URL: ${SENTINEL_BASE_URL:-https://cctv.corp8.cloud}
+      SENTINEL_RTSP_HOST: ${SENTINEL_RTSP_HOST:-103.250.160.189}
       CAMERA_IDS: ${CAMERA_IDS:-}
       MEDIA_RELAY_BASE_URL: rtsp://mediamtx:8554
       EDGE_DB_PATH: /data/outbox.sqlite3
@@ -175,6 +180,7 @@ services:
     volumes:
       - edge_data:/data
       - model_cache:/models
+      - alpr_cache:/root/.cache
     depends_on:
       - api
       - stream-adapter
@@ -211,4 +217,5 @@ volumes:
   edge_data:
   demo_edge_data:
   model_cache:
+  alpr_cache:
 
