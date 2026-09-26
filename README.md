@@ -27,7 +27,7 @@ Run these commands in the same PowerShell window. On a per-user Docker Desktop i
 
 Open <http://localhost:5173>. The operator key is in the uncommitted `.env` file as `OPERATOR_API_KEY`; enter it in the dashboard unlock field. The demo injector and operator actions require that key. API documentation is at <http://localhost:8000/docs>.
 
-Online mode requires the registered Sentinel email and access password in `.env`; a catalogue or HLS session may additionally require `SENTINEL_COOKIE`. YOLOv8n and FastALPR weights are downloaded automatically into persistent Docker volumes. `CAMERA_IDS=cam01,cam02` selects the first two portal cameras for this prototype:
+Online mode requires the registered Sentinel email and access password in `.env`. The adapter signs in through the portal form when the catalogue redirects to sign-in and keeps the resulting session cookie in memory only. `SENTINEL_COOKIE` remains an optional local override; normally leave it blank. YOLOv8n and FastALPR weights are downloaded automatically into persistent Docker volumes. `CAMERA_IDS=cam01,cam02` selects the first two portal cameras for this prototype:
 
 For direct RTSP access, the adapter first reads `cameras.json`, preserving any supplied stream URLs. For catalogue IDs without URLs, it uses the documented `rtsp://103.250.160.189:8554/stream/<id>` and `https://cctv.corp8.cloud/<id>/index.m3u8` patterns. It percent-encodes credentials and adds them only to `SENTINEL_RTSP_HOST` (default `103.250.160.189`), never to unrelated hosts.
 
@@ -42,7 +42,7 @@ Only two cameras are selected for AI processing. The worker tries the newer publ
 
 The selected portal cards are CAM01 (Chiman bhai Bridge) and CAM02 (Janpath); their documented public-grid IDs are `cam01` and `cam02`. The local `.env` is pinned to those IDs. The offline simulator has its own synthetic route and does not use `CAMERA_IDS`.
 
-Current access check: this account still receives a sign-in redirect from `/cameras.json`, an unauthorized response from the CAM01 RTSP endpoint, and HTTP 403 from the CAM01 HLS endpoint. The fallback selects URLs but cannot turn those responses into live video. Do not run the online profile unattended expecting camera processing until the provider confirms access-list permission and the correct access-password/session method.
+Access update on 2026-09-26: the updated local credentials successfully sign in, `/cameras.json` returns 30 cameras, and CAM01/CAM02 decode concurrently over both RTSP/TCP and authenticated HLS in short native checks. Camera discovery selects both without fallback. Full AI/dashboard runtime verification is currently blocked by a local Docker WSL engine startup failure; see `VALIDATION.md` for the separate checks. No footage was retained.
 
 Stop the current profile with `docker compose --profile offline down` or `docker compose --profile online down`. The database and outbox use persistent Docker volumes; `down` does not erase them.
 
@@ -67,7 +67,7 @@ The worker writes sightings to its SQLite outbox before sending them. The API de
 
 After unlocking the dashboard, the home page can search the authorised Sentinel catalogue by ID, camera name, or place name. Results are paged and include offline cameras, which cannot be previewed. Opening a live result starts a temporary MediaMTX preview; it does not change the two AI-monitored feeds. At most two temporary previews run at once, and idle previews stop after one minute. Source URLs and Sentinel credentials stay in the internal gateway, not in catalogue search responses.
 
-The catalogue gateway is available only in the online or native profile. `/cameras.json` must return authorised JSON. If it redirects to an HTML sign-in page, the dashboard shows a catalogue-unavailable message rather than scraping portal cards or showing the two monitored cameras as a false full-catalogue result. The offline demonstration remains usable without catalogue search.
+The catalogue gateway is available only in the online or native profile. `/cameras.json` must return authorised JSON. A sign-in redirect triggers one normal form-login attempt, with bounded retries and same-origin redirects only. If access still fails, the dashboard shows catalogue unavailable; it never scrapes portal cards or presents two monitored cameras as the full catalogue. The offline demonstration remains usable without catalogue search.
 
 ## Privacy and evidence
 

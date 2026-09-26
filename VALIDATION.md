@@ -43,7 +43,7 @@ The Docker outage exceeded the planned five-minute interruption. Its reported qu
 ## Not yet verified
 
 - Sentinel-camera model accuracy and sustained live throughput remain unverified; a later section records model loading and local RTSP fixture benchmarks.
-- The newer public-grid resource guide supplied by the team identifies `/cameras.json`, not the older/generic `/api/ingest`, as the public catalogue. Its authenticated JSON shape, Sentinel RTSP/HLS decoding, preview playback, and 15-minute live stability remain unverified.
+- The newer public-grid resource guide identifies `/cameras.json`, not the older/generic `/api/ingest`, as the public catalogue. Updated credentials now validate authenticated JSON and short RTSP/HLS decoding checks (see the latest section); browser preview playback and 15-minute AI stability remain unverified.
 - The user selected CAM01 (Chiman bhai Bridge) and CAM02 (Janpath). The newer guide identifies their IDs as `cam01` and `cam02`, and local `CAMERA_IDS` is now pinned to that pair. The documented-pattern fallback does not prove either feed is currently authorised or live.
 - The live AI image was subsequently built successfully and loaded the three models; that does not validate access to a Sentinel feed.
 - A full database-volume stop/start was not exercised. API container restart and queued-event recovery with persistent Docker volumes were verified.
@@ -83,7 +83,7 @@ Configuration: the built live worker image on the same RTX 3050 laptop, persiste
 
 The local fixture establishes that the current models can load and execute on two concurrent 5-fps test feeds. It does **not** establish vehicle/plate recall, false-positive rate, or a need for tuning on Sentinel imagery. A permitted labelled image set or authorised live feeds with ground truth are required to decide that. No tuning was performed.
 
-## Current public-grid access update on 2026-09-26 (local time)
+## Historical public-grid access failures on 2026-09-26 (local time)
 
 The team supplied a more specific public-grid guide: `/cameras.json` is the camera catalogue; direct RTSP uses `103.250.160.189:8554/stream/<id>` with URL-encoded registered-user credentials; HLS uses `https://cctv.corp8.cloud/<id>/index.m3u8`. Another pasted page still refers to `/api/ingest` and generic host URLs, so it is treated as an older or different deployment until the provider clarifies it. The common guidance about RTSP/TCP, PTS timing, mixed codecs, backoff, and loop discontinuities still applies.
 
@@ -98,3 +98,22 @@ The team supplied a more specific public-grid guide: `/cameras.json` is the came
 | Current regression | 35 edge, 17 backend, and 7 frontend tests passed. The online image and Compose configuration built; the offline end-to-end smoke test passed with 78.7 ms synthetic ingest latency. An ephemeral live worker selected `cam01,cam02` with `documented_fallback=True` without opening media. | Local/synthetic behavior is verified separately from Sentinel media access. |
 
 These access failures may mean the account lacks the required approved-list permission, uses a different access password, or needs a separate login session. The tests do not identify which. No live Sentinel frames or plate reads have been measured.
+
+## Updated credentials and actual live decoding on 2026-09-26 (local time)
+
+The user updated the local credentials. Normal portal form sign-in now succeeds, and the adapter performs that sign-in automatically when catalogue requests return a login page. Cookies remain in memory and are not included in operator responses. Failed authentication has a retry cooldown; cross-origin portal redirects are rejected. HLS media uses domain-scoped FFmpeg cookies rather than a raw Cookie header forwarded to arbitrary media hosts.
+
+| Check | Result | Boundary |
+| --- | --- | --- |
+| Authenticated catalogue | 30 JSON camera records; CAM01/CAM02 selected without fallback. | This is the current authorised catalogue, not an 8,000-camera deployment. |
+| HLS playlist access | Both CAM01 and CAM02 returned valid playlists after form login. | Separately followed by actual decoding below. |
+| Concurrent RTSP/TCP decoding | Native Windows PyAV 16.1.0: CAM01 328 frames in 20.016 seconds, startup 4.843 seconds; CAM02 481 frames in 20.125 seconds, startup 4.422 seconds. Both H.264, 1920x1080; no PTS discontinuities in these samples. | Decode only. No frames saved, AI calls, plate reads, central writes, or 15-minute stability test. |
+| Concurrent authenticated HLS decoding | CAM01 1,569 frames in 20.063 seconds, startup 2.484 seconds; CAM02 2,421 frames in 20.000 seconds, startup 3.313 seconds. Both H.264, 1920x1080. | Buffered content advanced PTS by about 104.6/80.7 seconds respectively. These counts are not real-time delivered fps or AI throughput, and do not establish low latency. |
+| Full-catalogue gateway search | Native `CatalogueState.search('cam03', 0, 25)` returned one authorised CAM03 result, with no source URL fields. | HTTP/dashboard playback and a third-camera preview remain unverified because Docker was unavailable. |
+| Authentication and regressions | 41 edge tests, 17 backend tests and 7 frontend tests passed. Dashboard production build passed with the existing large-bundle warning. | Tests include a local HTTP login fixture, cookie reuse/expiry, parallel sign-in, rejection cooldown, cross-origin protection and media cookie scoping. |
+| Updated live images | Stream adapter, catalogue gateway and worker rebuilt using cached dependency layers. | An image build does not prove runtime AI processing. |
+| Local Docker runtime | A normal restart briefly restored the engine and allowed rebuilding. Starting online services failed with HTTP 502 and WSL bootstrap exit `0xc00000fd`; subsequent Docker status was stopped. API requests timed out. | No factory reset, volume deletion, Windows restart, driver change or WSL reinstallation was performed. Root cause is not established; sustained AI/central/dashboard checks remain blocked. |
+
+Reproduce bounded decode checks with `backend/.venv/Scripts/python.exe scripts/check-live-access.py --seconds 20` and `--protocol hls` for the fallback. The script reads local `.env`, does not print source URLs or native error messages, and retains no media. Its optional 900-second duration is a decoder check, not the complete AI acceptance test.
+
+The brainstorming step kept this change scoped to the previously approved automatic sign-in workflow. No model tuning was performed or justified by these decoder-only results. Actual live YOLO/FastALPR performance, OCR ground-truth accuracy, a genuine central sighting and the 15-minute two-camera AI acceptance gate still require verification.

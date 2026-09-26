@@ -2,13 +2,10 @@
 
 from __future__ import annotations
 
-import base64
-import json
-import urllib.error
-import urllib.request
 from dataclasses import dataclass, replace
 from urllib.parse import quote, urlparse, urlsplit, urlunsplit
 
+from .auth import PortalAuthenticationError, portal_session
 from .config import Config
 
 
@@ -81,22 +78,11 @@ def parse_catalogue(data: object, *, include_without_urls: bool = False) -> list
 
 
 def discover(config: Config) -> list[Camera]:
-    token = base64.b64encode(f"{config.sentinel_email}:{config.sentinel_password}".encode()).decode()
-    request = urllib.request.Request(
-        config.sentinel_base_url + "/cameras.json",
-        headers={"Accept": "application/json"},
-    )
-    # Never forward local credentials if the catalogue redirects to sign-in.
-    request.add_unredirected_header("Authorization", "Basic " + token)
-    if config.sentinel_cookie:
-        request.add_unredirected_header("Cookie", config.sentinel_cookie)
     try:
-        with urllib.request.urlopen(request, timeout=10) as response:
-            cameras = parse_catalogue(json.load(response), include_without_urls=True)
-    except urllib.error.HTTPError as error:
-        raise CatalogueUnavailable(f"Sentinel catalogue HTTP {error.code}; authorised access is required") from None
-    except json.JSONDecodeError:
-        raise CatalogueUnavailable("Sentinel catalogue did not return JSON; authorised access is required") from None
+        data = portal_session(config).get_json(config.sentinel_base_url + "/cameras.json")
+        cameras = parse_catalogue(data, include_without_urls=True)
+    except PortalAuthenticationError as error:
+        raise CatalogueUnavailable(str(error)) from None
     if not cameras:
         raise ValueError("Camera catalogue contains no valid camera IDs")
     result = []
@@ -167,10 +153,6 @@ def rtsp_access_url(config: Config, url: str | None) -> str | None:
     return urlunsplit(parsed._replace(netloc=f"{user}:{password}@{parsed.netloc}"))
 
 
-def hls_headers(config: Config) -> dict[str, str]:
-    token = base64.b64encode(f"{config.sentinel_email}:{config.sentinel_password}".encode()).decode()
-    headers = {"Authorization": "Basic " + token}
-    if config.sentinel_cookie:
-        headers["Cookie"] = config.sentinel_cookie
-    return headers
+def hls_headers(config: Config, url: str | None = None) -> dict[str, str]:
+    return portal_session(config).headers_for(url or config.sentinel_base_url)
 

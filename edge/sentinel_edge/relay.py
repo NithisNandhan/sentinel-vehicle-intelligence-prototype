@@ -8,6 +8,7 @@ import threading
 import time
 from concurrent.futures import ThreadPoolExecutor, as_completed
 
+from .auth import media_http_options, portal_session
 from .cameras import Camera, hls_headers, rtsp_access_url, source_urls
 from .config import Config
 
@@ -19,7 +20,7 @@ def _probe(url: str, transport: str, headers: dict[str, str] | None) -> str:
         raise RuntimeError("PyAV is required for relay probing") from exc
     options = {"rtsp_transport": "tcp"} if transport == "rtsp" else {}
     if headers:
-        options["headers"] = "".join(f"{key}: {value}\r\n" for key, value in headers.items())
+        options.update(media_http_options(url, headers))
     with av.open(url, options=options, timeout=(8, 8)) as container:
         video = next((stream for stream in container.streams if stream.type == "video"), None)
         if video is None:
@@ -39,7 +40,8 @@ def _ffmpeg_args(url: str, transport: str, headers: dict[str, str] | None,
     if transport == "rtsp":
         args += ["-rtsp_transport", "tcp"]
     elif headers:
-        args += ["-headers", "".join(f"{key}: {value}\r\n" for key, value in headers.items())]
+        for key, value in media_http_options(url, headers).items():
+            args += ["-" + key, value]
     args += ["-i", url, "-map", "0:v:0", "-an"]
     if codec == "h264":
         args += ["-c:v", "copy"]
@@ -57,17 +59,19 @@ def relay_camera(config: Config, camera: Camera, stop: threading.Event, *, path:
         raise RuntimeError("ffmpeg executable not found")
     rtsp, hls = source_urls(camera)
     rtsp = rtsp_access_url(config, rtsp)
-    sources = [(url, transport, headers) for url, transport, headers in
-               ((rtsp, "rtsp", None), (hls, "hls", hls_headers(config))) if url]
+    sources = [(url, transport) for url, transport in ((rtsp, "rtsp"), (hls, "hls")) if url]
     target = config.mediamtx_publish_url + "/" + (path or camera.camera_id)
     backoff = 2
     while not stop.is_set():
-        for url, transport, headers in sources:
+        for url, transport in sources:
             if stop.is_set():
                 return
             try:
+                headers = hls_headers(config, url) if transport == "hls" else None
                 codec = _probe(url, transport, headers)
             except (OSError, ValueError, RuntimeError):
+                if transport == "hls":
+                    portal_session(config).invalidate()
                 continue
             encoders = ["copy"] if codec == "h264" else (["h264_nvenc", "libx264"] if _nvenc_available() else ["libx264"])
             for encoder in encoders:
@@ -89,6 +93,8 @@ def relay_camera(config: Config, camera: Camera, stop: threading.Event, *, path:
                 if time.monotonic() - launched_at > 10:
                     break  # Stream interruption, not encoder initialization failure.
                 # NVENC may be listed but unavailable at runtime; use CPU fallback.
+            if transport == "hls":
+                portal_session(config).invalidate()
         stop.wait(backoff)
         backoff = min(backoff * 2, 30)
 

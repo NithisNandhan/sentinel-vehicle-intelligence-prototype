@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import json
-import io
 import os
 import tempfile
 import unittest
@@ -9,7 +8,6 @@ from pathlib import Path
 from types import SimpleNamespace
 from unittest.mock import patch
 import threading
-import urllib.error
 
 from sentinel_edge.api import CentralClient
 from sentinel_edge.benchmark import latency_summary
@@ -118,15 +116,14 @@ class CameraTests(unittest.TestCase):
                                   "SENTINEL_EMAIL": "team@test.invalid", "SENTINEL_PASSWORD": "secret",
                                   "SENTINEL_BASE_URL": "https://grid.test"}, clear=True):
             config = Config.from_env(live=True)
-        response = io.BytesIO(json.dumps({"cameras": [
+        response = {"cameras": [
             {"id": "cam01", "name": "Bridge", "status": "live"},
             {"id": "cam02", "name": "Janpath", "status": "offline"},
-        ]}).encode())
-        with patch("sentinel_edge.cameras.urllib.request.urlopen", return_value=response) as open_url:
+        ]}
+        with patch("sentinel_edge.cameras.portal_session") as session:
+            session.return_value.get_json.return_value = response
             cameras = discover(config)
-        self.assertEqual(open_url.call_args.args[0].full_url, "https://grid.test/cameras.json")
-        self.assertNotIn("Authorization", open_url.call_args.args[0].headers)
-        self.assertIn("Authorization", open_url.call_args.args[0].unredirected_hdrs)
+        session.return_value.get_json.assert_called_once_with("https://grid.test/cameras.json")
         self.assertEqual([camera.camera_id for camera in cameras], ["cam01", "cam02"])
         self.assertEqual(cameras[0].rtsp_url, "rtsp://103.250.160.189:8554/stream/cam01")
         self.assertEqual(cameras[0].hls_url, "https://grid.test/cam01/index.m3u8")
@@ -136,8 +133,8 @@ class CameraTests(unittest.TestCase):
         with patch.dict(os.environ, {"EDGE_API_KEY": "a", "WATCHLIST_HMAC_KEY": "b",
                                   "SENTINEL_EMAIL": "team@test.invalid", "SENTINEL_PASSWORD": "test"}, clear=True):
             config = Config.from_env(live=True)
-        with patch("sentinel_edge.cameras.urllib.request.urlopen",
-                   return_value=io.BytesIO(b'["cam01", "cam02"]')):
+        with patch("sentinel_edge.cameras.portal_session") as session:
+            session.return_value.get_json.return_value = ["cam01", "cam02"]
             cameras = discover(config)
         self.assertEqual([camera.camera_id for camera in cameras], ["cam01", "cam02"])
         self.assertEqual(cameras[0].hls_url, "https://cctv.corp8.cloud/cam01/index.m3u8")
@@ -146,8 +143,9 @@ class CameraTests(unittest.TestCase):
         with patch.dict(os.environ, {"EDGE_API_KEY": "a", "WATCHLIST_HMAC_KEY": "b",
                                   "SENTINEL_EMAIL": "team@test.invalid", "SENTINEL_PASSWORD": "secret"}, clear=True):
             config = Config.from_env(live=True)
-        failure = urllib.error.HTTPError("https://grid.test/cameras.json", 403, "Forbidden", None, None)
-        with patch("sentinel_edge.cameras.urllib.request.urlopen", side_effect=failure):
+        from sentinel_edge.auth import PortalAuthenticationError
+        with patch("sentinel_edge.cameras.portal_session") as session:
+            session.return_value.get_json.side_effect = PortalAuthenticationError("Sentinel catalogue HTTP 403")
             with self.assertRaisesRegex(CatalogueUnavailable, "HTTP 403") as context:
                 discover(config)
         self.assertNotIn("secret", str(context.exception))
@@ -197,7 +195,8 @@ class CameraTests(unittest.TestCase):
                                   "SENTINEL_EMAIL": "team@test.invalid", "SENTINEL_PASSWORD": "test",
                                   "CAMERA_IDS": "cam01,cam02"}, clear=True):
             config = Config.from_env(live=True)
-        with patch("sentinel_edge.cameras.urllib.request.urlopen", return_value=io.BytesIO(b'[]')):
+        with patch("sentinel_edge.cameras.portal_session") as session:
+            session.return_value.get_json.return_value = []
             with self.assertRaisesRegex(ValueError, "no valid camera IDs"):
                 discover_live_pair(config)
 
@@ -364,9 +363,10 @@ class CatalogueGatewayTests(unittest.TestCase):
         with patch.dict(os.environ, {"EDGE_API_KEY": "a", "WATCHLIST_HMAC_KEY": "b",
                                   "SENTINEL_EMAIL": "team@test.invalid", "SENTINEL_PASSWORD": "test"}, clear=True):
             config = Config.from_env(live=True)
-        state = CatalogueState(config, fetcher=lambda cfg: discover(cfg, include_without_urls=True))
-        with patch("sentinel_edge.cameras.urllib.request.urlopen",
-                   return_value=io.BytesIO(b"<html><title>Sign in</title></html>")):
+        state = CatalogueState(config)
+        from sentinel_edge.auth import PortalAuthenticationError
+        with patch("sentinel_edge.cameras.portal_session") as session:
+            session.return_value.get_json.side_effect = PortalAuthenticationError("Sentinel sign-in failed")
             with self.assertRaisesRegex(GatewayError, "authorised JSON access"):
                 state.search("cam", 0, 25)
 
