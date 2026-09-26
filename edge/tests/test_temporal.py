@@ -116,8 +116,89 @@ class TemporalTests(unittest.TestCase):
             with self.assertRaises(ValueError):
                 TemporalPlateReader(ALPHABET, "_", **options)
 
+    def test_invalid_padding_prefix_cannot_consume_the_beam(self):
+        reader = TemporalPlateReader(ALPHABET, "_", beam_width=1)
+        rows = probabilities("GJ01AB1234")
+        rows[0] = [0.0] * len(ALPHABET)
+        rows[0][ALPHABET.index("_")] = 0.55
+        rows[0][ALPHABET.index("G")] = 0.45
+        for index in range(3):
+            reader.add(rows, timestamp_ms=index * 300)
+        self.assertEqual(reader.candidates()[0].plate, "GJ01AB1234")
+        # Grammar must not upgrade the actual weak G probability into evidence.
+        self.assertAlmostEqual(reader.candidates()[0].minimum_character_score, 0.45)
+        self.assertIsNone(reader.accepted(0.85))
+
+    def test_confident_prefix_does_not_hide_uncertain_trailing_padding(self):
+        reader = self.reader()
+        rows = probabilities("GJ01123")
+        for position in range(7, len(rows)):
+            rows[position] = [0.0] * len(ALPHABET)
+            rows[position][ALPHABET.index("_")] = 0.55
+            rows[position][ALPHABET.index("X")] = 0.45
+        for index in range(3):
+            reader.add(rows, timestamp_ms=index * 300)
+        self.assertGreater(reader.candidates()[0].score, 0.9)
+        self.assertIsNone(reader.accepted(0.85))
+
+    def test_trailing_padding_requires_two_separate_observations(self):
+        reader = self.reader()
+        for index, (pad_score, quality) in enumerate(((0.99, 1.0), (0.59, 0.1), (0.59, 0.1))):
+            rows = probabilities("GJ01123")
+            for position in range(7, len(rows)):
+                rows[position] = [0.0] * len(ALPHABET)
+                rows[position][ALPHABET.index("_")] = pad_score
+                rows[position][ALPHABET.index("X")] = 1 - pad_score
+            reader.add(rows, timestamp_ms=index * 300, quality=quality)
+        self.assertIsNone(reader.accepted(0.85))
+
+    def test_prefix_pruning_preserves_supported_common_layouts_and_scores(self):
+        for plate in ("GJ01123", "DL1CAA1234", "GJ123ABC1234", "24BH1234A", "24BH1234AB"):
+            with self.subTest(plate=plate):
+                reader = self.reader()
+                for index in range(3):
+                    reader.add(probabilities(plate), timestamp_ms=index * 300)
+                result = reader.accepted(0.85)
+                self.assertEqual(result.plate, plate)
+                self.assertAlmostEqual(result.score, 0.96)
+
+    def test_padding_inside_text_and_too_few_slots_cannot_be_accepted(self):
+        for rows in (probabilities("GJ01_AB1234"), probabilities("GJ01123")[:6]):
+            reader = self.reader()
+            for index in range(3):
+                reader.add(rows, timestamp_ms=index * 300)
+            self.assertIsNone(reader.accepted(0.85))
+
+    def test_unsupported_alphabet_tokens_never_become_plate_characters(self):
+        alphabet = ALPHABET + "?"
+        reader = TemporalPlateReader(alphabet, "_")
+        rows = [[0.0] * len(alphabet) for _ in range(10)]
+        for row in rows:
+            row[alphabet.index("?")] = 1.0
+        for index in range(3):
+            reader.add(rows, timestamp_ms=index * 300)
+        self.assertEqual(reader.candidates(), [])
+        self.assertIsNone(reader.accepted(0.85))
+
 
 class PipelineTemporalTests(unittest.TestCase):
+    def test_motion_discontinuity_discards_evidence_without_resetting_budget(self):
+        vision, image, box = self.pipeline([probabilities("GJ01AB1234")] * 3)
+        box.xyxy = [SimpleNamespace(tolist=lambda: [0, 0, 80, 40])]
+        vision.process(image, pts_ms=1000)
+        vision.process(image, pts_ms=1300)
+        box.xyxy = [SimpleNamespace(tolist=lambda: [180, 140, 260, 180])]
+        self.assertEqual(vision.process(image, pts_ms=1600), [])
+        self.assertEqual(vision.tracks["7"].reader.observation_count, 1)
+        self.assertEqual(vision.tracks["7"].attempts, 3)
+        self.assertEqual(vision.metrics["track_consistency_resets"], 1)
+
+    def test_long_video_time_gap_does_not_combine_old_reads(self):
+        vision, image, _ = self.pipeline([probabilities("GJ01AB1234")] * 3)
+        vision.process(image, pts_ms=1000)
+        vision.process(image, pts_ms=1300)
+        self.assertEqual(vision.process(image, pts_ms=4000), [])
+        self.assertEqual(vision.tracks["7"].reader.observation_count, 1)
     def pipeline(self, matrices):
         class Image:
             shape = (200, 300, 3)
@@ -173,6 +254,8 @@ class PipelineTemporalTests(unittest.TestCase):
             self.assertEqual(vision.process(image, pts_ms=1000 + index * 400), [])
         self.assertEqual(vision.metrics["probability_observations"], 40)
         self.assertEqual(vision.tracks["7"].reader.observation_count, 12)
+        self.assertEqual(vision.tracks["7"].no_read_reason, "attempt_budget_exhausted")
+        self.assertEqual(vision.metrics["no_read_tracks"], 1)
         self.assertNotIn("GJ01AB1234", str(vision.metrics))
 
     def test_frames_too_close_are_not_counted_twice(self):

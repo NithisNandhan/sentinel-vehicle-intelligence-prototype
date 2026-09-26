@@ -15,11 +15,18 @@ The original baseline used a 384-pixel plate detector, CCT-XS OCR and two identi
 3. Detect plate regions in the vehicle crop. Select the highest detector-scoring region, add small bounded padding, and reject crops smaller than 20 by 6 pixels. These thresholds are engineering guards, not proof that a crop is readable. Wider candidate processing is deliberately allowed than in the old baseline.
 4. Run the pretrained OCR network. The public OCR API exposes only winning characters and their scores; our narrow adapter retrieves all alternatives for each character slot using the same preprocessing and ONNX output. A runtime check compares that adapter with the public API on an in-memory synthetic text image, including probability row sums.
 5. Keep the latest twelve probability matrices in RAM for that vehicle. Weight observations by plate-crop area, bounded between 0.1 and 1. Average each character's probabilities across observations. Do not multiply scores as if adjacent frames were independent evidence.
-6. Decode a bounded beam of at most 200 alternatives, considering the four highest-probability tokens plus padding per slot. Padding must trail the text. Filter for broad common state-registration and Bharat-series layouts. Grammar is a hint, not an exhaustive legal validator; no assumed state or registration database is used. Filtering does not renormalize the scores.
-7. Accept only after at least three temporally separated observations. Require mean character score at least the configured threshold (default 0.85), weakest character score at least 0.75, a log-score margin of at least 0.5 over the next retained valid alternative, and support of at least 0.60 for each character in two observations. Otherwise abstain.
-8. Emit once per track; suppress repeat plate sightings for five minutes. Existing event construction immediately masks the plate and computes its keyed HMAC. Only protected metadata enters the SQLite outbox and central API. Live events identify the model as `yolov8n+fastalpr-cct-s-v2+temporal-v1`.
+6. Decode a bounded beam of at most 200 alternatives, considering the four highest-probability tokens plus padding per slot. Padding must trail the text. Apply broad state-registration and Bharat-series grammar to prefixes during beam expansion, before pruning. Grammar is a hint, not an exhaustive legal validator; no assumed state or registration database is used. Filtering does not renormalize the scores.
+7. Accept only after at least three temporally separated observations. Require mean character score at least the configured threshold (default 0.85), weakest character score at least 0.75, a log-score margin of at least 0.5 over the next retained valid alternative, and support of at least 0.60 for each character in two observations. Trailing padding must also have fused score >= 0.75 and repeated support. Otherwise abstain.
+8. Emit once per track; suppress repeat plate sightings for five minutes. Existing event construction immediately masks the plate and computes its keyed HMAC. Only protected metadata enters the SQLite outbox and central API. Current live events identify the model as `yolov8n+fastalpr-cct-s-v2+temporal-v2`; the earlier live comparison below used v1.
 
 Timestamp discontinuities reset the tracking evidence. A large shift of a plate region within the vehicle crop clears that plate's fusion buffer. These guards reduce accidental mixing but cannot guarantee correct vehicle association. Scene cuts with continuous timestamps and small spatial changes can still escape these guards; no appearance-matching system was added.
+
+Temporal v2 additionally clears fusion on abrupt vehicle geometry/class changes
+or video-time gaps exceeding two seconds, without resetting the attempt budget.
+Exhausted attempts receive an internal NO-READ diagnostic, not an alert. The
+licensed multi-frame failure-curve pilot and experimental PARSeq comparison are
+documented in [the degradation methodology](DEGRADATION_BENCHMARK.md). Neither
+model produced an accepted plate in that one-vehicle development pilot.
 
 ## Scores and limitations
 

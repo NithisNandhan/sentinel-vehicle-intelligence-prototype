@@ -92,6 +92,11 @@ The live worker now combines pretrained deep-learning plate OCR with per-vehicle
 
 ## Local verification
 
+The opt-in multi-frame degradation benchmark separates localization and OCR
+failures on explicitly licensed, labelled input. Its initial one-vehicle pilot
+does not establish general accuracy or live timing. PARSeq is research-only;
+production remains CCT-S. See [benchmark methodology](docs/DEGRADATION_BENCHMARK.md).
+
 With the offline profile running and Python 3.11+ available on the host, execute the synthetic API workflow check:
 
 ```powershell

@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import statistics
+import math
 import time
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -25,6 +26,8 @@ class PlateObservation:
     plate: str
     confidence: float
     track_id: str
+    # In-memory only: lets labelled benchmarks associate results to a target.
+    vehicle_bbox: tuple[int, int, int, int] | None = None
 
 
 @dataclass(repr=False)
@@ -38,6 +41,28 @@ class _Track:
     last_attempt_ms: int | None = None
     plate_center: tuple[float, float] | None = None
     counted_multi: bool = False
+    vehicle_bbox: tuple[int, int, int, int] | None = None
+    last_bbox_pts: int | None = None
+    plate_regions: int = 0
+    probability_observations: int = 0
+    vehicle_class: int | None = None
+    no_read_reason: str | None = None
+
+
+def track_consistent(previous, current, previous_class=None, current_class=None) -> bool:
+    """Conservative discontinuity guard, not proof of vehicle identity."""
+    if previous is None:
+        return True
+    if previous_class is not None and current_class is not None and previous_class != current_class:
+        return False
+    pw, ph = previous[2] - previous[0], previous[3] - previous[1]
+    cw, ch = current[2] - current[0], current[3] - current[1]
+    if min(pw, ph, cw, ch) <= 0:
+        return False
+    area_ratio, aspect_ratio = cw * ch / (pw * ph), (cw / ch) / (pw / ph)
+    displacement = math.hypot((current[0] + current[2] - previous[0] - previous[2]) / 2,
+                              (current[1] + current[3] - previous[1] - previous[3]) / 2)
+    return 0.4 <= area_ratio <= 2.5 and 0.5 <= aspect_ratio <= 2 and displacement <= 0.75 * math.hypot(pw, ph)
 
 
 class VisionPipeline:
@@ -47,7 +72,8 @@ class VisionPipeline:
 
     def __init__(self, model_path: Path, *, ocr_min_confidence: float = 0.85,
                  dedup_seconds: int = 300, multi_frame: bool = True,
-                 ocr_model: str | None = None, detector_model: str | None = None):
+                 ocr_model: str | None = None, detector_model: str | None = None,
+                 ocr_spacing_ms: int = 300):
         if not model_path.is_file():
             raise FileNotFoundError(f"Missing model at {model_path}; cache yolov8n.pt before running live mode")
         try:
@@ -64,6 +90,9 @@ class VisionPipeline:
             ort.preload_dlls()
         providers = preferred_onnx_providers(ort.get_available_providers())
         self.multi_frame = multi_frame
+        if not 150 <= ocr_spacing_ms <= 1000:
+            raise ValueError("OCR spacing must preserve separated temporal observations")
+        self.ocr_spacing_ms = ocr_spacing_ms
         self.ocr_model_name = ocr_model or ("cct-s-v2-global-model" if multi_frame else "cct-xs-v2-global-model")
         self.detector_model_name = detector_model or ("yolo-v9-t-512-license-plate-end2end" if multi_frame else "yolo-v9-t-384-license-plate-end2end")
         self.alpr = ALPR(detector_model=self.detector_model_name,
@@ -75,7 +104,7 @@ class VisionPipeline:
         self.last_plate_seen: dict[str, float] = {}
         self.metrics: dict[str, int | float] = {}
         self.max_tracks = 128
-        self.model_version = "yolov8n+fastalpr-cct-s-v2+temporal-v1" if multi_frame else "yolov8n+fastalpr-legacy"
+        self.model_version = "yolov8n+fastalpr-cct-s-v2+temporal-v2" if multi_frame else "yolov8n+fastalpr-legacy"
 
     def _count(self, key: str, value: int = 1) -> None:
         if not hasattr(self, "metrics"):
@@ -114,13 +143,26 @@ class VisionPipeline:
             state.last_seen = now
             temporal = getattr(self, "multi_frame", False)
             timestamp_ms = pts_ms if pts_ms is not None else round(now * 1000)
-            if state.emitted or state.attempts >= (40 if temporal else 5):
-                continue
-            if temporal and state.last_attempt_ms is not None and timestamp_ms - state.last_attempt_ms < 300:
-                continue
             x1, y1, x2, y2 = [int(value) for value in box.xyxy[0].tolist()]
             height, width = image.shape[:2]
             x1, y1, x2, y2 = max(0, x1), max(0, y1), min(width, x2), min(height, y2)
+            current_class = int(box.cls.item()) if getattr(box, "cls", None) is not None else None
+            current_box = (x1, y1, x2, y2)
+            gap = timestamp_ms - state.last_bbox_pts if state.last_bbox_pts is not None else 0
+            if temporal and not state.emitted and (
+                    gap > 2000 or gap < 0 or not track_consistent(state.vehicle_bbox, current_box,
+                                                                state.vehicle_class, current_class)):
+                state.reader = None
+                state.plate_center = None
+                state.counted_multi = False
+                self._count("track_consistency_resets")
+            state.vehicle_class = current_class
+            state.vehicle_bbox = (x1, y1, x2, y2)
+            state.last_bbox_pts = timestamp_ms
+            if state.emitted or state.attempts >= (40 if temporal else 5):
+                continue
+            if temporal and state.last_attempt_ms is not None and timestamp_ms - state.last_attempt_ms < getattr(self, "ocr_spacing_ms", 300):
+                continue
             if x2 - x1 < (64 if temporal else 120) or y2 - y1 < (32 if temporal else 50):
                 continue
             crop = image[y1:y2, x1:x2]
@@ -139,11 +181,16 @@ class VisionPipeline:
             if temporal:
                 observation = self._temporal_crop(crop, state, track_id, timestamp_ms)
                 if observation is not None:
+                    observation = PlateObservation(observation.plate, observation.confidence,
+                                                   observation.track_id, (x1, y1, x2, y2))
                     state.emitted = True
                     if observation.plate not in self.last_plate_seen:
                         self.last_plate_seen[observation.plate] = now
                         observations.append(observation)
                         self._count("accepted_sightings")
+                elif state.attempts >= 40 and state.no_read_reason is None:
+                    state.no_read_reason = "attempt_budget_exhausted"
+                    self._count("no_read_tracks")
                 continue
             results = self.alpr.predict(crop)
             for result in results:
@@ -191,6 +238,7 @@ class VisionPipeline:
     def _temporal_crop(self, crop, state: _Track, track_id: str, timestamp_ms: int) -> PlateObservation | None:
         detections = self.alpr.detector.predict(crop)
         self._count("plate_regions", len(detections))
+        state.plate_regions += len(detections)
         if not detections:
             return None
         # One spatially coherent plate per vehicle/observation, not every box.
@@ -227,6 +275,7 @@ class VisionPipeline:
                                 quality=min(1.0, (x2 - x1) * (y2 - y1) / 2000)):
             return None
         self._count("probability_observations")
+        state.probability_observations += 1
         if state.reader.observation_count >= 3:
             if not state.counted_multi:
                 state.counted_multi = True

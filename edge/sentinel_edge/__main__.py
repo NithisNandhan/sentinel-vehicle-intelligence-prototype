@@ -14,10 +14,17 @@ from .config import Config
 
 def main() -> None:
     parser = argparse.ArgumentParser(prog="python -m sentinel_edge")
-    parser.add_argument("mode", choices=("live", "relay", "gateway", "simulate", "prepare-models", "benchmark-models", "benchmark-live", "probe-stream", "probe-two-streams"))
+    parser.add_argument("mode", choices=("live", "relay", "gateway", "simulate", "prepare-models", "benchmark-models", "benchmark-live", "benchmark-degradation", "probe-stream", "probe-two-streams"))
     parser.add_argument("--once", action="store_true", help="Send offline events once and exit")
     parser.add_argument("--probe-camera-id", default="probe-bus", help="Local MediaMTX path used only for probe-stream")
     parser.add_argument("--probe-seconds", type=int, default=20, help="Observation duration for stream probes or live benchmark")
+    parser.add_argument("--manifest", type=Path, help="Licensed, labelled benchmark manifest (never Sentinel recordings)")
+    parser.add_argument("--report", type=Path, help="Optional aggregate-only generated benchmark report")
+    parser.add_argument("--degradation-family", choices=("resolution", "blur", "motion", "noise", "darkness"), default="resolution")
+    parser.add_argument("--benchmark-stage", choices=("both", "end_to_end", "oracle_plate_ocr"), default="both")
+    parser.add_argument("--ocr-spacing-ms", type=int, default=300)
+    parser.add_argument("--ocr-backend", choices=("cct", "parseq"), default="cct",
+                        help="Degradation benchmark only; PARSeq needs isolated research dependencies")
     args = parser.parse_args()
     logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
     config = Config.from_env(live=args.mode in {"live", "relay", "gateway", "benchmark-live"})
@@ -40,6 +47,13 @@ def main() -> None:
         elif args.mode == "benchmark-models":
             from .benchmark import run_model_benchmark
             run_model_benchmark(config.model_cache_dir / "yolov8n.pt")
+        elif args.mode == "benchmark-degradation":
+            if args.manifest is None or not 150 <= args.ocr_spacing_ms <= 1000:
+                parser.error("benchmark-degradation needs --manifest and temporal spacing between 150 and 1000 ms")
+            from .degradation_benchmark import run_degradation_benchmark
+            stages = None if args.benchmark_stage == "both" else [args.benchmark_stage]
+            run_degradation_benchmark(config, args.manifest, family=args.degradation_family, stages=stages,
+                                      spacing_ms=args.ocr_spacing_ms, output_path=args.report, ocr_backend=args.ocr_backend)
         elif args.mode in {"probe-stream", "probe-two-streams"}:
             if not 1 <= args.probe_seconds <= 300:
                 parser.error("--probe-seconds must be between 1 and 300")

@@ -183,3 +183,76 @@ Verification: **60 edge tests, 17 backend tests and 7 frontend tests passed**. E
 **Measured outcome: zero accepted live plate identifiers across both cameras.** The upgrade is implemented, but useful recognition is still unproven. There are no ground-truth labels, so whole-plate accuracy, accepted precision, candidate recall and confidence calibration remain unknown. Zero accepted identifiers does not prove recognition is impossible; nor does successful fusion in a synthetic test show that this footage contains sufficient character evidence. The genuine-sighting and fifteen-minute AI acceptance gates remain unmet. No threshold was lowered to generate alerts, and no tuning was performed.
 
 Deployment handoff: the rebuilt temporal worker is running. Post-test source stalls required restarting the stream adapter and worker; their cause was not established. At **05:18:55–56 UTC**, fresh central health reports showed CAM01 ONLINE with 431 decoded / 144 inferred frames, CAM02 ONLINE with 872 decoded / 147 inferred frames, and zero outbox depth on both. The worker's checked startup logs had no tracebacks or AI-processing failures and reported CUDA providers. This verifies restored processing and health delivery at that snapshot, not uninterrupted stability or a genuine recognised plate.
+
+## Licensed multi-frame degradation pilot on 2026-09-26
+
+The final runs generated reports at approximately 13:44–13:45 UTC. A manually
+labelled development passage used three distinct, vehicle-centred video-derived
+NIVU images published under CC BY 4.0. Original video PTS were unavailable;
+400 ms replay spacing was explicitly assigned. This is one vehicle, not an
+independent test set or a live timing validation. See
+[method, attribution and reproduction](docs/DEGRADATION_BENCHMARK.md).
+
+Both CCT-S and the pinned official PARSeq model were evaluated with the same
+temporal v2 safeguards, frames, thresholds and declared replay timing. Each ran
+21 quality conditions in two stages: automatic detection/tracking/OCR and a
+human-marked-crop OCR diagnostic. Across **84 condition-stage evaluations of
+the same passage**, there were **zero correct accepted readings, zero wrong
+accepted readings and 84 abstentions**. Accepted precision is undefined at zero
+coverage. This is not evidence of general zero accuracy or a universal limit.
+
+| Resolution scale | Median annotated plate width | CCT end-to-end diagnostic |
+|---|---|---|
+| 1.0 | 109 px | Correct final top candidate, but weakest character score 0.259; abstained |
+| 0.75 | 82 px | Candidate ranking ambiguity; abstained |
+| 0.5 | 55 px | Candidate ranking ambiguity; abstained |
+| 0.375 | 41 px | True label absent from final retained beam; abstained |
+| 0.25 | 27 px | Target plate localization failed; abstained |
+| 0.1875 | 20 px | Target plate localization failed; abstained |
+| 0.125 | 14 px | Target plate localization failed; abstained |
+
+At original quality the CCT end-to-end best mean score was 0.8584, but its
+weakest score was 0.2588. The marked-crop stage also abstained: best mean 0.8261,
+weakest 0.3800, and the correct identifier was not top-ranked. PARSeq's original
+marked-crop result was similarly insufficient: best mean 0.8706, weakest 0.1912,
+with incorrect top ranking. None of these scores is calibrated correctness.
+All Gaussian blur, horizontal motion, noise and brightness conditions also
+abstained. Recognition already fails at original quality, so this pilot does
+not establish the onset of a successful-to-failing recognition curve.
+
+Inference-stage timing is not dashboard latency. On the original three-frame
+passage, CCT took 858.47 ms end-to-end including the first model call and 23.22 ms
+in the marked-crop diagnostic; PARSeq took 794.29 and 84.07 ms respectively.
+These single-passage timings are not representative throughput benchmarks.
+Final aggregate JSON reports remain local under ignored
+`data/benchmarks/reports/final-*.json`; they include runtime versions, model
+revision, thresholds and numeric diagnostics without images or plaintext labels.
+
+The benchmark warm-up was corrected to explicitly select ByteTrack. Variable
+export dimensions are now padded rather than stretched. Target-only evidence,
+vehicle-box matching, decoded annotation bounds, explicit timing provenance and
+plate-level split isolation prevent several misleading scoring outcomes.
+
+Production temporal v2 adds grammar-aware beam pruning, trailing-length evidence
+checks, geometric/class/time-gap fusion resets and an internal bounded NO-READ
+reason. The changed image was rebuilt and the CCT live worker restored. PARSeq
+remains an opt-in research adapter; no production model, threshold or watchlist
+was switched. Its initial missing-C-compiler error was resolved with the
+installed Torch's experiment-only `TORCH_DISABLE_NATIVE_JIT=1` setting.
+
+At **13:48:32 UTC**, both CAM01 and CAM02 had fresh central ONLINE health
+timestamps after deployment. Checked startup logs showed cached models loading
+with CUDA/CPU providers and no traceback. This verifies restored health reporting
+at that snapshot, not continuous stability or recognised live plates.
+
+Verification: **102 edge tests and 17 backend tests passed**; backend retained
+three existing deprecation warnings. This does not demonstrate recognition gain.
+The synthetic end-to-end smoke test also passed watchlist matching, idempotency,
+alert queue, acknowledgement, resolution, route, incident and hourly-report
+checks. It created labelled synthetic alert 12; ingest latency was 182.35 ms,
+not camera-to-dashboard latency or an OCR benchmark.
+No training, P2 detector, learned temporal restoration, two-row segmentation,
+appearance matching or confidence calibration was performed. Further work needs
+more permitted original passages and independently verified labels; lowering
+thresholds or treating the one-vehicle development pilot as accuracy would be
+misleading. Live recognition and the fifteen-minute acceptance gate remain unmet.
