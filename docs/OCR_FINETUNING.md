@@ -93,6 +93,10 @@ Docker model volume: `/models/experiments/awiros/adaptations/bapatla-head.safete
 and companion JSON. Last epoch saved separately. Original weights untouched;
 weights local only, not committed/uploaded.
 
+The subsequent [expanded corpus preparation](INDIAN_OCR_CORPUS.md) supplies a
+larger, source-traceable candidate dataset. It is a separate acquisition/export
+stage; the checkpoint and measured results on this page remain unchanged.
+
 Explicit loading checks parent/dictionary/file hashes, tensor keys/shapes, actual
 frozen-state equality and changed head tensors. Strict reload matched cached
 predictions within 1e-5; separate full-model test inference reproduced metrics.

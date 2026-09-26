@@ -104,3 +104,14 @@ A CPU recognition-head adaptation and matched benchmark reruns are complete.
 See [OCR_FINETUNING.md](OCR_FINETUNING.md) for actual metrics, hashes and commands.
 The complete 1,700-image archive still has not been downloaded or cleaned; GPU
 model validation, live shadow tests and production promotion were not performed.
+
+## Follow-up: full archive and multi-source corpus
+
+The subsequent larger-corpus preparation acquired the complete Bapatla archive
+and verified its publisher MD5, ZIP CRCs and SHA-256. It also acquired the
+abtexp synthetic collection, Umar mixed collection and a pinned small Indian OCR
+image/CSV snapshot. Native crop export, deduplication, source attribution,
+provisional-label tiers and registration-grouped indexes are described in
+[INDIAN_OCR_CORPUS.md](INDIAN_OCR_CORPUS.md). The earlier statements about an
+undownloaded complete archive are historical, not current acquisition status.
+This expansion does not itself train a new checkpoint or verify all new labels.

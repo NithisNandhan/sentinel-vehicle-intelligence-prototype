@@ -113,9 +113,18 @@ CPU-speed limited and has not been further fine-tuned or deployed live. See
 The follow-up experimental comparison adds quality-weighted frame selection,
 checked reconstruction/deblurring and automatic plate crops. Its best variant
 accepted 13 of the same 21 one-vehicle conditions, with no wrong accepted reading
-in this small test. Diverse-data training is blocked because the proposed corpus
-contains no training files; GPU/live validation remains pending. See
+in this small test. The initially proposed HF corpus contained no training files;
+GPU/live validation remains pending. See
 [measured improvements and the stopping point](docs/OCR_IMPROVEMENTS.md).
+
+An actual 48-registration Indian-data pilot then adapted the OCR output layer:
+held-out whole-plate accuracy stayed 9/10 and the temporal acceptance boundary
+did not improve. See [measured adaptation](docs/OCR_FINETUNING.md). The subsequent
+[larger corpus preparation and source audit](docs/INDIAN_OCR_CORPUS.md) acquires
+and merges permitted candidate data, keeps synthetic/publisher/reviewed tiers
+separate and protects existing evaluation registrations. Dataset availability
+is not proof of better OCR; deeper adaptation and fresh reviewed evaluation
+remain separate steps.
 
 With the offline profile running and Python 3.11+ available on the host, execute the synthetic API workflow check:
 
