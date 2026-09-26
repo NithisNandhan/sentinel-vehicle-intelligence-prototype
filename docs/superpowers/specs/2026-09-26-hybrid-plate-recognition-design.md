@@ -1,7 +1,7 @@
 # Hybrid multi-frame plate recognition
 
-Status: hybrid direction, reconstruction and local benchmark candidate output
-approved; revised written design awaiting final review before implementation.
+Status: approved for implementation by the user's "execute the plan" request;
+experimental implementation and measured pilot results are in docs/HYBRID_RECOGNITION.md.
 Date: 2026-09-26.
 
 ## Goal and evidence boundary

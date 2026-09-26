@@ -256,3 +256,47 @@ appearance matching or confidence calibration was performed. Further work needs
 more permitted original passages and independently verified labels; lowering
 thresholds or treating the one-vehicle development pilot as accuracy would be
 misleading. Live recognition and the fifteen-minute acceptance gate remain unmet.
+
+## Hybrid reconstruction pilot — 26 September 2026
+
+Opt-in hybrid-v1 code adds bounded native crop collection, checked ECC/RAFT
+alignment, native-grid reconstruction, NAFNet deblurring and sequence-aligned
+PARSeq evidence. These deep models were actually loaded and exercised on CUDA;
+this is not a trained temporal network or proven super-resolution.
+
+ECC/NAFNet matched pilot: **84 evaluations, 0 correct accepted, 0 wrong accepted,
+84 abstentions**, across 21 controlled conditions, two stages and two readers.
+Only one three-frame vehicle passage was used. Reconstruction/deblurring ran in
+34 evaluations. In manually annotated crop cases, hybrid retained the truth in
+16/21 candidate beams versus CCT's 9/21, but top-ranked truth in only 1/21 versus
+4/21. Thus candidate inclusion improved in this pilot while top-ranking did not;
+neither demonstrated accepted recognition. RAFT/NAFNet resolution comparison also
+abstained in all 28 evaluations. These counts are not independent plate samples.
+
+The local viewer displays originals, processed reconstructions, deblurred images,
+ranked candidates and explicit uncertainty. Browser inspection found 42 sections,
+76 image elements, no external requests and no desktop/mobile horizontal overflow.
+Licensed artifact output stays in ignored data/benchmarks/reports. Live images,
+plaintext readings and candidate lists are not exported to the central workflow.
+
+Regression: **134 edge tests and 17 API tests passed**. The API test image lacked
+pytest and its installed Starlette required httpx2; both were installed only in a
+disposable test container. The running API and database were not modified.
+
+Default temporal-v2 remains deployed. Experimental promotion, learned-model
+parity, broader held-out accuracy, calibration and two-feed shadow validation
+remain unmet. Detailed method and commands: docs/HYBRID_RECOGNITION.md.
+
+The no-deblurring ablation also abstained in all 84 evaluations with unchanged
+original candidate counts. The labelled synthetic workflow passed again: alert
+13, watchlist/idempotency/queue/operator actions/routes/incident/hourly checks,
+34.47 ms measured ingest latency (not browser or camera-to-alert latency).
+
+Post-benchmark live check: CAM01/CAM02 reported DEGRADED. Both local MediaMTX
+paths failed a bounded decode check. Independent direct-source probes also
+failed: RTSP returned a redacted OSError; HLS authentication raised
+PortalAuthenticationError for both cameras. No genuine frame was decoded or
+saved during those checks. Recent worker logs contained no AI-processing
+tracebacks or CUDA/out-of-memory errors. Services were restored, but live feed
+readiness is not currently verified; this upstream access condition prevents
+live hybrid shadow validation.

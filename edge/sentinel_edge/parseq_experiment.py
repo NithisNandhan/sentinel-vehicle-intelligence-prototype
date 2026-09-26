@@ -1,4 +1,4 @@
-"""Opt-in research OCR adapter. Never loaded by the production worker.
+"""Opt-in research OCR adapter. Default live workers do not load it.
 
 Pinned official PARSeq code/weights; no labels enter inference. All output
 probability mass is retained, including unsupported punctuation as '?'.
@@ -48,14 +48,25 @@ def map_probabilities(rows, tokens, *, slots=13):
 
 
 class PARSeqExperiment:
-    def __init__(self, cache: Path):
+    def __init__(self, cache: Path, *, cached_only=False):
+        import hashlib
         import torch
         from torchvision import transforms
         self.torch = torch
         torch.hub.set_dir(str(cache / "torch-hub"))
         self.device = "cuda" if torch.cuda.is_available() else "cpu"
-        self.model = torch.hub.load(f"baudm/parseq:{REVISION}", "parseq", pretrained=True,
-                                    trust_repo=True, skip_validation=True).eval().to(self.device)
+        if cached_only:
+            repository = cache / 'torch-hub' / f'baudm_parseq_{REVISION}'
+            weights = cache / 'torch-hub' / 'checkpoints' / 'parseq-bb5792a6.pt'
+            if not (repository / 'hubconf.py').is_file() or not weights.is_file():
+                raise FileNotFoundError('Cache the pinned PARSeq source and weights before enabling hybrid mode')
+            if not hashlib.sha256(weights.read_bytes()).hexdigest().startswith('bb5792a6'):
+                raise ValueError('Cached PARSeq weights do not match the publisher hash')
+            model = torch.hub.load(str(repository), 'parseq', source='local', pretrained=True)
+        else:
+            model = torch.hub.load(f"baudm/parseq:{REVISION}", "parseq", pretrained=True,
+                                   trust_repo=True, skip_validation=True)
+        self.model = model.eval().to(self.device)
         self.tokens = self.model.tokenizer._itos
         self.transform = transforms.Compose([
             transforms.Resize(tuple(self.model.hparams.img_size), transforms.InterpolationMode.BICUBIC),

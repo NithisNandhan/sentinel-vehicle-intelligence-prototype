@@ -28,10 +28,10 @@ class _Stats:
     degraded: bool = False
 
 
-def run_camera(config: Config, camera: Camera, outbox: Outbox, stop: threading.Event) -> None:
+def run_camera(config: Config, camera: Camera, outbox: Outbox, stop: threading.Event, hybrid_resources=None) -> None:
     camera_id = camera.camera_id
     vision = VisionPipeline(config.model_cache_dir / "yolov8n.pt",
-                            ocr_min_confidence=config.ocr_min_confidence)
+                            ocr_min_confidence=config.ocr_min_confidence, hybrid_resources=hybrid_resources)
     stats = _Stats()
     lock = threading.Lock()
     heartbeat_stop = threading.Event()
@@ -107,10 +107,16 @@ def run_live(config: Config, cameras: list[Camera], stop: threading.Event) -> No
         raise FileNotFoundError("Missing yolov8n.pt in MODEL_CACHE_DIR; run prepare-models first")
     outbox = Outbox(config.db_path)
     client = CentralClient(config.central_api_url, config.edge_api_key, outbox)
+    hybrid_resources = None
+    if config.plate_reader == 'hybrid-v1':
+        from .hybrid import HybridResources
+        hybrid_resources = HybridResources(config.model_cache_dir / 'experiments',
+                                           alignment=config.hybrid_alignment,
+                                           restoration=config.hybrid_restoration)
     delivery = client.start_retry_loop(stop)
     pool = ThreadPoolExecutor(max_workers=2, thread_name_prefix="camera")
     try:
-        futures = [pool.submit(run_camera, config, camera, outbox, stop) for camera in cameras]
+        futures = [pool.submit(run_camera, config, camera, outbox, stop, hybrid_resources) for camera in cameras]
         for future in as_completed(futures):
             future.result()
     finally:

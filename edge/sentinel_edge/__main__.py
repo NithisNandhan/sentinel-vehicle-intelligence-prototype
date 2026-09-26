@@ -5,6 +5,7 @@ from __future__ import annotations
 import argparse
 import logging
 import os
+import sys
 import threading
 from pathlib import Path
 
@@ -14,21 +15,30 @@ from .config import Config
 
 def main() -> None:
     parser = argparse.ArgumentParser(prog="python -m sentinel_edge")
-    parser.add_argument("mode", choices=("live", "relay", "gateway", "simulate", "prepare-models", "benchmark-models", "benchmark-live", "benchmark-degradation", "probe-stream", "probe-two-streams"))
+    parser.add_argument("mode", choices=("live", "relay", "gateway", "simulate", "prepare-models", "prepare-hybrid-models", "benchmark-hybrid", "benchmark-models", "benchmark-live", "benchmark-degradation", "probe-stream", "probe-two-streams"))
     parser.add_argument("--once", action="store_true", help="Send offline events once and exit")
     parser.add_argument("--probe-camera-id", default="probe-bus", help="Local MediaMTX path used only for probe-stream")
     parser.add_argument("--probe-seconds", type=int, default=20, help="Observation duration for stream probes or live benchmark")
     parser.add_argument("--manifest", type=Path, help="Licensed, labelled benchmark manifest (never Sentinel recordings)")
     parser.add_argument("--report", type=Path, help="Optional aggregate-only generated benchmark report")
-    parser.add_argument("--degradation-family", choices=("resolution", "blur", "motion", "noise", "darkness"), default="resolution")
+    parser.add_argument("--degradation-family", choices=("resolution", "blur", "motion", "noise", "darkness", "all"), default="resolution")
     parser.add_argument("--benchmark-stage", choices=("both", "end_to_end", "oracle_plate_ocr"), default="both")
     parser.add_argument("--ocr-spacing-ms", type=int, default=300)
     parser.add_argument("--ocr-backend", choices=("cct", "parseq"), default="cct",
                         help="Degradation benchmark only; PARSeq needs isolated research dependencies")
+    parser.add_argument('--viewer', type=Path, help='Licensed local benchmark HTML under data/benchmarks/reports')
+    parser.add_argument('--hybrid-alignment', choices=('ecc', 'raft'), default='ecc')
+    parser.add_argument('--hybrid-restoration', action='store_true')
     args = parser.parse_args()
     logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
     config = Config.from_env(live=args.mode in {"live", "relay", "gateway", "benchmark-live"})
     config.model_cache_dir.mkdir(parents=True, exist_ok=True)
+    if args.mode == 'benchmark-hybrid' or (args.mode == 'live' and config.plate_reader == 'hybrid-v1'):
+        # Research-only packages remain isolated from the default live reader.
+        deps = config.model_cache_dir / 'experiments' / 'deps'
+        if deps.is_dir():
+            sys.path.insert(0, str(deps))
+        os.environ.setdefault('TORCH_DISABLE_NATIVE_JIT', '1')
     os.environ.setdefault("XDG_CACHE_HOME", str(config.model_cache_dir / "cache"))
     os.environ.setdefault("HF_HOME", str(config.model_cache_dir / "huggingface"))
     os.environ.setdefault("YOLO_CONFIG_DIR", str(config.model_cache_dir / "ultralytics"))
@@ -44,10 +54,22 @@ def main() -> None:
             from ultralytics import YOLO
             YOLO("yolov8n.pt")
             VisionPipeline(config.model_cache_dir / "yolov8n.pt")
+        elif args.mode == 'prepare-hybrid-models':
+            from .hybrid_models import prepare_assets
+            prepare_assets(config.model_cache_dir / 'experiments' / 'hybrid')
+        elif args.mode == 'benchmark-hybrid':
+            if args.manifest is None:
+                parser.error('benchmark-hybrid requires a permitted labelled manifest')
+            from .hybrid_benchmark import run_hybrid_benchmark
+            run_hybrid_benchmark(config, args.manifest, family=args.degradation_family,
+                                 alignment=args.hybrid_alignment, restoration=args.hybrid_restoration,
+                                 output_path=args.report, viewer_path=args.viewer)
         elif args.mode == "benchmark-models":
             from .benchmark import run_model_benchmark
             run_model_benchmark(config.model_cache_dir / "yolov8n.pt")
         elif args.mode == "benchmark-degradation":
+            if args.degradation_family == 'all':
+                parser.error('all families is currently supported only by benchmark-hybrid')
             if args.manifest is None or not 150 <= args.ocr_spacing_ms <= 1000:
                 parser.error("benchmark-degradation needs --manifest and temporal spacing between 150 and 1000 ms")
             from .degradation_benchmark import run_degradation_benchmark

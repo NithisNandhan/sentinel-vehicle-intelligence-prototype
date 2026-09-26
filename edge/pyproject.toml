@@ -17,6 +17,9 @@ test = ["pytest>=8,<10"]
 where = ["."]
 include = ["sentinel_edge*"]
 
+[tool.setuptools.package-data]
+sentinel_edge = ["third_party/*.txt"]
+
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 

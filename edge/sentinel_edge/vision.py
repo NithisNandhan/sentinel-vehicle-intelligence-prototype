@@ -73,7 +73,7 @@ class VisionPipeline:
     def __init__(self, model_path: Path, *, ocr_min_confidence: float = 0.85,
                  dedup_seconds: int = 300, multi_frame: bool = True,
                  ocr_model: str | None = None, detector_model: str | None = None,
-                 ocr_spacing_ms: int = 300):
+                 ocr_spacing_ms: int = 300, hybrid_resources=None):
         if not model_path.is_file():
             raise FileNotFoundError(f"Missing model at {model_path}; cache yolov8n.pt before running live mode")
         try:
@@ -105,6 +105,13 @@ class VisionPipeline:
         self.metrics: dict[str, int | float] = {}
         self.max_tracks = 128
         self.model_version = "yolov8n+fastalpr-cct-s-v2+temporal-v2" if multi_frame else "yolov8n+fastalpr-legacy"
+        self.hybrid = None
+        if hybrid_resources is not None:
+            if not multi_frame:
+                raise ValueError('Hybrid requires multi-frame mode')
+            from .hybrid import HybridEngine
+            self.hybrid = HybridEngine(hybrid_resources, threshold=ocr_min_confidence)
+            self.model_version = 'yolov8n+plate-yolov9t+' + hybrid_resources.model_version
 
     def _count(self, key: str, value: int = 1) -> None:
         if not hasattr(self, "metrics"):
@@ -113,6 +120,8 @@ class VisionPipeline:
 
     def reset(self) -> None:
         self.tracks.clear()
+        if getattr(self, 'hybrid', None) is not None:
+            self.hybrid.clear()
         predictor = getattr(self.model, "predictor", None)
         for tracker in getattr(predictor, "trackers", []) if predictor is not None else []:
             tracker.reset()
@@ -120,6 +129,8 @@ class VisionPipeline:
     def process(self, image: object, *, pts_ms: int | None = None) -> list[PlateObservation]:
         now = time.monotonic()
         self.tracks = {key: state for key, state in self.tracks.items() if now - state.last_seen < 30}
+        if getattr(self, 'hybrid', None) is not None:
+            self.hybrid.retain(set(self.tracks))
         self.last_plate_seen = {key: seen for key, seen in self.last_plate_seen.items()
                                 if now - seen < self.dedup_seconds}
         result = self.model.track(image, persist=True, tracker="bytetrack.yaml",
@@ -153,6 +164,8 @@ class VisionPipeline:
                     gap > 2000 or gap < 0 or not track_consistent(state.vehicle_bbox, current_box,
                                                                 state.vehicle_class, current_class)):
                 state.reader = None
+                if getattr(self, 'hybrid', None) is not None:
+                    self.hybrid.drop(track_id)
                 state.plate_center = None
                 state.counted_multi = False
                 self._count("track_consistency_resets")
@@ -248,6 +261,8 @@ class VisionPipeline:
         center = ((bbox.x1 + bbox.x2) / (2 * width), (bbox.y1 + bbox.y2) / (2 * height))
         if state.plate_center is not None and sum((a - b) ** 2 for a, b in zip(center, state.plate_center)) > 0.12:
             state.reader = None
+            if getattr(self, 'hybrid', None) is not None:
+                self.hybrid.drop(track_id)
             self._count("plate_region_resets")
         state.plate_center = center
         # Small padding is only a crop adjustment, not a super-resolution claim.
@@ -258,6 +273,17 @@ class VisionPipeline:
             self._count("too_small_plate_regions")
             return None
         plate_crop = crop[y1:y2, x1:x2]
+        if getattr(self, 'hybrid', None) is not None:
+            from .reconstruction import native_crop
+            plate_crop = native_crop(crop, (x1, y1, x2, y2))
+            sharpness = self.cv2.Laplacian(self.cv2.cvtColor(plate_crop, self.cv2.COLOR_BGR2GRAY),
+                                          self.cv2.CV_64F).var()
+            accepted = self.hybrid.process(track_id, plate_crop, timestamp_ms,
+                                           quality=max(.1, min(1., sharpness / 100)))
+            state.reader = self.hybrid.tracks.get(track_id)
+            state.probability_observations = state.reader.observation_count if state.reader else 0
+            self._count('hybrid_crop_observations')
+            return PlateObservation(accepted.plate, accepted.score, track_id) if accepted else None
         matrix = self._probabilities(plate_crop)
         cfg = self.alpr.ocr.ocr_model.config
         greedy = "".join(cfg.alphabet[max(range(len(row)), key=row.__getitem__)] for row in matrix).rstrip(cfg.pad_char)

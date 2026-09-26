@@ -97,6 +97,12 @@ failures on explicitly licensed, labelled input. Its initial one-vehicle pilot
 does not establish general accuracy or live timing. PARSeq is research-only;
 production remains CCT-S. See [benchmark methodology](docs/DEGRADATION_BENCHMARK.md).
 
+An opt-in hybrid prototype now adds native crop windows, checked ECC/RAFT
+reconstruction, optional NAFNet deblurring and sequence-aware PARSeq fusion. Its
+separate local benchmark viewer shows uncertain ranked alternatives and processed
+images. It has **not** demonstrated correct accepted readings or been promoted to
+live mode. See [implementation, reproduction and measured limits](docs/HYBRID_RECOGNITION.md).
+
 With the offline profile running and Python 3.11+ available on the host, execute the synthetic API workflow check:
 
 ```powershell

@@ -29,6 +29,9 @@ class Config:
     media_relay_base_url: str
     mediamtx_publish_url: str
     preview_base_url: str
+    plate_reader: str = 'temporal-v2'
+    hybrid_alignment: str = 'ecc'
+    hybrid_restoration: bool = False
 
     @classmethod
     def from_env(cls, *, live: bool) -> "Config":
@@ -56,12 +59,17 @@ class Config:
             media_relay_base_url=os.getenv("MEDIA_RELAY_BASE_URL", "").rstrip("/"),
             mediamtx_publish_url=os.getenv("MEDIAMTX_PUBLISH_URL", "rtsp://mediamtx:8554").rstrip("/"),
             preview_base_url=os.getenv("PREVIEW_BASE_URL", "http://localhost:8888").rstrip("/"),
+            plate_reader=os.getenv('PLATE_READER', 'temporal-v2'),
+            hybrid_alignment=os.getenv('HYBRID_ALIGNMENT', 'ecc'),
+            hybrid_restoration=os.getenv('HYBRID_RESTORATION', 'false').lower() == 'true',
         )
         missing = [name for name, value in (("EDGE_API_KEY", cfg.edge_api_key), ("WATCHLIST_HMAC_KEY", cfg.hmac_key)) if not value]
         if live:
             missing += [name for name, value in (("SENTINEL_EMAIL", cfg.sentinel_email), ("SENTINEL_PASSWORD", cfg.sentinel_password)) if not value]
         if missing:
             raise ValueError("Missing required environment variables: " + ", ".join(missing))
+        if cfg.plate_reader not in {'temporal-v2', 'hybrid-v1'} or cfg.hybrid_alignment not in {'ecc', 'raft'}:
+            raise ValueError('Invalid plate reader or hybrid alignment')
         if len(cfg.camera_ids) > 2 or len(cfg.simulator_camera_ids) != 2:
             raise ValueError("Configure at most two live cameras and exactly two simulator cameras")
         if not 0 < cfg.inference_fps <= 30 or not 0 < cfg.ocr_min_confidence <= 1 or cfg.heartbeat_seconds < 1:

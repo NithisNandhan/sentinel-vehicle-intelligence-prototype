@@ -177,6 +177,9 @@ services:
       MEDIA_RELAY_BASE_URL: rtsp://mediamtx:8554
       EDGE_DB_PATH: /data/outbox.sqlite3
       MODEL_CACHE_DIR: /models
+      PLATE_READER: ${PLATE_READER:-temporal-v2}
+      HYBRID_ALIGNMENT: ${HYBRID_ALIGNMENT:-ecc}
+      HYBRID_RESTORATION: ${HYBRID_RESTORATION:-false}
     volumes:
       - edge_data:/data
       - model_cache:/models
