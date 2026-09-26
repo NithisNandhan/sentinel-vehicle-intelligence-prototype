@@ -10,6 +10,63 @@ from sentinel_edge.ocr_selection_benchmark import run_selection_benchmark
 
 
 class SelectionBenchmarkTests(unittest.TestCase):
+    def test_processed_view_cannot_supply_missing_original_observations(self):
+        import numpy as np
+        class FakeOCR:
+            tokens = ('', *'0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ')
+            device = 'cpu'
+            def probabilities(self, crop):
+                rows = []
+                for char in 'GJ01AB1234':
+                    row = [0.] * len(self.tokens)
+                    row[self.tokens.index(char)] = 1.
+                    rows.extend([row, [1.] + [0.] * (len(self.tokens) - 1)])
+                return rows
+        class TwoFrameDetector:
+            calls = 0
+            def box(self, image):
+                self.calls += 1
+                return (10, 10, 80, 40) if self.calls % 3 else None
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            manifest, _ = self.fixture(root)
+            output = root / 'data/benchmarks/reports'
+            with patch('sentinel_edge.awiros_experiment.AwirosExperiment', return_value=FakeOCR()), \
+                    patch('sentinel_edge.ocr_selection_benchmark.PlateDetectorExperiment', return_value=TwoFrameDetector()), \
+                    patch('sentinel_edge.plate_quality.deskew_view', return_value=(np.zeros((30, 70, 3), np.uint8), 5.)), \
+                    patch('sentinel_edge.ocr_selection_benchmark.deskew_view', return_value=(np.zeros((30, 70, 3), np.uint8), 5.)), \
+                    redirect_stdout(io.StringIO()):
+                result = run_selection_benchmark(manifest, root, family='motion', automatic_crops=True,
+                                                 deskew=True, report_path=output / 'two.json', viewer_path=output / 'two.html')
+            self.assertEqual(result['correct'], 0)
+            self.assertTrue(all(row['observations'] == 2 for row in result['rows']))
+            self.assertTrue(all(row['processed_diagnostics'][0]['greedy_exact'] for row in result['rows']))
+            self.assertNotIn('GJ01AB1234', (output / 'two.json').read_text())
+
+    def test_automatic_no_detections_reports_abstention_not_oracle_fallback(self):
+        class FakeOCR:
+            tokens = ('', 'A')
+            device = 'cpu'
+            def probabilities(self, crop):
+                return [[1., 0.]]
+        class MissingDetector:
+            def box(self, image):
+                return None
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            manifest, _ = self.fixture(root)
+            output = root / 'data/benchmarks/reports'
+            with patch('sentinel_edge.awiros_experiment.AwirosExperiment', return_value=FakeOCR()), \
+                    patch('sentinel_edge.ocr_selection_benchmark.PlateDetectorExperiment', return_value=MissingDetector()), \
+                    redirect_stdout(io.StringIO()):
+                result = run_selection_benchmark(manifest, root, family='motion', automatic_crops=True,
+                                                 report_path=output / 'auto.json', viewer_path=output / 'auto.html')
+            self.assertEqual(result['correct'], 0)
+            self.assertEqual(result['abstain'], len(result['rows']))
+            self.assertTrue(result['automatic_detection_evaluated'])
+            self.assertTrue(all(row['selected_crops'] == 0 for row in result['rows']))
+            self.assertTrue(all(row['failure_reason'] == 'automatic_localisation_insufficient' for row in result['rows']))
+
     def fixture(self, root):
         import cv2
         import numpy as np

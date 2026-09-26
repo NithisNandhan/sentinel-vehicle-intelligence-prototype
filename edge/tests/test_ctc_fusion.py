@@ -7,6 +7,44 @@ from sentinel_edge.ctc_fusion import (CTCPlateReader, greedy_text, prefix_candid
 
 
 class CTCTests(unittest.TestCase):
+    def test_quality_weights_retain_independent_evidence_gate(self):
+        tokens = ('', *'0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ')
+        def rows(strength):
+            result = []
+            for char in 'GJ01AB1234':
+                row = [0.] * len(tokens)
+                row[tokens.index(char)], row[0] = strength, 1 - strength
+                result.extend([row, [1.] + [0.] * (len(tokens) - 1)])
+            return result
+        reader = CTCPlateReader(tokens)
+        reader.add(rows(.99), timestamp_ms=0, source_id='a', quality=1.)
+        reader.add(rows(.99), timestamp_ms=400, source_id='b', quality=1.)
+        self.assertIsNone(reader.accepted())
+        reader.add(rows(.4), timestamp_ms=800, source_id='c', quality=.1)
+        self.assertEqual(reader.accepted().plate, 'GJ01AB1234')
+        self.assertEqual(reader.accepted().observations, 3)
+        weak = CTCPlateReader(tokens)
+        for index in range(3):
+            weak.add(rows(.4), timestamp_ms=index * 400, source_id=str(index), quality=.1)
+        self.assertIsNone(weak.accepted())
+        for quality in (0, -1, 1.1, float('nan'), float('inf'), True):
+            with self.assertRaises(ValueError):
+                reader.add(rows(.99), timestamp_ms=1200, source_id='d', quality=quality)
+
+    def test_default_and_explicit_equal_weights_are_identical(self):
+        tokens = ('', *'0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ')
+        rows = []
+        for char in 'GJ01AB1234':
+            row = [.01 / (len(tokens) - 1)] * len(tokens)
+            row[tokens.index(char)] = .99
+            rows.extend([row, [1.] + [0.] * (len(tokens) - 1)])
+        implicit, explicit = CTCPlateReader(tokens), CTCPlateReader(tokens)
+        for index in range(3):
+            implicit.add(rows, timestamp_ms=index * 400, source_id=str(index))
+            explicit.add(rows, timestamp_ms=index * 400, source_id=str(index), quality=1.)
+        self.assertEqual(implicit.candidates(), explicit.candidates())
+        self.assertEqual(implicit.accepted(), explicit.accepted())
+
     def test_repeated_symbols_require_separator(self):
         tokens = ('', 'A', 'a', ' ')
         self.assertEqual(greedy_text([[0, 1, 0, 0], [0, 1, 0, 0]], tokens), 'A')

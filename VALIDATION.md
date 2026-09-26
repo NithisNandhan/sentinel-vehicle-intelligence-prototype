@@ -328,3 +328,20 @@ paths, repeat/case/space handling, literal-only config parsing, strict checkpoin
 loading, original-crop preservation, privacy rejection and escaped local visuals.
 Reports/viewers remain ignored local files. The production reader stays unchanged.
 Detailed reproduction and limits: docs/OCR_MODEL_SELECTION.md.
+
+## OCR improvement stages, 27 September 2026 (India local date)
+
+The baseline was rerun on the same three-frame, one-vehicle permitted passage:
+11 correct accepted / 0 wrong / 10 abstentions across 21 conditions. Quality
+weighting yielded 12 / 0 / 9; adding ECC reconstruction, NAFNet deblurring and
+optional deskew retained 12 / 0 / 9. Automatic plate crops with quality weighting
+and optional deskew yielded 13 / 0 / 8. All thresholds remained unchanged.
+These are experimental same-passage ablations, not independent accuracy or
+live readiness. No extra fine-tuning, registry lookup or genuine media retention
+occurred; the production reader is unchanged.
+
+154 edge tests passed. Reports/viewers stay ignored local artifacts. The proposed
+18,537-crop training repository was verified to contain only a README and
+repository settings, blocking diverse-data fine-tuning. GPU parity and live
+shadow checks were not run after this blocking input error. Full methodology,
+file names, input requirements and evidence limits: docs/OCR_IMPROVEMENTS.md.

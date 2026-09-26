@@ -110,6 +110,13 @@ these are copies of one passage, not general accuracy. It is benchmark-only,
 CPU-speed limited and has not been further fine-tuned or deployed live. See
 [model selection and measured boundaries](docs/OCR_MODEL_SELECTION.md).
 
+The follow-up experimental comparison adds quality-weighted frame selection,
+checked reconstruction/deblurring and automatic plate crops. Its best variant
+accepted 13 of the same 21 one-vehicle conditions, with no wrong accepted reading
+in this small test. Diverse-data training is blocked because the proposed corpus
+contains no training files; GPU/live validation remains pending. See
+[measured improvements and the stopping point](docs/OCR_IMPROVEMENTS.md).
+
 With the offline profile running and Python 3.11+ available on the host, execute the synthetic API workflow check:
 
 ```powershell

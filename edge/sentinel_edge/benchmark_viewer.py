@@ -91,6 +91,15 @@ def render_viewer(output: Path, dataset: dict, cases: list, *, source_mode='benc
                  'This label was not supplied to inference.</p>' if case.get('expected') else '')
         if case.get('score_note'):
             extra += f'<p>{esc(case["score_note"])}</p>'
+        if case.get('localisation_note'):
+            extra += f'<p>{esc(case["localisation_note"])}</p>'
+        readings = case.get('processed_readings', [])
+        if len(readings) > 3:
+            raise ValueError('Too many processed-view diagnostics')
+        if readings:
+            extra += '<p>Correlated working-copy OCR (not additional votes): ' + '; '.join(
+                f'{esc(item.get("origin"))}: {esc(item.get("reading"))} '
+                f'({esc(item.get("ocr_ms"))} ms)' for item in readings) + '</p>'
         if diagnostics:
             extra += ('<details><summary>Inspect raw OCR on each original frame — diagnostic, not separate product detections</summary>'
                       f'<div class="images">{diagnostic_html}</div></details>')
@@ -118,7 +127,7 @@ td,th{{padding:10px;border-bottom:1px solid #465568}}th{{position:sticky;top:0;b
 mark{{background:#ffce72;color:#101925}}.unavailable{{color:#c5ceda}}footer{{margin-top:24px;color:#b9c8dc}}
 </style></head><body><main><h1>Local multi-frame plate benchmark</h1>
 <p>Licensed offline evaluation only — not genuine Sentinel evidence or production accuracy.</p>
-<p>These visual cases use manually annotated plate crops to isolate OCR. They do not demonstrate automatic vehicle/plate localisation.</p>
+<p>Check each case for its crop source. Manual-crop results isolate OCR; automatic-crop diagnostics do not establish vehicle tracking or live accuracy.</p>
 {''.join(sections)}<footer>Dataset: {esc(dataset.get('name'))}. Licence: {esc(dataset.get('license'))}.
 Source: {esc(dataset.get('source_url'))}. Licence notice: {esc(dataset.get('license_url'))}.
 Modifications: cropping, controlled degradation, geometric alignment, reconstruction and optional deblurring.

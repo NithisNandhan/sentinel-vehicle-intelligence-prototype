@@ -11,6 +11,20 @@ DATASET = {'name': 'Permitted fixture', 'license': 'CC-BY-4.0',
 
 
 class ViewerTests(unittest.TestCase):
+    def test_processed_readings_are_correlated_escaped_and_bounded(self):
+        with tempfile.TemporaryDirectory() as temp:
+            output = Path(temp) / 'data/benchmarks/reports/view.html'
+            case = {'source_mode': 'benchmark', 'localisation_note': '<script>location</script>',
+                    'processed_readings': [{'origin': '<script>processed</script>',
+                                            'reading': '<script>reading</script>', 'ocr_ms': 1.}]}
+            render_viewer(output, DATASET, [case])
+            text = output.read_text()
+            self.assertNotIn('<script>', text)
+            self.assertIn('not additional votes', text)
+            case['processed_readings'] *= 4
+            with self.assertRaises(ValueError):
+                render_viewer(output, DATASET, [case])
+
     def candidate(self, text, score=.5):
         return PlateCandidate(text, score, .2, -5., 3, 'state')
 

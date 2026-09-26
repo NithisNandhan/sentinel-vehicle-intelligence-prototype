@@ -154,16 +154,19 @@ class CTCPlateReader:
     def observation_count(self):
         return len(self.samples)
 
-    def add(self, rows, *, timestamp_ms, source_id):
+    def add(self, rows, *, timestamp_ms, source_id, quality=1.0):
         validate_ctc(rows, self.tokens)
-        if not isinstance(timestamp_ms, int) or timestamp_ms < 0 or not isinstance(source_id, str) or not source_id:
+        if (not isinstance(timestamp_ms, int) or isinstance(timestamp_ms, bool) or timestamp_ms < 0
+                or not isinstance(source_id, str) or not source_id
+                or not isinstance(quality, (int, float)) or isinstance(quality, bool)
+                or not math.isfinite(quality) or not .1 <= quality <= 1.):
             raise ValueError('Distinct source identity and timestamp required')
         if any(sample[1] == source_id for sample in self.samples):
             return False
         if self.samples and timestamp_ms - self.samples[-1][0] < 150:
             return False
         candidates = prefix_candidates(rows, self.tokens, beam_width=self.beam_width)
-        self.samples.append((timestamp_ms, source_id, rows, candidates))
+        self.samples.append((timestamp_ms, source_id, rows, candidates, quality))
         self._cache = None
         return True
 
@@ -173,7 +176,7 @@ class CTCPlateReader:
         # Union of independently generated frame hypotheses. A candidate is
         # rescored against every frame, not only frames that happened to emit it.
         proposals = {}
-        for _, _, _, candidates in self.samples:
+        for _, _, _, candidates, _ in self.samples:
             for text, score in candidates:
                 if indian_plate_format(text):
                     proposals[text] = max(proposals.get(text, NEG), score)
@@ -181,15 +184,22 @@ class CTCPlateReader:
         result, self._peaks = [], {}
         for text in proposals:
             likelihoods, peaks = [], []
-            for _, _, rows, _ in self.samples:
+            weights = []
+            for _, _, rows, _, quality in self.samples:
                 score, character_peaks = sequence_score(rows, self.tokens, text)
                 likelihoods.append(score)
                 peaks.append(character_peaks)
+                weights.append(quality)
             if not likelihoods or not all(math.isfinite(v) for v in likelihoods):
                 continue
-            character_scores = [sum(values[i] for values in peaks) / len(peaks) for i in range(len(text))]
+            # Relative image-quality weights, not extra observations or a
+            # calibrated confidence boost. Default weights retain equal fusion.
+            denominator = sum(weights)
+            character_scores = [sum(weight * values[i] for weight, values in zip(weights, peaks))
+                                / denominator for i in range(len(text))]
             result.append(PlateCandidate(text, sum(character_scores) / len(text), min(character_scores),
-                                         sum(likelihoods) / len(likelihoods), len(self.samples),
+                                         sum(weight * value for weight, value in zip(weights, likelihoods))
+                                         / denominator, len(self.samples),
                                          indian_plate_format(text)))
             self._peaks[text] = peaks
         self._cache = sorted(result, key=lambda candidate: (-candidate.log_score, candidate.plate))[:200]
