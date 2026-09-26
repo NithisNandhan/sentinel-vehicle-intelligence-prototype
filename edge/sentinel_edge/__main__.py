@@ -14,13 +14,13 @@ from .config import Config
 
 def main() -> None:
     parser = argparse.ArgumentParser(prog="python -m sentinel_edge")
-    parser.add_argument("mode", choices=("live", "relay", "gateway", "simulate", "prepare-models", "benchmark-models", "probe-stream", "probe-two-streams"))
+    parser.add_argument("mode", choices=("live", "relay", "gateway", "simulate", "prepare-models", "benchmark-models", "benchmark-live", "probe-stream", "probe-two-streams"))
     parser.add_argument("--once", action="store_true", help="Send offline events once and exit")
     parser.add_argument("--probe-camera-id", default="probe-bus", help="Local MediaMTX path used only for probe-stream")
-    parser.add_argument("--probe-seconds", type=int, default=20, help="Duration of local stream probe")
+    parser.add_argument("--probe-seconds", type=int, default=20, help="Observation duration for stream probes or live benchmark")
     args = parser.parse_args()
     logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
-    config = Config.from_env(live=args.mode in {"live", "relay", "gateway"})
+    config = Config.from_env(live=args.mode in {"live", "relay", "gateway", "benchmark-live"})
     config.model_cache_dir.mkdir(parents=True, exist_ok=True)
     os.environ.setdefault("XDG_CACHE_HOME", str(config.model_cache_dir / "cache"))
     os.environ.setdefault("HF_HOME", str(config.model_cache_dir / "huggingface"))
@@ -51,6 +51,12 @@ def main() -> None:
                 run_two_stream_probe(config, camera_ids=(args.probe_camera_id,
                                                          args.probe_camera_id + "-2"),
                                      seconds=args.probe_seconds)
+        elif args.mode == "benchmark-live":
+            if not 1 <= args.probe_seconds <= 900:
+                parser.error("--probe-seconds must be between 1 and 900")
+            from .live_benchmark import run_live_benchmark
+            cameras, _ = discover_live_pair(config)
+            run_live_benchmark(config, cameras, seconds=args.probe_seconds)
         elif args.mode == "gateway":
             from .catalogue_gateway import run_gateway
             run_gateway(config)

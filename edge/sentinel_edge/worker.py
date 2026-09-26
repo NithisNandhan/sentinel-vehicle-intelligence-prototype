@@ -83,7 +83,7 @@ def run_camera(config: Config, camera: Camera, outbox: Outbox, stop: threading.E
                 last_inference_pts = frame.pts_ms
                 last_inference_wall = now
                 try:
-                    observations = vision.process(frame.image)
+                    observations = vision.process(frame.image, pts_ms=frame.pts_ms)
                 except Exception:
                     log.exception("AI processing failed for camera %s", camera_id)
                     observations = []
@@ -95,7 +95,7 @@ def run_camera(config: Config, camera: Camera, outbox: Outbox, stop: threading.E
                                      confidence=observation.confidence, source_mode="live",
                                      stream_pts_ms=frame.pts_ms if frame.pts_ms is not None and frame.pts_ms >= 0 else None,
                                      track_id=observation.track_id,
-                                     observed_at=utc_now(), model_version="yolov8n+fastalpr")
+                                     observed_at=utc_now(), model_version=vision.model_version)
                     outbox.put("/v1/sightings", event)
     finally:
         heartbeat_stop.set()

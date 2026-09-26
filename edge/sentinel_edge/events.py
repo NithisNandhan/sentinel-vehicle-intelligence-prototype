@@ -16,6 +16,8 @@ def sighting(*, edge_id: str, camera_id: str, plate: str, hmac_key: str,
              confidence: float, source_mode: str, stream_pts_ms: int | None = None,
              track_id: str | None = None, observed_at: str | None = None,
              model_version: str | None = None) -> dict:
+    # `confidence` is the model's uncalibrated recognition score, not a measured
+    # probability that the complete identifier is correct; retain wire compatibility.
     if source_mode not in {"live", "synthetic"}:
         raise ValueError("Invalid source mode")
     if not 0 <= confidence <= 1:

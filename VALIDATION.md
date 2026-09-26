@@ -150,3 +150,34 @@ The repeated 45-second crop diagnostic sampled about one frame per second, indep
 Interpretation: candidate crops are often small, and simple padding/upscaling did not solve confident recognition in this sample. Small size is a plausible contributor, not a proven root cause: false detections, viewing angle, blur and model/domain mismatch have not been separated by labelled evaluation. YOLO fine-tuning is not justified by these tests. OCR improvement is needed before claiming usable number-plate recognition, but deciding between better input/plate cropping, another detector/OCR model and fine-tuning requires permitted labelled plate examples. Lowering thresholds simply to create sightings would not validate recognition. The 15-minute AI acceptance run and genuine confirmed central sighting remain incomplete.
 
 Final checks: a real missing local RTSP path produced redacted `OSError` results from both the deployed decoder and relay probe, with no source URL in the message. Fresh central reports after restoring the worker showed CAM01 ONLINE with 462 decoded / 154 inferred frames, CAM02 ONLINE with 857 decoded / 143 inferred frames, and zero queued events on both. API, database, dashboard, MediaMTX, gateway, stream adapter and live worker were running. All 43 edge, 17 backend and 7 dashboard tests passed. The live worker remains running; these snapshots are not a 15-minute uninterrupted acceptance run.
+
+## Multi-frame deep-learning OCR upgrade on 2026-09-26
+
+Implemented per-vehicle character-probability fusion on top of pretrained neural detection/OCR. Production defaults now use `yolo-v9-t-512-license-plate-end2end` and `cct-s-v2-global-model`; YOLOv8n and ByteTrack remain. See [the exact methodology and limits](docs/MULTIFRAME_RECOGNITION.md). No custom temporal network was trained, no super-resolution was added, and no registry was queried.
+
+An initial comparison had a requested 180-second window but only about 86–87 seconds between first and last decoded frames because startup consumed much of the window. All methods accepted zero plates. The benchmark was corrected to start each camera's observation timer at its first decoded frame, and rerun. The following is the corrected run, starting at **2026-09-26 05:09:47 UTC** (10:39:47 India time), with models initialized and warmed first. Both feeds used local RTSP/TCP relays; production inference was stopped during comparison to avoid another competing worker. The simulator remained stopped. No footage, crops, OCR strings or central sightings were saved by the benchmark.
+
+| Corrected concurrent live comparison | CAM01 | CAM02 |
+| --- | --- | --- |
+| Actual first-to-last-frame observation | 179.60 s | 179.38 s |
+| Stream startup | 0.80 s | 4.35 s |
+| Decoded frames | 2,366 | 3,010 |
+| Sampled frames, shared by all three methods | 450 | 194 |
+| Vehicle boxes across sampled frames | 1,138 | 249 |
+| Tracker IDs observed | 96 | 33 |
+| Legacy: plate regions / non-empty OCR / accepted unique identifiers | 49 / 0 / **0** | 8 / 1 / **0** |
+| Larger models with legacy consensus: regions / non-empty OCR / accepted identifiers | 6 / 0 / **0** | 1 / 0 / **0** |
+| Temporal pipeline: regions / probability observations / accepted identifiers | 11 / 9 / **0** | 1 / 1 / **0** |
+| Temporal tracks reaching three observations | 1 | 0 |
+| Legacy vision-call median / p95 | 20.29 / 64.23 ms | 27.54 / 82.44 ms |
+| Larger-model consensus vision-call median / p95 | 20.25 / 64.89 ms | 31.06 / 89.85 ms |
+| Temporal vision-call median / p95 | 32.52 / 80.42 ms | 29.64 / 84.21 ms |
+| Processing errors, every method | 0 | 0 |
+
+Counts are repeated model detections, not labelled correct plates or unique verified vehicles. All variants used the same sampled frames, but temporal processing also widened crop gates and attempt budgets: this is not a fusion-only ablation. The six comparison pipelines share one GPU, so sampled rates and timing are not production-throughput or camera-to-dashboard latency claims. First/last-frame observation does not prove uninterrupted delivery. Larger models did not demonstrate an improvement; fewer detected plate regions cannot be interpreted as better precision without labels.
+
+The real-model probability adapter passed a parity check on an **in-memory synthetic rendered image**: its decoded slots and per-slot maxima matched the public OCR API, maximum score difference 0.0; maximum probability-row-sum error approximately 9.92e-8. Both detector/OCR sessions used CUDA with CPU fallback. The OCR model exposes ten character slots. Runtime versions on this laptop were Torch 2.14.0+cu130 and ONNX Runtime 1.30.0. This check establishes adapter correctness, not correct recognition of the synthetic label or real-camera accuracy.
+
+Verification: **60 edge tests, 17 backend tests and 7 frontend tests passed**. Edge tests include complementary character errors recovered at the unchanged production acceptance threshold, non-inflation of scores from repeated identical inputs, abstention on weak or tied characters, timestamp spacing, bounded buffers/attempts, scene/spatial resets and duplicate suppression. These are synthetic probability fixtures and mocked-model pipeline tests, not labelled neural-model accuracy tests. Backend tests retained existing deprecation warnings; frontend tests required running outside the restricted filesystem sandbox because its build tool scans parent directories.
+
+**Measured outcome: zero accepted live plate identifiers across both cameras.** The upgrade is implemented, but useful recognition is still unproven. There are no ground-truth labels, so whole-plate accuracy, accepted precision, candidate recall and confidence calibration remain unknown. Zero accepted identifiers does not prove recognition is impossible; nor does successful fusion in a synthetic test show that this footage contains sufficient character evidence. The genuine-sighting and fifteen-minute AI acceptance gates remain unmet. No threshold was lowered to generate alerts, and no tuning was performed.

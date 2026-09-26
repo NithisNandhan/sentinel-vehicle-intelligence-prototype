@@ -86,6 +86,10 @@ Synthetic events and any demonstration image are marked `synthetic` in the API a
 The online gates cannot be claimed until Sentinel credentials, camera availability, Docker/WSL2, and GPU access are validated on the presentation machine.
 Measured results and remaining gates are recorded in [VALIDATION.md](VALIDATION.md).
 
+## Multi-frame plate recognition
+
+The live worker now combines pretrained deep-learning plate OCR with per-vehicle, character-level temporal fusion. It keeps up to twelve OCR probability matrices in memory, ranks bounded alternatives, and only sends a sighting when multi-observation evidence passes the acceptance gates. Uncertain alternatives are not watchlist alerts. This does not restore invisible characters or imply 90% plate accuracy. See [methodology and limitations](docs/MULTIFRAME_RECOGNITION.md) and the measured live comparison in [VALIDATION.md](VALIDATION.md).
+
 ## Local verification
 
 With the offline profile running and Python 3.11+ available on the host, execute the synthetic API workflow check:
