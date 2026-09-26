@@ -1,6 +1,7 @@
 # Hybrid multi-frame plate recognition
 
-Status: hybrid direction approved; written design awaiting user review.
+Status: hybrid direction and reconstruction addition approved; revised written
+design awaiting user review before implementation.
 Date: 2026-09-26.
 
 ## Goal and evidence boundary
@@ -25,6 +26,15 @@ Do not change central APIs, the dashboard, watchlist matching or privacy rules.
 Use `PLATE_READER=temporal-v2|hybrid-v1`; default remains temporal-v2 until the
 hybrid evaluation is reviewed. Stamp emitted records with the actual variant
 and OCR/restoration identities, using the existing model-version field.
+
+Pipeline: native video -> tracked native plate crops -> quality selection ->
+checked geometric alignment -> multi-frame reconstruction -> optional learned
+deblurring -> original/restored OCR -> sequence-aware evidence fusion -> accepted,
+uncertain or NO-READ -> existing privacy-protected delivery.
+
+The reconstruction is a new processed image derived from captured observations,
+not a generated replacement plate. Never render a predicted string into an image
+and feed that rendering back as recognition evidence.
 
 ### 1. Native crops and bounded windows
 
@@ -54,6 +64,14 @@ coordinates. Fuse only valid samples with bounded quality-weighted averaging.
 These initial engineering gates are not accuracy claims. Native-grid fusion is
 multi-frame denoising/reconstruction, not evidence of recovered resolution.
 Do not label interpolation as super-resolution.
+
+Each reconstructed result carries in-memory source-observation IDs, reference
+PTS, valid-pixel/support masks, alignment diagnostics and processing identity.
+Changing the reference starts a fresh reconstruction window. Overlapping windows
+do not create new independent evidence from reused source observations. Require
+at least three distinct observations surviving alignment; otherwise keep original
+OCR available and report reconstruction as unavailable. Preserve originals and
+never overwrite them with rectified, enlarged or restored versions.
 
 ### 3. Learned restoration as a separate experiment
 
@@ -92,6 +110,25 @@ Require original-frame support at each accepted character position; one restored
 window cannot manufacture repeat support. No registry or confidence boost is
 assumed. Scores remain explicitly uncalibrated until held-out calibration exists.
 
+### 5. Reconstruction visualisation
+
+Build an offline local HTML benchmark viewer, separate from the central dashboard
+and live camera preview. Display original native crop, multi-frame reconstruction
+and optional deblurred reconstruction side by side at matched display scale. Show
+native dimensions, distinct source count, alignment rejection count and processing
+time. Label outputs "Processed reconstruction - not original footage" and
+"Learned deblurring - may alter character details". Keep recognition output in a
+separate panel; never draw predicted characters into the plate image. Display
+UNCERTAIN and NO-READ honestly rather than making an uncertain result look verified.
+
+Viewer image assets and reports may be written only for provenance-validated,
+permitted non-Sentinel benchmark inputs under ignored `data/benchmarks/reports`.
+Include dataset attribution, licence and modification notices. No external image
+hosting, upload, CDN scripts or cloud inference. Do not bundle images or labels
+into Git. Existing numeric report JSON remains free of plate strings and images.
+Reject live/Sentinel input for persisted visual reports. Genuine live-image
+visualisation or storage requires a separate explicit privacy decision.
+
 ## Runtime safety and rollout
 
 Run heavy GPU research variants sequentially, not alongside a live AI worker.
@@ -100,6 +137,13 @@ stop central services or camera relays. Bound restoration attempts to one per
 window update and four per track. GPU OOM or rejected alignment discards the
 experimental result and reports a numeric failure; no fabricated observation.
 Benchmark opt-in hybrid integration before considering a default switch.
+
+For integrated hybrid operation, use one shared heavy-model executor per worker,
+batch size one, and a bounded pending queue of eight track windows. Never create
+one RAFT/NAFNet model instance per vehicle. Bypass optional restoration at six
+pending windows; resume below four. Under overload or model failure preserve
+original OCR and report the bypass reason, rather than waiting indefinitely.
+These bounds are initial resource controls, not a guarantee of throughput/uptime.
 
 Genuine Sentinel frames, crops, candidates and plaintext plates stay in RAM.
 No cloud calls, retained live footage or image/text logging. Only existing
@@ -126,6 +170,8 @@ remaining limitations. Distinguish planned, implemented and validated work.
    alignment/restoration/fusion on the same permitted passages and degradation
    controls. Keep labels outside inference. Report correct, wrong, abstained,
    coverage, candidate inclusion, stage failures, latency and peak GPU memory.
+   Verify viewer source/output association, truthful labels, attribution, absence
+   of externally loaded content, and refusal to persist live/Sentinel images.
 6. Integration: run edge/backend regression tests, privacy checks, offline smoke
    workflow and bounded live shadow observation without saving media. Promote
    only after correct-reading improvement is demonstrated with no additional
