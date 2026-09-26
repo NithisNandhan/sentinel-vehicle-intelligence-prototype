@@ -137,3 +137,25 @@ access results must not be presented as current. The improved experimental
 reader has not been promoted to the live worker. Resume with valid training
 inputs, then verify GPU model-output parity and privacy-preserving live shadow
 processing before changing the production default.
+
+### Subsequent dataset acquisition
+
+The follow-up search found a real CC BY 4.0 Zenodo archive with 1,700 images and
+a transcription workbook. The workbook and ten images were acquired; eight
+image/label pairs were visually confirmed and two quarantined. This resolves
+the lack of any additional verified images, but not full-corpus cleaning,
+vehicle-separated training or held-out validation. See
+[dataset audit and remaining gates](INDIAN_DATASET_AUDIT.md). The historical
+empty-corpus finding above remains correct for that specific Hugging Face repo.
+
+### Subsequent fine-tuning pilot
+
+The approved follow-up expanded visual review to 48 distinct registrations and
+trained the Awiros CTC linear output layer. Separate test results were 9/10 exact
+before and after, with character errors falling from two to one. Both matched
+multi-frame runs accepted 13/21 conditions correctly, abstained on eight, and
+accepted none incorrectly. This is not a demonstrated improvement in the blurry
+plate acceptance boundary. See [training, evidence and reproduction](OCR_FINETUNING.md).
+The historical blocker above describes the earlier stage, not the current pilot.
+Production remains unchanged; GPU/live validation and larger diverse training
+remain unfinished.

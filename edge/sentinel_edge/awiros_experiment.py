@@ -110,8 +110,33 @@ def check_state_shapes(expected, actual):
         raise ValueError('OCR checkpoint tensor shapes do not match the pinned architecture')
 
 
+def checkpoint_metadata(path: Path, cache: Path):
+    """Require an explicit, hashed adaptation descended from the pinned model."""
+    metadata = json.loads(path.with_suffix('.json').read_text(encoding='utf-8'))
+    if (metadata.get('parent_sha256') != WEIGHTS_SHA256
+            or metadata.get('dictionary_sha256') != file_hash(cache / 'en_dict.txt')
+            or metadata.get('weights_sha256') != file_hash(path)
+            or metadata.get('training_scope') != 'ctc_linear_head_only'
+            or not metadata.get('frozen_state_unchanged')):
+        raise ValueError('Unverified adapted OCR checkpoint')
+    return metadata
+
+
+def input_array(image):
+    """Identical preprocessing for cached features and reader inference."""
+    import cv2
+    import numpy as np
+    if image.ndim != 3 or image.shape[2] != 3 or image.dtype != np.uint8 or not image.size:
+        raise ValueError('A nonempty native BGR uint8 crop is required')
+    height, width = image.shape[:2]
+    target_width = max(1, min(int(width * 48 / height), 320))
+    padded = np.zeros((48, 320, 3), dtype=np.uint8)
+    padded[:, :target_width] = cv2.resize(image, (target_width, 48))
+    return ((padded.astype(np.float32) / 255.0 - .5) / .5).transpose(2, 0, 1)[None]
+
+
 class AwirosExperiment:
-    def __init__(self, cache: Path, *, device='cpu'):
+    def __init__(self, cache: Path, *, device='cpu', checkpoint: Path | None = None):
         import sys
         if device not in {'cpu', 'gpu'}:
             raise ValueError('Explicit CPU/GPU device required')
@@ -133,6 +158,8 @@ class AwirosExperiment:
         sys.path.insert(0, str(source))
         if (cache / 'deps').is_dir():
             sys.path.insert(0, str(cache / 'deps'))
+        if device == 'gpu' and (cache / 'gpu-deps').is_dir():
+            sys.path.insert(0, str(cache / 'gpu-deps'))
         import paddle
         from safetensors.numpy import load_file
         from ppocr.modeling.architectures import build_model
@@ -142,8 +169,16 @@ class AwirosExperiment:
         paddle.set_device(device)
         config = author_config((cache / 'test.py').read_text(encoding='utf-8'))
         self.model = build_model(config)
-        arrays = load_file(str(cache / 'model.safetensors'))
+        self.adaptation = checkpoint_metadata(checkpoint, cache) if checkpoint else None
+        arrays = load_file(str(checkpoint or cache / 'model.safetensors'))
         check_state_shapes(self.model.state_dict(), arrays)
+        if checkpoint:
+            import numpy as np
+            parent = load_file(str(cache / 'model.safetensors'))
+            head_keys = {'head.ctc_head.fc.weight', 'head.ctc_head.fc.bias'}
+            if (any(not np.array_equal(arrays[key], parent[key]) for key in arrays if key not in head_keys)
+                    or not any(not np.array_equal(arrays[key], parent[key]) for key in head_keys)):
+                raise ValueError('Adaptation modified frozen state or contains no trained head')
         missing, unexpected = self.model.set_state_dict({k: paddle.to_tensor(v) for k, v in arrays.items()})
         if missing or unexpected:
             raise ValueError('OCR checkpoint did not load strictly')
@@ -155,15 +190,8 @@ class AwirosExperiment:
         self.device = device
 
     def probabilities(self, image):
-        import cv2
         import numpy as np
-        if image.ndim != 3 or image.shape[2] != 3 or image.dtype != np.uint8 or not image.size:
-            raise ValueError('A nonempty native BGR uint8 crop is required')
-        height, width = image.shape[:2]
-        target_width = max(1, min(int(width * 48 / height), 320))
-        padded = np.zeros((48, 320, 3), dtype=np.uint8)
-        padded[:, :target_width] = cv2.resize(image, (target_width, 48))
-        tensor = ((padded.astype(np.float32) / 255.0 - .5) / .5).transpose(2, 0, 1)[None]
+        tensor = input_array(image)
         with self.paddle.no_grad():
             output = self.model(self.paddle.to_tensor(tensor))
         if isinstance(output, dict):

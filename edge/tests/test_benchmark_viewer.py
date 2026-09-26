@@ -11,6 +11,16 @@ DATASET = {'name': 'Permitted fixture', 'license': 'CC-BY-4.0',
 
 
 class ViewerTests(unittest.TestCase):
+    def test_still_diagnostic_never_claims_temporal_acceptance(self):
+        with tempfile.TemporaryDirectory() as temp:
+            output = Path(temp) / 'data/benchmarks/reports/view.html'
+            case = {'source_mode': 'benchmark', 'diagnostic_only': True, 'outcome': 'raw-exact'}
+            render_viewer(output, DATASET, [case])
+            self.assertIn('RAW MATCH', output.read_text())
+            case['accepted'] = 'GJ01AB1234'
+            with self.assertRaises(ValueError):
+                render_viewer(output, DATASET, [case])
+
     def test_processed_readings_are_correlated_escaped_and_bounded(self):
         with tempfile.TemporaryDirectory() as temp:
             output = Path(temp) / 'data/benchmarks/reports/view.html'

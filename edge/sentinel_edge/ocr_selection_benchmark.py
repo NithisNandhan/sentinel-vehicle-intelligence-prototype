@@ -3,7 +3,7 @@
 Only independently labelled permitted benchmark inputs are allowed. Aggregate
 JSON never contains plate text; detailed readings appear only in the ignored
 local HTML viewer. Enhancements and automatic localisation are explicit
-ablations, not changes to live inference. No registry or training is involved.
+ablations, not changes to live inference. Adapted checkpoints are explicit only.
 """
 from __future__ import annotations
 
@@ -76,7 +76,8 @@ class CCTExperiment:
 
 def run_selection_benchmark(manifest_path: Path, cache: Path, *, backend='awiros', family='all',
                             report_path: Path, viewer_path: Path, device='cpu', quality_weighted=False,
-                            reconstruction=False, restoration=False, automatic_crops=False, deskew=False):
+                            reconstruction=False, restoration=False, automatic_crops=False, deskew=False,
+                            checkpoint=None):
     import numpy as np
     document = json.loads(manifest_path.read_text(encoding='utf-8-sig'))
     root = manifest_path.parent.resolve()
@@ -95,7 +96,7 @@ def run_selection_benchmark(manifest_path: Path, cache: Path, *, backend='awiros
     loaded = time.perf_counter()
     if backend == 'awiros':
         from .awiros_experiment import AwirosExperiment, MODEL_REVISION
-        ocr = AwirosExperiment(cache / 'experiments' / 'awiros', device=device)
+        ocr = AwirosExperiment(cache / 'experiments' / 'awiros', device=device, checkpoint=checkpoint)
         revision = MODEL_REVISION
     elif backend == 'parseq':
         import sys
@@ -109,6 +110,8 @@ def run_selection_benchmark(manifest_path: Path, cache: Path, *, backend='awiros
         revision = 'cct-s-v2-global-model'
     else:
         raise ValueError('Unknown OCR comparison backend')
+    if checkpoint and backend != 'awiros':
+        raise ValueError('Adaptation is available only for Awiros')
     loading_ms = (time.perf_counter() - loaded) * 1000
     ocr.probabilities(np.zeros((32, 128, 3), dtype=np.uint8))
     detector = PlateDetectorExperiment() if automatic_crops else None
@@ -275,7 +278,9 @@ def run_selection_benchmark(manifest_path: Path, cache: Path, *, backend='awiros
     report = {'evaluation': 'native-crop multi-frame OCR selection diagnostic',
               'generated_at': datetime.now(timezone.utc).isoformat(),
               'backend': backend, 'model_revision': revision, 'device': ocr.device,
-              'further_fine_tuned_here': False, 'loading_ms': round(loading_ms, 2),
+              'further_fine_tuned_here': bool(checkpoint),
+              'adapted_checkpoint_sha256': ocr.adaptation['weights_sha256'] if checkpoint else None,
+              'loading_ms': round(loading_ms, 2),
               'warmup_excluded': True, 'stage': 'automatic_plate_crop_ocr' if detector else 'oracle_plate_ocr',
               'automatic_detection_evaluated': bool(detector), 'vehicle_tracking_evaluated': False,
               'quality_weighted': quality_weighted, 'reconstruction_requested': reconstruction,
@@ -310,10 +315,12 @@ if __name__ == '__main__':
     parser.add_argument('--restoration', action='store_true')
     parser.add_argument('--automatic-crops', action='store_true')
     parser.add_argument('--deskew', action='store_true')
+    parser.add_argument('--checkpoint', type=Path)
     parser.add_argument('--report', type=Path, required=True)
     parser.add_argument('--viewer', type=Path, required=True)
     args = parser.parse_args()
     run_selection_benchmark(args.manifest, args.cache, backend=args.backend, family=args.family,
                             report_path=args.report, viewer_path=args.viewer, device=args.device,
                             quality_weighted=args.quality_weighted, reconstruction=args.reconstruction,
-                            restoration=args.restoration, automatic_crops=args.automatic_crops, deskew=args.deskew)
+                            restoration=args.restoration, automatic_crops=args.automatic_crops, deskew=args.deskew,
+                            checkpoint=args.checkpoint)

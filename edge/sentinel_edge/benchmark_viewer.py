@@ -63,6 +63,10 @@ def render_viewer(output: Path, dataset: dict, cases: list, *, source_mode='benc
         candidates = ranked_candidates(case.get('candidates', []), case.get('processed_candidates', []))
         accepted = case.get('accepted')
         status = 'RECOGNISED' if accepted else 'UNCERTAIN' if candidates else 'NO-READ'
+        if case.get('diagnostic_only'):
+            if accepted:
+                raise ValueError('Single-still diagnostics cannot claim temporal acceptance')
+            status = 'RAW MATCH' if case.get('outcome') == 'raw-exact' else 'RAW ERROR'
         alternatives = [c.plate for c, _ in candidates]
         differing = {i for i in range(max((len(t) for t in alternatives), default=0))
                      if len({t[i] if i < len(t) else None for t in alternatives}) > 1}
