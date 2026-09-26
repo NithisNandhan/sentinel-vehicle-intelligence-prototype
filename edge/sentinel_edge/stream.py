@@ -26,17 +26,21 @@ def _decode(url: str, *, transport: str, headers: dict[str, str] | None = None) 
     options = {"rtsp_transport": "tcp", "stimeout": "8000000"} if transport == "rtsp" else {}
     if headers:
         options.update(media_http_options(url, headers))
-    with av.open(url, options=options, timeout=(8, 8)) as container:
-        video_stream = next((s for s in container.streams if s.type == "video"), None)
-        if video_stream is None:
-            raise OSError("No video stream")
-        previous_pts: int | None = None
-        for frame in container.decode(video_stream):
-            pts_ms = round(float(frame.pts * frame.time_base) * 1000) if frame.pts is not None else None
-            discontinuity = previous_pts is not None and pts_ms is not None and (pts_ms < previous_pts or pts_ms - previous_pts > 5000)
-            if pts_ms is not None:
-                previous_pts = pts_ms
-            yield VideoFrame(frame.to_ndarray(format="bgr24"), pts_ms, discontinuity)
+    try:
+        with av.open(url, options=options, timeout=(8, 8)) as container:
+            video_stream = next((s for s in container.streams if s.type == "video"), None)
+            if video_stream is None:
+                raise OSError("No video stream")
+            previous_pts: int | None = None
+            for frame in container.decode(video_stream):
+                pts_ms = round(float(frame.pts * frame.time_base) * 1000) if frame.pts is not None else None
+                discontinuity = previous_pts is not None and pts_ms is not None and (pts_ms < previous_pts or pts_ms - previous_pts > 5000)
+                if pts_ms is not None:
+                    previous_pts = pts_ms
+                yield VideoFrame(frame.to_ndarray(format="bgr24"), pts_ms, discontinuity)
+    except av.error.FFmpegError:
+        # PyAV errors do not consistently inherit OSError; redact their source URL.
+        raise OSError("Video decoding interrupted or unavailable") from None
 
 
 def read_camera(config: Config, camera: Camera, *, stop=None) -> Iterator[tuple[str, VideoFrame]]:

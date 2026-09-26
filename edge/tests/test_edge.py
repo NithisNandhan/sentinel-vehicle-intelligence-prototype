@@ -6,7 +6,7 @@ import tempfile
 import unittest
 from pathlib import Path
 from types import SimpleNamespace
-from unittest.mock import patch
+from unittest.mock import patch, MagicMock
 import threading
 
 from sentinel_edge.api import CentralClient
@@ -263,6 +263,41 @@ class DeliveryTests(unittest.TestCase):
 
 
 class RelayTests(unittest.TestCase):
+    def test_native_decoder_errors_are_redacted_for_retry(self):
+        from sentinel_edge.stream import _decode
+        from sentinel_edge.relay import _probe
+        class FFmpegError(Exception):
+            pass
+        fake_av = SimpleNamespace(error=SimpleNamespace(FFmpegError=FFmpegError),
+                                  open=MagicMock(side_effect=FFmpegError("rtsp://user:secret@host")))
+        with patch.dict("sys.modules", {"av": fake_av}):
+            for operation in (lambda: next(_decode("rtsp://source", transport="rtsp")),
+                              lambda: _probe("rtsp://source", "rtsp", None)):
+                with self.assertRaises(OSError) as raised:
+                    operation()
+                self.assertNotIn("secret", str(raised.exception))
+                self.assertNotIn("rtsp", str(raised.exception))
+
+    def test_transient_native_error_retries_local_relay(self):
+        class FFmpegError(Exception):
+            pass
+        frame = SimpleNamespace(pts=1, time_base=1, to_ndarray=lambda **_: object())
+        container = MagicMock()
+        container.__enter__.return_value = container
+        container.streams = [SimpleNamespace(type="video")]
+        container.decode.return_value = [frame]
+        fake_av = SimpleNamespace(error=SimpleNamespace(FFmpegError=FFmpegError),
+                                  open=MagicMock(side_effect=[FFmpegError("404"), container]))
+        with patch.dict(os.environ, {"EDGE_API_KEY": "a", "WATCHLIST_HMAC_KEY": "b",
+                                    "MEDIA_RELAY_BASE_URL": "rtsp://local:8554"}, clear=True):
+            config = Config.from_env(live=False)
+        stop = SimpleNamespace(is_set=lambda: False, wait=lambda _: None)
+        with patch.dict("sys.modules", {"av": fake_av}):
+            transport, decoded = next(read_camera(config, Camera("cam01", "Bridge"), stop=stop))
+        self.assertEqual(transport, "rtsp")
+        self.assertEqual(decoded.pts_ms, 1000)
+        self.assertEqual(fake_av.open.call_count, 2)
+
     def test_h264_copy_and_h265_transcode(self):
         copied = _ffmpeg_args("rtsp://source", "rtsp", None, "h264", "copy", "rtsp://target")
         self.assertEqual(copied[copied.index("-c:v") + 1], "copy")

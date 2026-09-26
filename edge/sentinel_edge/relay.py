@@ -21,11 +21,14 @@ def _probe(url: str, transport: str, headers: dict[str, str] | None) -> str:
     options = {"rtsp_transport": "tcp"} if transport == "rtsp" else {}
     if headers:
         options.update(media_http_options(url, headers))
-    with av.open(url, options=options, timeout=(8, 8)) as container:
-        video = next((stream for stream in container.streams if stream.type == "video"), None)
-        if video is None:
-            raise OSError("No video stream")
-        return video.codec_context.name.lower()
+    try:
+        with av.open(url, options=options, timeout=(8, 8)) as container:
+            video = next((stream for stream in container.streams if stream.type == "video"), None)
+            if video is None:
+                raise OSError("No video stream")
+            return video.codec_context.name.lower()
+    except av.error.FFmpegError:
+        raise OSError("Video probe unavailable") from None
 
 
 def _nvenc_available() -> bool:

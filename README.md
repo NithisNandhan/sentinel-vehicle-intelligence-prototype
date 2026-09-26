@@ -42,7 +42,7 @@ Only two cameras are selected for AI processing. The worker tries the newer publ
 
 The selected portal cards are CAM01 (Chiman bhai Bridge) and CAM02 (Janpath); their documented public-grid IDs are `cam01` and `cam02`. The local `.env` is pinned to those IDs. The offline simulator has its own synthetic route and does not use `CAMERA_IDS`.
 
-Access update on 2026-09-26: the updated local credentials successfully sign in, `/cameras.json` returns 30 cameras, and CAM01/CAM02 decode concurrently over both RTSP/TCP and authenticated HLS in short native checks. Camera discovery selects both without fallback. Full AI/dashboard runtime verification is currently blocked by a local Docker WSL engine startup failure; see `VALIDATION.md` for the separate checks. No footage was retained.
+Access update on 2026-09-26: the updated credentials successfully sign in, `/cameras.json` returns 30 cameras, and CAM01/CAM02 decode over RTSP/TCP and authenticated HLS. Docker subsequently recovered, and a three-minute concurrent live GPU test ran approximately five sampled inference calls per second on each camera. Vehicle detection works in this sample, but FastALPR produced no confirmed plates; number-plate recognition is not yet accepted. See `VALIDATION.md` for timing, crop diagnostics and remaining gates. No footage was retained.
 
 Stop the current profile with `docker compose --profile offline down` or `docker compose --profile online down`. The database and outbox use persistent Docker volumes; `down` does not erase them.
 

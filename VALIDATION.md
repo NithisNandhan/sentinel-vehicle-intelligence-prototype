@@ -117,3 +117,36 @@ The user updated the local credentials. Normal portal form sign-in now succeeds,
 Reproduce bounded decode checks with `backend/.venv/Scripts/python.exe scripts/check-live-access.py --seconds 20` and `--protocol hls` for the fallback. The script reads local `.env`, does not print source URLs or native error messages, and retains no media. Its optional 900-second duration is a decoder check, not the complete AI acceptance test.
 
 The brainstorming step kept this change scoped to the previously approved automatic sign-in workflow. No model tuning was performed or justified by these decoder-only results. Actual live YOLO/FastALPR performance, OCR ground-truth accuracy, a genuine central sighting and the 15-minute two-camera AI acceptance gate still require verification.
+
+## Live YOLOv8n / FastALPR test on 2026-09-26 (local time)
+
+After the user recovered Docker, the cached models loaded on the RTX 3050. YOLO used `cuda:0`; both FastALPR ONNX sessions used CUDA with CPU fallback. RTSP/TCP relays carried CAM01/CAM02 to local MediaMTX. The synthetic simulator stayed stopped. Test-only in-memory instrumentation counted model calls and results without saving frames or printing plate text; no confidence or consensus thresholds were changed.
+
+| Three-minute concurrent live test | CAM01 | CAM02 |
+| --- | --- | --- |
+| Decoded frames | 2,689 | 5,336 |
+| Sampled inference frames | 896 | 890 |
+| Approximate sampled calls per wall-clock second | 4.98 | 4.94 |
+| Complete vision-call median / p95 | 25.47 / 56.72 ms | 25.30 / 61.60 ms |
+| YOLO/ByteTrack median / p95 | 23.91 / 48.41 ms | 23.10 / 45.35 ms |
+| Vehicle boxes across sampled frames | 1,593 | 1,407 |
+| FastALPR vehicle-crop calls | 168 | 240 |
+| FastALPR crop-call median / p95 | 20.36 / 30.46 ms | 19.54 / 33.39 ms |
+| Candidate plate regions | 31 | 28 |
+| Non-empty OCR results | 1 | 0 |
+| OCR results at or above 0.85 confidence | 0 | 0 |
+| Confirmed plate sightings | 0 | 0 |
+
+Vehicle boxes and plate regions are repeated detections, not unique vehicle counts or verified correct detections. Timing includes Python/model calls but excludes camera-network-to-dashboard latency. These samples show vehicle detection/tracking and the plate models executing at the configured sampling rate, but do not establish detection recall or OCR accuracy.
+
+The normal live worker also delivered central health reports: two initial reports per camera totalled 914 decoded / 305 inferred frames on CAM01 and 1,852 decoded / 309 inferred frames on CAM02. Both latest states were ONLINE with zero outbox depth; the database contained no live sightings. This verifies live health delivery, not a genuine plate-sighting acceptance gate.
+
+A separate bundled-image smoke benchmark (three warm-ups, 20 repeats, before live tests) measured YOLO/ByteTrack median 12.41 ms / p95 16.07 ms and FastALPR full-image median 15.45 ms / p95 30.38 ms. This remains a non-Sentinel fixture benchmark, not accuracy evidence.
+
+A follow-up diagnostic encountered a temporary MediaMTX 404. PyAV's native `FFmpegError` did not follow the assumed `OSError` inheritance on this image and escaped the existing retry loop. The decoder and relay probe now normalize that error into a redacted `OSError`, preserving the already-approved protocol fallback/backoff flow. Two focused tests cover redaction and successful retry after a native 404. All 43 edge tests and 17 backend tests passed; live images were rebuilt and deployed. The brainstorming scope remained limited to this resilience correction, with no recognition-model or threshold change.
+
+The repeated 45-second crop diagnostic sampled about one frame per second, independently of production crop-quality/dedup gates. CAM01: 37 sampled frames, 51 vehicle crops, 14 candidate plates; candidate widths min/median/max 9/33/34 pixels and heights 5/22.5/24 pixels. CAM02: 36 sampled frames, 54 vehicle crops, 15 candidates; widths 14/28/104 pixels and heights 6/13/28 pixels. Normal OCR returned 0/2 non-empty readings for CAM01/CAM02; adding roughly 5% crop padding and 2x cubic scaling returned 0/3. No reading in either variant met 0.85 confidence. No production model, crop rule, threshold or consensus requirement was changed; the normal live worker was restored after testing.
+
+Interpretation: candidate crops are often small, and simple padding/upscaling did not solve confident recognition in this sample. Small size is a plausible contributor, not a proven root cause: false detections, viewing angle, blur and model/domain mismatch have not been separated by labelled evaluation. YOLO fine-tuning is not justified by these tests. OCR improvement is needed before claiming usable number-plate recognition, but deciding between better input/plate cropping, another detector/OCR model and fine-tuning requires permitted labelled plate examples. Lowering thresholds simply to create sightings would not validate recognition. The 15-minute AI acceptance run and genuine confirmed central sighting remain incomplete.
+
+Final checks: a real missing local RTSP path produced redacted `OSError` results from both the deployed decoder and relay probe, with no source URL in the message. Fresh central reports after restoring the worker showed CAM01 ONLINE with 462 decoded / 154 inferred frames, CAM02 ONLINE with 857 decoded / 143 inferred frames, and zero queued events on both. API, database, dashboard, MediaMTX, gateway, stream adapter and live worker were running. All 43 edge, 17 backend and 7 dashboard tests passed. The live worker remains running; these snapshots are not a 15-minute uninterrupted acceptance run.
