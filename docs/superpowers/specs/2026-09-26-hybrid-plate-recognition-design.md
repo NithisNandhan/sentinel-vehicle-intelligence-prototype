@@ -1,7 +1,7 @@
 # Hybrid multi-frame plate recognition
 
-Status: hybrid direction and reconstruction addition approved; revised written
-design awaiting user review before implementation.
+Status: hybrid direction, reconstruction and local benchmark candidate output
+approved; revised written design awaiting final review before implementation.
 Date: 2026-09-26.
 
 ## Goal and evidence boundary
@@ -121,6 +121,28 @@ time. Label outputs "Processed reconstruction - not original footage" and
 separate panel; never draw predicted characters into the plate image. Display
 UNCERTAIN and NO-READ honestly rather than making an uncertain result look verified.
 
+The recognition panel shows every retained unique candidate, up to the existing
+200-candidate beam limit, sorted by descending evidence score. This is a bounded
+candidate list, not every mathematically possible registration and not a guarantee
+that the true plate is retained. Show rank, candidate text, uncalibrated model
+score, weakest-character score and distinct source-observation support. Do not
+present scores as percentage accuracy or renormalise the displayed list into an
+exhaustive probability distribution. Highlight positions where candidates differ.
+
+Show the accepted plate separately when the normal evidence gates pass. Otherwise
+label the ranked list UNCERTAIN, including its rejection reason. If no candidate
+survives, show NO-READ, an empty list and any supported partial text with unknown
+positions marked '?'; do not manufacture complete registrations just to fill the
+list. Candidate output never creates events or watchlist alerts. Ground-truth
+labels may be used only by the evaluator after inference, never by candidate
+generation or reconstruction.
+
+Full benchmark candidate strings are permitted only in the local visual report
+for licensed inputs, under the ignored report directory. Keep them out of numeric
+aggregate JSON, ordinary logs, SQLite outbox, central APIs and the live dashboard.
+Escape candidate text when rendering HTML. The viewer runs without external
+requests and must not depend on available Sentinel access.
+
 Viewer image assets and reports may be written only for provenance-validated,
 permitted non-Sentinel benchmark inputs under ignored `data/benchmarks/reports`.
 Include dataset attribution, licence and modification notices. No external image
@@ -172,6 +194,8 @@ remaining limitations. Distinguish planned, implemented and validated work.
    coverage, candidate inclusion, stage failures, latency and peak GPU memory.
    Verify viewer source/output association, truthful labels, attribution, absence
    of externally loaded content, and refusal to persist live/Sentinel images.
+   Test uncertain candidate display, stable ranking/deduplication, the 200-entry
+   cap, empty/partial NO-READ output, HTML escaping and unchanged alert emission.
 6. Integration: run edge/backend regression tests, privacy checks, offline smoke
    workflow and bounded live shadow observation without saving media. Promote
    only after correct-reading improvement is demonstrated with no additional
