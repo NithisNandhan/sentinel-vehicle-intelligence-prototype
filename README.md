@@ -103,6 +103,13 @@ separate local benchmark viewer shows uncertain ranked alternatives and processe
 images. It has **not** demonstrated correct accepted readings or been promoted to
 live mode. See [implementation, reproduction and measured limits](docs/HYBRID_RECOGNITION.md).
 
+The separate Indian-specific Awiros OCR comparison has now recognised one
+licensed development plate across three native frames. It correctly accepted
+11 of 21 degraded variants, versus zero for the existing CCT/PARSeq readers;
+these are copies of one passage, not general accuracy. It is benchmark-only,
+CPU-speed limited and has not been further fine-tuned or deployed live. See
+[model selection and measured boundaries](docs/OCR_MODEL_SELECTION.md).
+
 With the offline profile running and Python 3.11+ available on the host, execute the synthetic API workflow check:
 
 ```powershell

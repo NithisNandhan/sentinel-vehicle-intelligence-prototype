@@ -57,3 +57,17 @@ class ViewerTests(unittest.TestCase):
             with self.assertRaises(ValueError):
                 render_viewer(Path(temp) / 'data/benchmarks/reports/view.html', DATASET,
                               [{'source_mode': 'live'}])
+
+    def test_frame_diagnostics_are_escaped_and_bounded(self):
+        with tempfile.TemporaryDirectory() as temp:
+            output = Path(temp) / 'data/benchmarks/reports/view.html'
+            case = {'source_mode': 'benchmark', 'expected': '<script>label</script>',
+                    'score_note': '<script>score</script>',
+                    'frame_diagnostics': [{'index': 0, 'reading': '<script>reading</script>'}]}
+            render_viewer(output, DATASET, [case])
+            text = output.read_text()
+            self.assertNotIn('<script>', text)
+            self.assertIn('Raw OCR', text)
+            case['frame_diagnostics'] *= 41
+            with self.assertRaises(ValueError):
+                render_viewer(output, DATASET, [case])

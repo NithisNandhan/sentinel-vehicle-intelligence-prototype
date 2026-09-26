@@ -80,12 +80,27 @@ def render_viewer(output: Path, dataset: dict, cases: list, *, source_mode='benc
                              ('Original native crop', 'original'),
                              ('Processed reconstruction — not original footage', 'reconstruction'),
                              ('Learned deblurring — may alter character details', 'restored')))
+        diagnostics = case.get('frame_diagnostics', [])
+        if len(diagnostics) > 40:
+            raise ValueError('Too many frame diagnostics')
+        diagnostic_html = ''.join(
+            f'<figure><figcaption>Original frame {esc(item.get("index"))} · {esc(item.get("pts_ms"))} ms'
+            f'<br>Raw OCR: {esc(item.get("reading"))} · OCR time: {esc(item.get("ocr_ms"))} ms</figcaption>'
+            f'{_image(item.get("image"))}</figure>' for item in diagnostics)
+        extra = (f'<p>Manually verified evaluation label: {esc(case["expected"])}. '
+                 'This label was not supplied to inference.</p>' if case.get('expected') else '')
+        if case.get('score_note'):
+            extra += f'<p>{esc(case["score_note"])}</p>'
+        if diagnostics:
+            extra += ('<details><summary>Inspect raw OCR on each original frame — diagnostic, not separate product detections</summary>'
+                      f'<div class="images">{diagnostic_html}</div></details>')
         sections.append(f'''<section><h2>{esc(case.get('title', 'Benchmark passage'))}</h2>
 <p class="status">{status}</p><p>Accepted plate: {esc(accepted or 'none')} · Partial reading: {esc(case.get('partial') or 'unavailable')}</p>
 <p>Reason: {esc(case.get('reason', 'unknown'))} · Native dimensions: {esc(case.get('dimensions'))} · Reconstruction sources: {esc(case.get('source_count', 0))}
  · Rejected alignments: {esc(case.get('rejected', 0))} · Processing: {esc(case.get('duration_ms'))} ms</p>
 <p>Evaluation outcome: {esc(case.get('outcome', 'not scored'))}. Ground truth was used only after inference.</p>
 <div class="images">{images}</div>
+{extra}
 <p>Retained candidates: {len(candidates)} / maximum 200. This is not an exhaustive list; the correct plate may be absent.
 Scores are uncalibrated model scores, not probability of correctness. Ranking uses whole-sequence log score, not the mean character score.
 Processed views are correlated hypotheses, not extra frames.</p>

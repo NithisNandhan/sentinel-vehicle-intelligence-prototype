@@ -300,3 +300,31 @@ saved during those checks. Recent worker logs contained no AI-processing
 tracebacks or CUDA/out-of-memory errors. Services were restored, but live feed
 readiness is not currently verified; this upstream access condition prevents
 live hybrid shadow validation.
+
+## Indian-specialist OCR selection, 26 September 2026
+
+Pinned Awiros ANPR OCR checkpoint and PaddleOCR source were downloaded into an
+isolated research cache. Weight publisher SHA-256 and every model key/shape were
+checked before inference. No genuine Sentinel input or live settings changed.
+
+Native-crop multi-frame comparison: one permitted NIVU development vehicle,
+three distinct frames, assigned replay timestamps and 21 deterministic conditions.
+CCT-S v2 and pretrained PARSeq each returned 0 correct, 0 wrong and 21 abstentions.
+The already Indian-fine-tuned Awiros checkpoint plus proper CTC sequence fusion
+returned **11 correct, 0 wrong and 10 abstentions**. All three clear-frame raw
+readings matched the independently read evaluation label. No label was supplied
+to inference. This is recognition of one distinct plate, not held-out accuracy,
+not automatic localisation, and not evidence of a 90% correctness probability.
+
+Numerically stabilised decoder replay preserved all 21 outcomes and true-candidate
+ranks. Median CPU network inference was approximately 2,090 ms per crop with
+a two-CPU/4-GiB container cap. GPU/export and live-speed gates are untested.
+Further training was not run: one seen vehicle cannot support meaningful
+fine-tuning and independent evaluation. Dataset permission/provenance, diverse
+checked labels, vehicle-separated splits and calibration remain required.
+
+**145 edge tests passed**, including CTC likelihood comparisons against exhaustive
+paths, repeat/case/space handling, literal-only config parsing, strict checkpoint
+loading, original-crop preservation, privacy rejection and escaped local visuals.
+Reports/viewers remain ignored local files. The production reader stays unchanged.
+Detailed reproduction and limits: docs/OCR_MODEL_SELECTION.md.
