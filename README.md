@@ -4,6 +4,11 @@ This repository contains a two-camera demonstration of a regional vehicle-intell
 
 The system does not perform face recognition. Genuine camera frames, crops, clips, and plaintext number plates are not persisted. Offline demonstration imagery is synthetic.
 
+The isolated GPU OCR adaptation and its measured limitations are documented in
+[DEEP_OCR_ADAPTATION.md](docs/DEEP_OCR_ADAPTATION.md). The new checkpoint improves
+a small licensed still-image diagnostic; it is not deployed and does not establish
+live accuracy. Local results: <http://127.0.0.1:7777/indian-corpus-summary.html>.
+
 ## Before starting
 
 - Windows with WSL2, Docker Desktop, hardware virtualization, and enough free memory for the database, dashboard, media gateway, and AI worker. The online worker needs a working NVIDIA GPU container or the native Windows fallback.

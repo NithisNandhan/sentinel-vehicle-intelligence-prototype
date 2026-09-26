@@ -14,6 +14,19 @@ from pathlib import Path
 MODEL_REVISION = 'eadbc5ae4faa8284c8a547a60142fd555c3059ca'
 PADDLEOCR_REVISION = 'fc82f229112a03aff46cc53db6166a98ea65a8fa'
 WEIGHTS_SHA256 = 'f9f1264e0c115a239ca6d6700a74ceffab17168b75dafc6c169c232012c68e47'
+DEEP_PREFIXES = ('head.ctc_head.fc.', 'head.ctc_encoder.encoder.svtr_block.1.',
+                 'backbone.stages.3.blocks.0.layers.5.conv2.conv.')
+
+
+def adaptation_keys(state, scope):
+    if scope == 'ctc_linear_head_only':
+        return {'head.ctc_head.fc.weight', 'head.ctc_head.fc.bias'}
+    if scope != 'bounded_image_encoder_tail_and_ctc':
+        raise ValueError('Unsupported adaptation scope')
+    keys = {key for key in state if key.startswith(DEEP_PREFIXES)}
+    if not all(any(key.startswith(prefix) for key in keys) for prefix in DEEP_PREFIXES):
+        raise ValueError('Selected encoder architecture contract changed')
+    return keys
 
 
 def file_hash(path):
@@ -116,7 +129,7 @@ def checkpoint_metadata(path: Path, cache: Path):
     if (metadata.get('parent_sha256') != WEIGHTS_SHA256
             or metadata.get('dictionary_sha256') != file_hash(cache / 'en_dict.txt')
             or metadata.get('weights_sha256') != file_hash(path)
-            or metadata.get('training_scope') != 'ctc_linear_head_only'
+            or metadata.get('training_scope') not in {'ctc_linear_head_only', 'bounded_image_encoder_tail_and_ctc'}
             or not metadata.get('frozen_state_unchanged')):
         raise ValueError('Unverified adapted OCR checkpoint')
     return metadata
@@ -175,7 +188,7 @@ class AwirosExperiment:
         if checkpoint:
             import numpy as np
             parent = load_file(str(cache / 'model.safetensors'))
-            head_keys = {'head.ctc_head.fc.weight', 'head.ctc_head.fc.bias'}
+            head_keys = adaptation_keys(arrays, self.adaptation['training_scope'])
             if (any(not np.array_equal(arrays[key], parent[key]) for key in arrays if key not in head_keys)
                     or not any(not np.array_equal(arrays[key], parent[key]) for key in head_keys)):
                 raise ValueError('Adaptation modified frozen state or contains no trained head')

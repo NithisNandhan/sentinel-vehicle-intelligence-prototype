@@ -5,6 +5,10 @@ The existing experimental OCR checkpoint and live worker are unchanged.
 The combined images, labels, archives, receipts and review pages stay local
 under ignored `data/benchmarks`; GitHub receives tools, tests and this audit only.
 
+Follow-up: a separate bounded GPU encoder adaptation and diagnostic evaluation
+are recorded in [DEEP_OCR_ADAPTATION.md](DEEP_OCR_ADAPTATION.md). They do not change
+the corpus's original review statuses or establish independent live accuracy.
+
 ## Selected sources
 
 | Source | Publisher permission / labels | Treatment |
