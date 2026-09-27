@@ -74,9 +74,13 @@ validates library coexistence, not live OCR accuracy. OCR-first initialization
 avoids the CUDA/cuDNN library conflict found when Torch loaded first.
 
 On 2026-09-27 the page, camera controls and paused state were exercised in the
-local browser. During this implementation's access recheck the catalogue became
-unavailable and the CAM02 relay/direct probes returned no frames. Consequently,
-display of genuine live overlays could not be accepted in that check. The prior
-60-second live shadow test decoded both feeds and yielded five possible plate
-crops, but those results are not evidence that this viewer currently receives
-video. No recordings or synthetic substitutions were used to conceal the blocker.
+local browser. Initial access rechecks found an unavailable catalogue and no
+CAM02 relay/direct frames. After correcting GPU initialization and restarting
+the diagnostic, **CAM02 live display succeeded**: the browser showed 1,336
+decoded frames, 93 analysed frames, two possible plate crops and a recent
+64 x 26-pixel native crop with one distinct OCR observation. A subsequent visual
+check showed aligned green vehicle boxes on the Janpath feed (1,592 decoded,
+110 analysed, two plate crops). No accepted plate reading or live OCR accuracy
+was established. CAM01 live display in this viewer remains unverified. These are
+point-in-time checks, not feed-stability guarantees. No genuine images were saved
+and no synthetic substitutions were used to conceal the earlier access blocker.
