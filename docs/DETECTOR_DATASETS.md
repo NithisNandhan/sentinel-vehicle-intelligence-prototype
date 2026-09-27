@@ -30,9 +30,16 @@ connected group. Final learning split: **999 train / 148 val / 150 test**.
 Excluded originals are preserved but absent from all explicit training lists.
 Local SHA256 receipts are not publisher-verified image checksums.
 
+The admitted BMD subset has 10,402 training, 1,541 validation and 1,592 test
+vehicle annotations. It is imbalanced: two-wheelers have 4,814 training boxes,
+three-wheelers 1,801, but mini-buses only 38 (two validation, five test).
+Overall pooled box results must not be presented as reliable accuracy for every
+rare subclass. Frozen guarded manifest SHA256:
+`0dfe0ee13dad6a3bfcf7862287c5070f2c1080b34c61de9434abfe936ce0fa94`.
+
 Plate preparation admitted 567 unique non-conflicting photographs: 360 train /
 130 val / 77 test. 135 exact duplicate observations and 86 conflicting pixel
-groups were identified; both members of conflicting groups were excluded.
+groups were identified; all observations from conflicting groups were excluded.
 Split/source counts: Gujarat 234/85/34; Make ML 126/45/43. No annotations rejected
 for malformed coordinates in this export. Native images remain unmodified.
 

@@ -17,6 +17,7 @@ parser.add_argument('--kind',choices=['vehicle','plate'],required=True)
 parser.add_argument('--epochs',type=int,default=20)
 parser.add_argument('--name',default=None)
 parser.add_argument('--dataset',default=None)
+parser.add_argument('--resume',action='store_true',help='Resume an interrupted vehicle run, not a completed experiment')
 args = parser.parse_args()
 if not 1 <= args.epochs <= 60:
     raise ValueError('Bounded experiment required')
@@ -33,8 +34,11 @@ name = args.name or args.kind
 if not name.replace('-','').isalnum():
     raise ValueError('Simple experiment name required')
 output = Path('/training/runs')/name
-if output.exists():
+if output.exists() and not args.resume:
     raise ValueError('Existing experiment preserved; use a new run directory explicitly')
+if args.resume and (args.kind!='vehicle' or not (output/'weights/last.pt').exists()
+                    or (output/'training-receipt.json').exists()):
+    raise ValueError('Only an interrupted vehicle checkpoint can be resumed')
 started = time.time()
 record = {'kind':args.kind,'requested_epochs':args.epochs,'production_promoted':False,
           'training_manifest_sha256':hashlib.sha256((root/'manifest.json').read_bytes()).hexdigest(),
@@ -46,15 +50,29 @@ if args.kind == 'vehicle':
     from ultralytics import YOLO
     parent = Path('/models/experiments/detectors/yolo26s.pt')
     record['parent_sha256'] = hashlib.sha256(parent.read_bytes()).hexdigest()
-    model = YOLO(str(parent))
-    # Publisher categories, not a guessed COCO mapping. Baseline and
-    # candidate comparisons use pooled vehicle boxes; production remains COCO.
-    model.train(data=str(root/'data.yaml'),epochs=args.epochs,imgsz=640,batch=4,
-        workers=0,device=0,amp=False,optimizer='AdamW',lr0=.0002,lrf=.1,
-        freeze=10,patience=6,seed=42,deterministic=True,mosaic=.2,close_mosaic=3,
-        fliplr=.5,mixup=0,translate=.05,scale=.15,degrees=3,
-        project='/training/runs',name=name,exist_ok=False,plots=False,
-        save=True,cache=False,verbose=False)
+    model = YOLO(str(output/'weights/last.pt') if args.resume else str(parent))
+    if args.resume:
+        prior=model.ckpt['train_args']
+        required={'data':str(root/'data.yaml'),'epochs':args.epochs,'imgsz':640,
+                  'batch':4,'freeze':10,'seed':42,'amp':False,'lr0':.0002}
+        if any(prior.get(k)!=v for k,v in required.items()):
+            raise ValueError('Interrupted run configuration differs; do not change training protocol')
+        record['resumed_from_completed_epoch']=model.ckpt['epoch']+1
+        record['resume_checkpoint_sha256']=hashlib.sha256((output/'weights/last.pt').read_bytes()).hexdigest()
+        with (output/'results.csv').open() as stream:
+            completed=list(csv.DictReader(stream))
+        record['prior_completed_training_seconds']=max(float(r['time']) for r in completed)
+        record['resume_caveat']='Optimizer/model resumed after driver error; restarted augmentation RNG is not claimed bitwise identical to uninterrupted training'
+        model.train(resume=True)
+    else:
+        # Publisher categories, not a guessed COCO mapping. Baseline and
+        # candidate comparisons use pooled vehicle boxes; production remains COCO.
+        model.train(data=str(root/'data.yaml'),epochs=args.epochs,imgsz=640,batch=4,
+            workers=0,device=0,amp=False,optimizer='AdamW',lr0=.0002,lrf=.1,
+            freeze=10,patience=6,seed=42,deterministic=True,mosaic=.2,close_mosaic=3,
+            fliplr=.5,mixup=0,translate=.05,scale=.15,degrees=3,
+            project='/training/runs',name=name,exist_ok=False,plots=False,
+            save=True,cache=False,verbose=False)
 else:
     source = Path('/models/experiments/yolov9-training')
     os.chdir(source); sys.path.insert(0,str(source))
@@ -100,6 +118,10 @@ else:
     callbacks.register_action('on_fit_epoch_end',callback=progress)
     train.main(opt,callbacks)
 record.update(elapsed_seconds=round(time.time()-started,2),status='training_completed')
+if args.resume:
+    record['elapsed_session_seconds']=record['elapsed_seconds']
+    record['elapsed_seconds']=round(record['prior_completed_training_seconds']+record['elapsed_session_seconds'],2)
+    record['elapsed_caveat']='Prior completed-epoch CSV time plus recovery-session wall time; excludes failed unsaved work and downtime'
 best = output/'weights/best.pt'
 if not best.is_file():
     raise ValueError('Trainer returned without selected checkpoint')

@@ -124,6 +124,23 @@ Local adaptation report: `data/benchmarks/reports/plate-detector-adaptation-test
 Training artifacts remain in Docker volume `sentinel_detector_training`, under
 `/training/runs/plate-r3`; receipt/checkpoint hashes are recorded there.
 
+### Indian-only plate-location breakdown
+
+The Gujarat reserved subset has 34 images / 34 plate annotations, separate from
+the 43 Make ML images / 49 annotations. At IoU .5:
+
+| Gujarat condition | Parent matched / 34 | Adapted matched / 34 |
+|---|---:|---:|
+| Native | 31 | 33 |
+| Quarter resolution | 18 | 31 |
+| Motion blur | 15 | 29 |
+
+Tight IoU .75 matches improve 16 -> 22 native, 6 -> 16 quarter and 6 -> 24
+motion. This is a small publisher-labelled regional plate-location test, **not
+plate-text recognition or a calibrated confidence claim**. The mixed-country
+native regression comes from Make ML (45 -> 42 matches), not this Gujarat fold.
+The separate Bapatla/NIVU tight-box regression still prevents a global switch.
+
 ### Export and diagnostic regression check
 
 The candidate was exported to plain ONNX `[1,5,5376]` (xywh plus probability,
@@ -166,8 +183,8 @@ Native annotation precision is .9038 parent / .9048 candidate. Motion-blur
 precision falls .7342 -> .6638, and tight IoU .75 matches fall 36 -> 8 under
 motion. This is a significant regression boundary despite improved IoU .5
 coverage. Six frames from one camera cannot establish Indian CCTV readiness.
-The original is retained. A separate primary-source Indian CCTV experiment is
-being prepared; its results must be documented before any further recommendation.
+The original is retained. The separate primary-source Indian CCTV experiment
+is complete; its results and regression boundaries are documented below.
 
 ## Indian CCTV adaptation protocol
 
@@ -178,11 +195,75 @@ originals are preserved, explicit file lists prevent re-admission. Validation
 selects the checkpoint; fixed test labels never enter training. The source is
 CC BY 4.0; no Sentinel recordings or account credentials are used.
 
-Training uses YOLO26s-640, batch four, AdamW .0002, 20 requested epochs,
+Training uses YOLO26s-640, batch four, AdamW .0002, 20 completed epochs,
 patience six, first ten layers frozen, FP32, seed 42 and the same mild
-augmentation protocol as the pilot. Results remain pending until the run and
-paired reserved tests complete. Source consensus labels, not new human truth.
+augmentation protocol as the pilot. Source consensus labels, not new human truth.
 Camera identities and pretraining overlap are not independently verified.
+
+The initial Indian run hit `CUDA_ERROR_UNKNOWN` after ten saved epochs. A fresh
+container passed CUDA availability and a GPU matrix-operation smoke test, and
+the last checkpoint resumed the original 20-epoch protocol. Services were not
+restarted and saved checkpoints were not discarded. Recovery uses model,
+optimizer and scheduler resume; restarted augmentation RNG is not claimed
+bitwise identical to an uninterrupted run. A driver failure is not evidence of
+a model accuracy problem. Recovery-session wall time was 2,290.76 s; the first
+ten completed epochs took 853.061 s according to their CSV. Combined recorded
+training work is about 3,143.82 s, excluding the failed unsaved work and downtime.
+The actual receipt's `elapsed_seconds` records the recovery session only; future
+resume runs explicitly separate session and combined accounting.
+
+### Reserved Indian CCTV results
+
+150 original reserved images contain 1,592 labelled vehicle instances per
+condition. Native, quarter-resolution and motion blur are repeated views of
+these same images, not 4,776 distinct independent vehicles. Box matches ignore
+subclass labels and use IoU .5 with confidence .25; YOLO26 retains its released
+end-to-end prediction behavior, rather than traditional NMS.
+
+| Condition | Parent matched / 1592 | Indian adapted matched / 1592 | Parent coverage | Adapted coverage |
+|---|---:|---:|---:|---:|
+| Native | 787 | 1263 | 49.43% | 79.33% |
+| Quarter resolution | 788 | 1239 | 49.50% | 77.83% |
+| Motion blur | 629 | 1194 | 39.51% | 75.00% |
+
+Tight IoU .75 matches improve 596 -> 1,104 native, 584 -> 1,105 quarter,
+461 -> 1,018 motion. Aggregate box coverage is .4615 parent / .7739 adapted;
+annotation precision is .7411 / .7293. Native annotation precision is .7348 /
+.7305. Increased coverage is not a claim of zero false positives or accurate
+vehicle subclass classification. Source consensus may omit some objects.
+
+Native localisation by ground-truth subtype reveals the trade-off:
+two-wheelers improve **242 -> 601 / 777**, three-wheelers **122 -> 232 / 270**;
+hatchbacks fall 114 -> 106 / 127, sedans 75 -> 67 / 84, SUVs 54 -> 52 / 61,
+MUVs 27 -> 23 / 32, vans 15 -> 12 / 18. Rare classes remain weakly sampled.
+The comparison is class-agnostic localisation, not a predicted-type confusion
+matrix. Overall gains must not hide the car-category regressions.
+
+Best validation class-aware mAP50 was .48083 and mAP50-95 .37347; these are
+validation metrics, not the reserved fixed-threshold box coverage above.
+Checkpoint SHA256:
+`a6d7cb9b39d77ac5f2b494ac4e264454d3d5bc13e6b78d92700671c658a36a5a`.
+Full evidence: `vehicle-detector-adaptation-bmd-test.json` in local reports,
+and `/training/runs/vehicle-bmd/training-receipt.json` in the research volume.
+
+### Cross-source regression and recommendation
+
+On the earlier 13-image / 65-stress-case development diagnostic, parent finds
+**64/65**, Indian-adapted **49/65**. Native target coverage falls 13/13 -> 10/13;
+tight matches fall 64/65 -> 45/65 overall. This is a material domain-regression
+boundary. Retain **YOLO26s-640 as the general vehicle candidate** and the Indian
+adaptation as a separately identified **CCTV specialist experiment**, not a
+universal replacement. Additional integration must preserve car coverage and
+map the 13-class output correctly before tracking/OCR.
+
+Recorded adapter medians on BMD are 56.50 ms parent / 47.49 ms adapted. These
+runs had other host applications and prototype services active, with observed
+memory/GPU contention. They are not isolated throughput claims and are not
+comparable directly to the initial small-image 11.79 ms run. Cross-source test
+logged an NMS time-limit warning during warm-up/unmeasured work: all timed
+case latencies were <=327.70 ms parent / <=115.56 ms adapted, below the reported
+2,050 ms limit. No timeout occurred in the recorded timed-case intervals.
+Cross-source evidence: `vehicle-bmd-cross-source-regression.json`.
 
 The baseline test includes COCO bicycle in addition to car, motorcycle, bus and
 truck, since BMD labels bicycles. BMD also includes a dedicated three-wheeler
@@ -206,14 +287,21 @@ live validation would be separate integration gates.
   acquisition and pre-training transitive near-image quarantine.
 - `tools/export_plate_detector.py`, `tools/validate_plate_export.py`: strict raw
   ONNX export, real-image FP32 parity and previous-diagnostic regression checks.
+- `tools/validate_vehicle_adaptation.py`: previous-source vehicle regression
+  check; `tools/render_detector_summary.py`: static viewer of actual JSON reports.
 
 Containers use `sentinel-detector-training:local`, built from
 `edge/Dockerfile.detector-training`; production image remains unchanged. Mount
-the repository at `/workspace`, the existing model volume at `/models` and
-`sentinel_detector_training` at `/training`. For evaluation set working
+only `edge` at `/workspace/edge` (read-only), `tools` at `/workspace/tools`
+(read-only), permitted benchmark data at `/workspace/data/benchmarks`, the
+existing model volume at `/models` and `sentinel_detector_training` at
+`/training`. For evaluation set working
 directory `/workspace/edge` and `PYTHONPATH=/workspace/edge`; loading `/app`'s
 installed copy would hide newly added benchmark modules. Training/evaluation
-containers have network disabled and do not receive `.env` or stream credentials.
+containers have network disabled; training mounts never include `.env` or stream
+credentials. Initial diagnostic/export validation used a broader repository
+bind mount (the harness does not read `.env`); subsequent evaluation uses the
+scoped mounts above to exclude the credential file structurally.
 For ONNX CUDA evaluation use the installed CUDA 13 / cuDNN library paths;
 the Paddle CUDA 12 research launcher is not suitable for these ONNX tests.
 
@@ -232,6 +320,23 @@ original source under `/models/experiments/yolov9-training`. Current results use
 the hashes recorded in each local training receipt, not a newly downloaded
 latest source or regenerated manifest. An export is likewise never overwritten.
 
+For an interrupted (not completed) vehicle run only, add `--resume`. The harness
+checks the existing training settings and rejects a changed data path, epoch
+budget, batch size, input size, freeze/seed/precision or learning rate. It
+preserves saved weights and resumes optimiser state; it does not silently start
+a new experiment. Completed runs require a new explicit name.
+
+Local human-readable results: `data/benchmarks/reports/detector-summary.html`,
+served by the existing localhost-only benchmark server at
+<http://127.0.0.1:7777/detector-summary.html>. It displays actual JSON results,
+not a new live feed or synthetic accuracy demonstration.
+
 Model selection never changes `.env`, monitored cameras, live defaults or OCR.
+The full edge test suite passed in both the research runtime and a fresh Python
+environment installed only from declared test dependencies: 219 tests and five
+subtests, 24.77 s for the clean run. Missing Pillow/PyAV test dependencies were
+fixed before this successful rerun. All 25 experiment tool files parsed
+successfully. The local viewer was checked in the browser, including regression
+warnings; these software checks are not additional live-camera validation.
 Datasets, weights, training-source checkout and image review sheets remain local,
 not committed to GitHub. See [DETECTOR_DATASETS.md](DETECTOR_DATASETS.md) for sources.

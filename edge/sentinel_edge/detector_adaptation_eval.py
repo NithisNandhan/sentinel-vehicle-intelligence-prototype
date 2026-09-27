@@ -4,6 +4,7 @@ This does not measure OCR, independent camera generalisation, or live success.
 No checkpoint selection or thresholds use the reserved test partition.
 """
 import argparse
+from collections import Counter
 import hashlib
 import json
 import statistics
@@ -17,7 +18,7 @@ import numpy as np
 from .detector_comparison import PlateModel, VehicleModel, iou, letterbox, transformed
 
 
-def match_counts(predictions,targets,threshold):
+def match_assignments(predictions,targets,threshold):
     """Maximum-cardinality one-to-one IoU matching, not multiple credits."""
     neighbors = [sorted((j for j,t in enumerate(targets) if iou(p,t)>=threshold),
                         key=lambda j:-iou(p,targets[j])) for p in predictions]
@@ -31,7 +32,13 @@ def match_counts(predictions,targets,threshold):
                 assigned[target]=index
                 return True
         return False
-    matches=sum(augment(i,set()) for i in range(len(predictions)))
+    for index in range(len(predictions)):
+        augment(index,set())
+    return assigned
+
+
+def match_counts(predictions,targets,threshold):
+    matches=len(match_assignments(predictions,targets,threshold))
     return {'matched':matches,'unmatched_predictions':len(predictions)-matches,
             'missed_annotations':len(targets)-matches,'annotations':len(targets)}
 
@@ -73,6 +80,24 @@ def aggregate(rows):
     return result
 
 
+def class_coverage(rows):
+    counts={}
+    for row in rows:
+        for cls,values in row.get('target_class_iou50',{}).items():
+            bucket=counts.setdefault(cls,{'matched':0,'annotations':0})
+            for key in bucket:bucket[key]+=values[key]
+    for values in counts.values():
+        values['annotation_recall']=round(values['matched']/values['annotations'],4)
+    return counts
+
+
+def normalised_targets(boxes, shape):
+    """Restore labels at actual resized dimensions; no repeated image copies."""
+    height,width=shape[:2]
+    return [[(x-w/2)*width,(y-h/2)*height,(x+w/2)*width,(y+h/2)*height]
+            for _,x,y,w,h in boxes]
+
+
 def evaluate(kind,root,checkpoint,report):
     import torch
     torch.set_num_threads(2); cv2.setNumThreads(2)
@@ -105,21 +130,28 @@ def evaluate(kind,root,checkpoint,report):
         for condition in ('native','resolution_quarter','motion9'):
             for sample in samples:
                 path=root/sample['image_path']
-                if hashlib.sha256(path.read_bytes()).hexdigest()!=sample['original_sha256']:
+                raw=path.read_bytes()
+                if hashlib.sha256(raw).hexdigest()!=sample['original_sha256']:
                     raise ValueError('Reserved test image changed')
-                image=cv2.imread(str(path)); height,width=image.shape[:2]
-                targets=[]
-                for _,x,y,w,h in sample['boxes']:
-                    box=[(x-w/2)*width,(y-h/2)*height,(x+w/2)*width,(y+h/2)*height]
-                    _,box=transformed(image,condition,box); targets.append(box)
+                image=cv2.imdecode(np.frombuffer(raw,np.uint8),cv2.IMREAD_COLOR)
+                if image is None:raise ValueError('Reserved image decode failed')
+                height,width=image.shape[:2]
                 changed,_=transformed(image,condition,[0,0,width,height])
+                targets=normalised_targets(sample['boxes'],changed.shape)
                 start=time.perf_counter(); predictions=model.predict(changed)
                 elapsed=(time.perf_counter()-start)*1000
+                assigned=match_assignments(predictions,targets,.5)
+                labels=[str(b[0]) for b in sample['boxes']]
+                totals=Counter(labels); matched=Counter(labels[index] for index in assigned)
                 rows.append({'id':sample['id'],'source':sample.get('source','BMD-45'),'condition':condition,
                     'elapsed_ms':round(elapsed,2),'iou50':match_counts(predictions,targets,.5),
-                    'iou75':match_counts(predictions,targets,.75)})
+                    'iou75':match_counts(predictions,targets,.75),
+                    'target_class_iou50':{cls:{'matched':matched[cls],'annotations':total} for cls,total in totals.items()}})
         entry={'name':name,'summary':aggregate(rows),'conditions':{
-            c:aggregate([r for r in rows if r['condition']==c]) for c in ('native','resolution_quarter','motion9')},'cases':rows}
+            c:aggregate([r for r in rows if r['condition']==c]) for c in ('native','resolution_quarter','motion9')},
+            'class_localisation_coverage':{c:class_coverage([r for r in rows if r['condition']==c]) for c in ('native','resolution_quarter','motion9')},
+            'class_coverage_caveat':'Recall by ground-truth subclass, ignoring predicted class; localisation only, not classification accuracy',
+            'cases':rows}
         result['models'].append(entry); report.write_text(json.dumps(result,indent=2))
         print(json.dumps({k:v for k,v in entry.items() if k!='cases'}),flush=True)
     return result

@@ -345,3 +345,45 @@ occurred; the production reader is unchanged.
 repository settings, blocking diverse-data fine-tuning. GPU parity and live
 shadow checks were not run after this blocking input error. Full methodology,
 file names, input requirements and evidence limits: docs/OCR_IMPROVEMENTS.md.
+
+## Detector comparison and isolated adaptation, 27 September 2026
+
+Eight previously discussed detectors were compared on CPU/CUDA using 13 public
+development images / 11 target vehicles and five degradation conditions.
+YOLO26s-640 gave the best general target coverage (64/65 GPU); YOLOv9-tiny-512
+gave the best plate coverage/latency balance (61/65, versus small's 60/65).
+These are approximate target diagnostics, not exhaustive independently labelled
+scene accuracy. Larger plate models did not consistently improve these tests.
+
+The selected plate model was adapted for 20 epochs using 360 training / 130
+validation images. On the 34-image Gujarat reserved fold, matches at IoU .5:
+31 -> 33 native, 18 -> 31 quarter-resolution, 15 -> 29 motion-blurred. Combined
+Gujarat/Make ML test has 77 images / 83 annotations. Real-image raw ONNX export
+parity passed 48 CPU/GPU checks with TF32 disabled, but tight box alignment on
+the earlier cross-source diagnostic fell 51 -> 21 / 65. No global promotion.
+
+YOLO26s completed 20 epochs on a licensed Indian BMD-45 subset (999 train / 148
+val / 150 test). A CUDA driver failure after ten saved epochs was recovered by
+fresh-container GPU validation and checkpoint resume, without restarting the
+prototype services. Three invalid/leaking examples were excluded; file lists
+and split guards were independently checked. No Sentinel frames were used.
+
+On 150 reserved BMD images / 1,592 publisher vehicle annotations per condition,
+parent -> adapted matches at IoU .5: **787 -> 1,263 native**, **788 -> 1,239
+quarter**, **629 -> 1,194 motion**. Native coverage improves 49.43% -> 79.33%,
+primarily through two-/three-wheelers, but some car categories lose coverage.
+The earlier diagnostic falls 64 -> 49 / 65 targets after adaptation. Retain the
+general model; treat the adapted checkpoint as a CCTV specialist experiment,
+not an interchangeable COCO-class production checkpoint. Timing was measured
+under host resource contention and is not isolated throughput.
+
+**219 edge unit tests passed** in the research runtime and again in a fresh
+Python environment using only the declared test dependencies (24.77 s, plus
+five subtests). The clean check exposed missing Pillow/PyAV dependencies;
+both are now declared, and the full rerun passed. These experiments measure
+vehicle/plate box localisation, not recognised plate text, live success, route
+correctness or deployment capacity. Production defaults and `.env` remain
+unchanged. Detailed evidence, provenance, regressions and local viewer:
+[DETECTOR_COMPARISON.md](docs/DETECTOR_COMPARISON.md),
+[DETECTOR_DATASETS.md](docs/DETECTOR_DATASETS.md),
+<http://127.0.0.1:7777/detector-summary.html>.
