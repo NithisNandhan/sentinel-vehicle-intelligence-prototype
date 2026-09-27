@@ -11,6 +11,22 @@ DATASET = {'name': 'Permitted fixture', 'license': 'CC-BY-4.0',
 
 
 class ViewerTests(unittest.TestCase):
+    def test_experiment_metadata_does_not_claim_reconstruction_or_verified_labels(self):
+        with tempfile.TemporaryDirectory() as temp:
+            output = Path(temp) / 'data/benchmarks/reports/view.html'
+            dataset = dict(DATASET,modifications='Native automatic crops; no reconstruction <script>')
+            case = {'source_mode':'benchmark','expected':'MH02EK0837','source_count':3,
+                    'label_description':'Visually reviewed development label <script>',
+                    'source_count_label':'Distinct original observations'}
+            render_viewer(output,dataset,[case])
+            text = output.read_text()
+            self.assertIn('Distinct original observations: 3',text)
+            self.assertIn('Visually reviewed development label',text)
+            self.assertIn('Native automatic crops; no reconstruction',text)
+            self.assertNotIn('Manually verified evaluation label',text)
+            self.assertNotIn('Reconstruction sources',text)
+            self.assertNotIn('<script>',text)
+
     def test_still_diagnostic_never_claims_temporal_acceptance(self):
         with tempfile.TemporaryDirectory() as temp:
             output = Path(temp) / 'data/benchmarks/reports/view.html'

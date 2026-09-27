@@ -3,6 +3,15 @@
 This opt-in viewer makes the existing live shadow diagnostic visible. It does
 not modify the production OCR model, alert API, watchlist or outbox.
 
+The launcher now defaults to the experimental **general YOLO26s + parent plate
+detector** profile, with independent ByteTrack OCR histories. See
+[integration results](DETECTOR_OCR_INTEGRATION.md): one licensed development
+registration was recognised automatically, but the new live CAM14/CAM17 probes
+accepted none. `-DetectorProfile legacy`, `plate_adapted` and `indian_adapted`
+select alternate cached detectors without changing production defaults. Calling
+the module without `--detector-profile` still retains the earlier diagnostic
+algorithm for compatibility.
+
 ## Start
 
 With the existing live Compose services running, cached research models present
@@ -23,21 +32,25 @@ changing cameras clears old media and temporal state. Closing/hiding the browser
 stops its heartbeat and expires the capture within 60 seconds (plus bounded
 decoder/inference shutdown). The whole diagnostic stops after 30 minutes; run the
 script again for a new session. Ctrl+C stops the foreground launcher sooner.
+Authorised temporary previews now retry a clean relay EOF as well as decode
+errors, with bounded backoff. The first frame after a reconnect invalidates old
+tracking/OCR evidence. A permanently unavailable preview is shown as unavailable
+and retried by the viewer, rather than reusing stale frames as fresh evidence.
 
 ## What the screen means
 
-- Green boxes: **all** vehicle regions returned by YOLOv8n at the existing .25
-  threshold and 640 inference setting. There is no three-box display cap. The
-  classes remain cars, motorcycles, buses and trucks; this does not mean every
-  visible vehicle is detected.
-- Yellow box: the highest-confidence full-frame plate proposal, or the first
-  detected plate in one of at most three native vehicle regions searched per
-  frame. That search budget rotates across all detections instead of always
-  choosing only the three highest-confidence vehicles. At most one plate is
-  passed to OCR per sampled frame. These proposals can be false
-  positives; they are not human-verified plate labels.
+- Green boxes: vehicle regions assigned ByteTrack IDs by the selected detector
+  at .25 confidence and 640 inference setting. There is no three-box display
+  cap. General/legacy profiles include bicycles, cars, motorcycles, buses and
+  trucks; the BMD profile explicitly maps its 13 classes to coarse families.
+  This does not mean every visible vehicle is detected.
+- Yellow boxes: the highest-confidence plate proposal in each searched native
+  vehicle region. At most three vehicle ROIs are searched per sampled frame,
+  rotating across eligible tracks. Each track has its own OCR history. Proposals
+  may be false positives and are not human-verified plate labels. The older
+  no-profile diagnostic instead searches full-frame first and selects one plate.
 - The full image and boxes belong to the **same analysed frame**. Detection is
-  sampled using PTS with a minimum 500 ms interval. CPU detection/OCR speed can
+  sampled using PTS with a minimum 500 ms interval. Detection/OCR speed can
   reduce actual update rate; this is not full-frame-rate preview.
 - The last native plate crop remains visible for up to ten seconds of active
   processing with an age label. The model receives original crop pixels before
@@ -47,10 +60,12 @@ script again for a new session. Ctrl+C stops the foreground launcher sooner.
   crops contribute to CTC sequence fusion. Three observations are a minimum,
   not a guarantee of acceptance. Masked leading hypotheses appear after three
   observations. No full registration text leaves the inference process.
-- Association is conservative plate-box IoU plus a 1.5-second gap limit, **not
-  the complete production ByteTrack vehicle association**. This diagnostic
-  intentionally exposes insufficient repeat detections instead of claiming
-  a live-recognition result. It does not run reconstruction or learned deblurring.
+- Association now uses ByteTrack vehicle IDs plus independent geometry/class,
+  plate-position and stale-OCR guards. Gaps over 2.5 seconds or scene/PTS resets
+  clear histories. Continuous decoding keeps the latest frame and drops backlog;
+  this can still miss observations under load. The older no-profile diagnostic
+  retains plate-box IoU association. Neither mode runs reconstruction or learned
+  deblurring, and neither demonstrates verified live accuracy by itself.
 - Accepted means the model's evidence gates passed, **not verified correctness
   or calibrated confidence**. No accuracy can be inferred without ground truth.
 - A stale-frame warning means the image is no longer a current live view.

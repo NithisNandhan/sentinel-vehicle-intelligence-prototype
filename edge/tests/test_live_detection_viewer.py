@@ -7,6 +7,16 @@ from sentinel_edge.live_detection_viewer import LiveState, safe_request, detect_
 
 
 class LiveViewerTests(unittest.TestCase):
+    def test_tracked_profile_page_describes_the_actual_association(self):
+        from sentinel_edge.live_detection_viewer import viewer_page
+        page = viewer_page('local-test-token','general<script>')
+        self.assertIn('ByteTrack vehicle IDs',page)
+        self.assertIn('independent OCR evidence for each searched vehicle',page)
+        self.assertIn('general&lt;script&gt;',page)
+        self.assertNotIn('general<script>',page)
+        self.assertNotIn('at most one plate passed',page)
+        self.assertIn('conservative box overlap',viewer_page('local-test-token'))
+
     def test_only_approved_pair_and_expiring_session(self):
         clock = [10.]
         state = LiveState(clock=lambda: clock[0])

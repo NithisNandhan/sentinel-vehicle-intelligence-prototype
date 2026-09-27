@@ -174,13 +174,20 @@ def viewer_frames(config, camera, stop):
     raise TimeoutError('No live frames received; no media retained')
 
 
-def load_models(config, cache, checkpoint):
+def load_models(config, cache, checkpoint, *, detector_profile=None, training_root=None):
     # Paddle's isolated CUDA 12 libraries must initialize before importing
     # Torch/YOLO (the production image bundles a different CUDA/cuDNN version).
     import numpy as np
     from .awiros_experiment import AwirosExperiment
     reader = AwirosExperiment(cache, device='gpu', checkpoint=checkpoint)
     reader.probabilities(np.zeros((32, 120, 3), dtype=np.uint8))
+    if detector_profile is not None:
+        from .experimental_detectors import PROFILES, PlateDetector, VehicleTracker
+        if detector_profile not in PROFILES:
+            raise ValueError('Unknown experimental detector profile')
+        vehicle, plate = PROFILES[detector_profile]
+        return (reader, PlateDetector(plate, config.model_cache_dir),
+                VehicleTracker(vehicle, config.model_cache_dir, training_root or Path('/training')))
     from ultralytics import YOLO
     from .ocr_selection_benchmark import PlateDetectorExperiment
     return reader, PlateDetectorExperiment(), YOLO(str(config.model_cache_dir/'yolov8n.pt'))
@@ -316,7 +323,22 @@ if(s.crop){$('crop').src='data:image/png;base64,'+s.crop.image;$('crop').style.w
 </script></html>'''
 
 
-def serve(config, cache, checkpoint, port=7780, lifetime=1800, bind_host='127.0.0.1'):
+def viewer_page(token,detector_profile=None):
+    import html
+    page = PAGE.replace('__TOKEN__',json.dumps(token))
+    if detector_profile:
+        page = page.replace('<h1>Live detection lab</h1>',
+            '<h1>Live detection lab</h1><p class="muted">Experimental tracked detector profile: '+
+            html.escape(detector_profile)+' · plate numbers remain unverified.</p>')
+        page = page.replace('with at most one plate passed to OCR.',
+            'with independent OCR evidence for each searched vehicle.')
+        page = page.replace('Plate association here uses conservative box overlap, not the full production tracker.',
+            'Association uses ByteTrack vehicle IDs plus geometry, class and stale-evidence guards.')
+    return page
+
+
+def serve(config, cache, checkpoint, port=7780, lifetime=1800, bind_host='127.0.0.1',
+          detector_profile=None, training_root=None):
     state, shutdown = LiveState(), threading.Event()
     token = secrets.token_urlsafe(32)
     catalogue = {'available': False, 'cameras': []}
@@ -351,7 +373,7 @@ def serve(config, cache, checkpoint, port=7780, lifetime=1800, bind_host='127.0.
             if not self.allowed():
                 return
             if self.path == '/':
-                self.reply(200, PAGE.replace('__TOKEN__', json.dumps(token)).encode(), 'text/html; charset=utf-8')
+                self.reply(200, viewer_page(token,detector_profile).encode(), 'text/html; charset=utf-8')
             elif self.path == '/snapshot':
                 self.reply(200, json.dumps(state.snapshot()).encode())
             elif self.path == '/cameras':
@@ -402,8 +424,13 @@ def serve(config, cache, checkpoint, port=7780, lifetime=1800, bind_host='127.0.
                 if model is None:
                     import av
                     av.logging.set_level(av.logging.PANIC)
-                    model, detector, vehicle = load_models(config, cache, checkpoint)
-                observe(config, cameras[selected], model, detector, vehicle, state, stop)
+                    model, detector, vehicle = load_models(config, cache, checkpoint,
+                        detector_profile=detector_profile, training_root=training_root)
+                if detector_profile:
+                    from .tracked_live_viewer import observe_tracked
+                    observe_tracked(config, cameras[selected], model, detector, vehicle, state, stop)
+                else:
+                    observe(config, cameras[selected], model, detector, vehicle, state, stop)
             except Exception:
                 state.publish({'camera_id': selected, 'status': 'unavailable'}, stop)
                 stop.wait(5)  # Redact third-party exceptions; retry, never tight-loop.
@@ -433,6 +460,9 @@ if __name__ == '__main__':
     parser.add_argument('--cache', type=Path, required=True)
     parser.add_argument('--checkpoint', type=Path, required=True)
     parser.add_argument('--container-bind', action='store_true', help='Use only with a Docker loopback-only port publication')
+    parser.add_argument('--detector-profile', choices=('legacy','general','plate_adapted','indian_adapted'))
+    parser.add_argument('--training-root', type=Path, default=Path('/training'))
     args = parser.parse_args()
     serve(Config.from_env(live=True), args.cache, args.checkpoint,
-          bind_host='0.0.0.0' if args.container_bind else '127.0.0.1')
+          bind_host='0.0.0.0' if args.container_bind else '127.0.0.1',
+          detector_profile=args.detector_profile, training_root=args.training_root)

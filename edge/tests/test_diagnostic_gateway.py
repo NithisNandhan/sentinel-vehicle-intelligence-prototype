@@ -37,18 +37,37 @@ class DiagnosticGatewayTests(unittest.TestCase):
 
     def test_preview_closed_after_capture_and_on_decoder_failure(self):
         for decoded in ([object()], None):
+            stop = threading.Event()
             with patch('sentinel_edge.diagnostic_gateway.request', return_value={'id': 'a'*32}) as req, \
                  patch('sentinel_edge.stream._decode') as decode:
                 if decoded is None:
                     decode.side_effect = RuntimeError('redacted')
                 else:
-                    decode.return_value = iter(decoded)
+                    def closed_by_operator(*args,**kwargs):
+                        yield from decoded
+                        stop.set()
+                    decode.side_effect = closed_by_operator
                 if decoded is None:
                     with self.assertRaises(RuntimeError):
                         list(frames(None, SimpleNamespace(camera_id='cam17'), threading.Event()))
                 else:
-                    self.assertEqual(len(list(frames(None, SimpleNamespace(camera_id='cam17'), threading.Event()))), 1)
+                    self.assertEqual(len(list(frames(None, SimpleNamespace(camera_id='cam17'), stop))), 1)
                 self.assertEqual(req.call_args.args[1:], ('/previews/'+'a'*32, 'DELETE'))
+
+    def test_clean_eof_reconnects_same_preview_and_marks_discontinuity(self):
+        from sentinel_edge.stream import VideoFrame
+        delays = []
+        stop = SimpleNamespace(is_set=lambda:False,wait=lambda seconds:delays.append(seconds))
+        with patch('sentinel_edge.diagnostic_gateway.request',return_value={'id':'a'*32}) as req, \
+             patch('sentinel_edge.stream._decode',side_effect=[iter([VideoFrame(None,100,False)]),
+                                                              iter([VideoFrame(None,200,False)])]) as decode:
+            stream = frames(None,SimpleNamespace(camera_id='cam17'),stop)
+            self.assertFalse(next(stream)[1].discontinuity)
+            self.assertTrue(next(stream)[1].discontinuity)
+            stream.close()
+        self.assertEqual(delays,[2])
+        self.assertEqual(decode.call_args_list[0],decode.call_args_list[1])
+        self.assertEqual(req.call_args.args[1:],('/previews/'+'a'*32,'DELETE'))
 
 
 if __name__ == '__main__': unittest.main()

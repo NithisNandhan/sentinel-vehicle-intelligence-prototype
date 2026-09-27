@@ -91,7 +91,7 @@ def render_viewer(output: Path, dataset: dict, cases: list, *, source_mode='benc
             f'<figure><figcaption>Original frame {esc(item.get("index"))} · {esc(item.get("pts_ms"))} ms'
             f'<br>Raw OCR: {esc(item.get("reading"))} · OCR time: {esc(item.get("ocr_ms"))} ms</figcaption>'
             f'{_image(item.get("image"))}</figure>' for item in diagnostics)
-        extra = (f'<p>Manually verified evaluation label: {esc(case["expected"])}. '
+        extra = (f'<p>{esc(case.get("label_description", "Manually verified evaluation label"))}: {esc(case["expected"])}. '
                  'This label was not supplied to inference.</p>' if case.get('expected') else '')
         if case.get('score_note'):
             extra += f'<p>{esc(case["score_note"])}</p>'
@@ -109,7 +109,7 @@ def render_viewer(output: Path, dataset: dict, cases: list, *, source_mode='benc
                       f'<div class="images">{diagnostic_html}</div></details>')
         sections.append(f'''<section><h2>{esc(case.get('title', 'Benchmark passage'))}</h2>
 <p class="status">{status}</p><p>Accepted plate: {esc(accepted or 'none')} · Partial reading: {esc(case.get('partial') or 'unavailable')}</p>
-<p>Reason: {esc(case.get('reason', 'unknown'))} · Native dimensions: {esc(case.get('dimensions'))} · Reconstruction sources: {esc(case.get('source_count', 0))}
+<p>Reason: {esc(case.get('reason', 'unknown'))} · Native dimensions: {esc(case.get('dimensions'))} · {esc(case.get('source_count_label', 'Reconstruction sources'))}: {esc(case.get('source_count', 0))}
  · Rejected alignments: {esc(case.get('rejected', 0))} · Processing: {esc(case.get('duration_ms'))} ms</p>
 <p>Evaluation outcome: {esc(case.get('outcome', 'not scored'))}. Ground truth was used only after inference.</p>
 <div class="images">{images}</div>
@@ -134,7 +134,7 @@ mark{{background:#ffce72;color:#101925}}.unavailable{{color:#c5ceda}}footer{{mar
 <p>Check each case for its crop source. Manual-crop results isolate OCR; automatic-crop diagnostics do not establish vehicle tracking or live accuracy.</p>
 {''.join(sections)}<footer>Dataset: {esc(dataset.get('name'))}. Licence: {esc(dataset.get('license'))}.
 Source: {esc(dataset.get('source_url'))}. Licence notice: {esc(dataset.get('license_url'))}.
-Modifications: cropping, controlled degradation, geometric alignment, reconstruction and optional deblurring.
+Modifications: {esc(dataset.get('modifications', 'cropping, controlled degradation, geometric alignment, reconstruction and optional deblurring'))}.
 This report performs no external network requests and sends no alerts.</footer></main></body></html>'''
     if len(body.encode('utf-8')) > 64 * 1024 * 1024:
         raise ValueError('Visual report exceeds byte bound')

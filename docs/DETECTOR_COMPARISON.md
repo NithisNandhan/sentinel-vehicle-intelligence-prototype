@@ -340,3 +340,9 @@ successfully. The local viewer was checked in the browser, including regression
 warnings; these software checks are not additional live-camera validation.
 Datasets, weights, training-source checkout and image review sheets remain local,
 not committed to GitHub. See [DETECTOR_DATASETS.md](DETECTOR_DATASETS.md) for sources.
+
+The subsequent [tracked OCR integration](DETECTOR_OCR_INTEGRATION.md) connects
+these candidates to an opt-in viewer and records automatic licensed-sequence and
+paired live results. Its viewer launcher selects the general profile; production
+worker defaults remain unchanged. Detector box improvements did not establish
+successful live plate reading.

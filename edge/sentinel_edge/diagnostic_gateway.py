@@ -3,6 +3,7 @@ import json
 import re
 import threading
 import urllib.request
+from dataclasses import replace
 
 from .cameras import Camera
 
@@ -53,11 +54,17 @@ def frames(config, camera, stop):
             if stop.is_set():
                 return
             try:
+                first = True
                 for frame in _decode(f'rtsp://mediamtx:8554/preview-{session_id}', transport='rtsp'):
                     if stop.is_set():
                         return
+                    if first and attempt:
+                        frame = replace(frame,discontinuity=True)
+                    first = False
                     yield 'rtsp', frame
-                return
+                # A clean EOF can be a relay restart/loop, not user cancellation.
+                # Retry the same authorised session and invalidate old OCR state.
+                stop.wait(min(2 ** (attempt + 1), 8))
             except OSError:
                 stop.wait(min(2 ** (attempt + 1), 8))
         raise TimeoutError('Authorised temporary preview unavailable')

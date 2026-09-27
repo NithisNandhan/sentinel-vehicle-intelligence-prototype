@@ -387,3 +387,39 @@ unchanged. Detailed evidence, provenance, regressions and local viewer:
 [DETECTOR_COMPARISON.md](docs/DETECTOR_COMPARISON.md),
 [DETECTOR_DATASETS.md](docs/DETECTOR_DATASETS.md),
 <http://127.0.0.1:7777/detector-summary.html>.
+
+## Selected detector → tracked OCR integration, 27 September 2026
+
+The opt-in viewer launcher now uses general YOLO26s, the parent YOLOv9-tiny
+plate detector and the existing adapted Awiros reader. ByteTrack histories,
+native crop extraction, continuous latest-frame decoding, PTS/scene resets and
+bounded rotating ROI scheduling are connected without changing production
+worker settings or `.env`. Alternate adapted detectors remain experiments.
+
+Paired 90-second CAM14/CAM17 windows completed without decoder errors or missing
+PTS, but all four detector profiles produced **zero model-accepted plates**.
+A standalone general CAM17 window also accepted zero: nine crops and up to six
+distinct observations still produced no complete candidate. Counts are proposals,
+not independently verified detection accuracy; no genuine images/text were saved.
+
+Full-scene automatic processing of the existing permitted three-frame NIVU
+Indian development passage correctly recognised **one registration, MH02EK0837**,
+with legacy/general/plate-adapted profiles. The BMD-adapted vehicle model found
+only one frame and abstained. A repeat reproduced these outcomes. Assigned replay
+PTS and a previously reviewed development label do not establish held-out/live
+accuracy. No annotated crops were supplied to inference. No reconstruction or
+new fine-tuning was performed in this stage.
+
+**234 edge tests and five subtests passed**, 9.95 s in the research runtime,
+including native-pixel viewer preservation, masked output, track isolation,
+duplicate/cut handling, decode-local cancellation without ending the outer
+operator session, clean-EOF preview reconnect, model hashes/taxonomy and truthful
+escaped viewer labels.
+The final exact viewer-profile check in the deployed edge image completed
+30.87 seconds on CAM17, with six crops / three candidate windows / zero accepted
+identifiers. Its preceding 15.43-second early-EOF attempt is preserved as
+incomplete; same-session preview reconnect was corrected and tested before the
+repeat. The browser displayed the upgraded profile and 30 authorised catalogue
+entries. No live recognition success is claimed.
+Detailed counts, limitations and reproduction:
+[DETECTOR_OCR_INTEGRATION.md](docs/DETECTOR_OCR_INTEGRATION.md).

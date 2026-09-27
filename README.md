@@ -102,6 +102,14 @@ The live worker now combines pretrained deep-learning plate OCR with per-vehicle
 
 ## Local verification
 
+The selected-detector integration now adds per-vehicle ByteTrack OCR histories
+to the opt-in viewer, whose launcher defaults to general YOLO26s plus the parent
+plate detector. Automatic full-scene processing correctly read one permitted
+Indian development plate across three original frames; new CAM14/CAM17 live
+probes still produced no accepted reading. Production defaults remain unchanged.
+See [integration and measured boundaries](docs/DETECTOR_OCR_INTEGRATION.md) and
+the [local result viewer](http://127.0.0.1:7777/detector-summary.html).
+
 To watch the models work on an authorised catalogue camera (with CAM01/CAM02
 retained as difficult baselines), run
 `.\scripts\start-live-detection-viewer.ps1` and open
