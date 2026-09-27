@@ -167,7 +167,7 @@ class CameraTests(unittest.TestCase):
                                   "CAMERA_IDS": "cam01,cam03"}, clear=True):
             other = Config.from_env(live=True)
         with patch("sentinel_edge.cameras.discover", side_effect=CatalogueUnavailable("sign-in")):
-            with self.assertRaisesRegex(ValueError, "cam19,cam26"):
+            with self.assertRaisesRegex(ValueError, "explicitly approved"):
                 discover_live_pair(other)
 
     def test_valid_catalogue_missing_selected_camera_never_falls_back(self):

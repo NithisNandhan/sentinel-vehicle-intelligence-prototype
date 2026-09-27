@@ -366,7 +366,7 @@ def configured_relay_cameras(config):
             or parsed.username or parsed.password or parsed.query or parsed.fragment or parsed.path not in ('','/')):
         return {}
     names = {'cam01': 'Chiman bhai Bridge · configured relay', 'cam02': 'Janpath · configured relay',
-             'cam19':'CAM19 · configured relay', 'cam26':'CAM26 · configured relay'}
+             'cam19':'CAM19 · configured relay', 'cam26':'CAM26 · configured relay', 'cam17':'CAM17 · configured relay'}
     return {key: Camera(key,names[key],rtsp_url=base.rstrip('/')+'/'+key) for key in config.camera_ids}
 
 

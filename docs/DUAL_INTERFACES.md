@@ -48,7 +48,7 @@ process token and local Host/Origin controls. Full candidate text, images, OCR
 posteriors and stream URLs never enter the central recognition proxy responses.
 
 When current catalogue access fails, the opt-in launcher may offer only the
-approved/configured local pair (now CAM19/CAM26). This scope is explicitly
+approved/configured local pair (now CAM17/CAM01). This scope is explicitly
 labelled `configured_relays`, not a complete catalogue. Full-catalogue search
 keeps its independent unavailable state; no portal scraping is introduced.
 

@@ -53,7 +53,7 @@ def main():
             raise ValueError('Authorised camera scope did not become ready within 60 seconds')
         time.sleep(1)
     ids = {row['id'] for row in catalogue.get('cameras', [])}
-    requested = [camera.strip() for camera in os.environ.get('CAMERA_IDS', 'cam19,cam26').split(',') if camera.strip()]
+    requested = [camera.strip() for camera in os.environ.get('CAMERA_IDS', 'cam17,cam01').split(',') if camera.strip()]
     if len(requested) != 2 or len(set(requested)) != 2 or any(camera not in ids for camera in requested):
         raise ValueError('Both configured cameras must be in the current authorised catalogue or approved relay scope')
     cameras = requested

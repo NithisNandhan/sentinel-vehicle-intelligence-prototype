@@ -491,4 +491,23 @@ Sequential 90-second authorised live checks connected both: CAM19 decoded
 plate crops, reconstruction attempts and accepted readings. Final frame ages
 were 0.9/0.1 seconds. The new pair is selected, but plate localisation remains
 the immediate blocker there; the successful live reconstruction result above
-belongs to the earlier CAM17 check. The shared session is paused for handoff.
+belongs to the earlier CAM17 check. The shared session was paused for that handoff.
+
+## Camera selection update — CAM17/CAM01
+
+The user's later request supersedes CAM19/CAM26. Current `.env`/example and
+both running stream-adapter/edge-worker services use `CAMERA_IDS=cam17,cam01`.
+The shared catalogue orders CAM17 then CAM01 first; authorised full-catalogue
+search remains available. Original and reconstruction/OCR model settings are
+unchanged. The approved manual fallback now supports this pair, while still
+rejecting unsupported pairs and selected cameras absent/offline in valid JSON.
+
+Full regression: 265 edge tests run, 264 passed, one optional Node test skipped.
+A source-only cached-runtime deployment avoided package/model downloads.
+The short initial CAM17 check was still connecting during the cold start; CAM01
+subsequently decoded 313 frames/analysed 25 in its 30-second check, with no plate
+crops. Selecting CAM17 again with the models warm reached live state within the
+25-second readiness check; a subsequent metadata check had 963 decoded/73
+analysed frames and three plate crops. This confirms current access/processing,
+not improved plate accuracy. No genuine imagery or plaintext readings were saved.
+CAM17 was selected for the engineering-view handoff, subject to idle expiry.

@@ -90,11 +90,13 @@ Errors are redacted and fall back to original OCR, rather than killing capture.
   until plate localisation supplies at least three usable same-track crops;
   this is not evidence of reconstruction execution on the new pair.
 
-The selected camera pair is now CAM19/CAM26 following the user's subsequent
+The selected camera pair is now CAM17/CAM01 following the user's subsequent
 request. `.env`, its example and future smoke checks use this pair. The launcher
 no longer overrides `.env` with CAM01/CAM02. Full catalogue search remains
 available; the configured pair is ordered first. Production pair selection also
 uses the updated setting, without deleting historical camera records.
+The earlier CAM19/CAM26 measurements above are retained as historical evidence,
+not current camera selection. Model settings and reconstruction are unchanged.
 The AI runtime was updated source-only using `edge/Dockerfile.source-update`
 on the previously validated installed image, avoiding an unrelated dependency
 upgrade/download. Future dependency changes should use the normal Dockerfile.

@@ -31,28 +31,28 @@ class SharedRecognitionTests(unittest.TestCase):
     def test_current_camera_pair_is_supported_without_inventing_locations(self):
         from sentinel_edge.live_detection_viewer import configured_relay_cameras
         from sentinel_edge.cameras import CatalogueUnavailable, discover_live_pair
-        config = SimpleNamespace(camera_ids=('cam19','cam26'), media_relay_base_url='rtsp://mediamtx:8554',
+        config = SimpleNamespace(camera_ids=('cam17','cam01'), media_relay_base_url='rtsp://mediamtx:8554',
                                  sentinel_rtsp_host='103.250.160.189', sentinel_base_url='https://cctv.corp8.cloud')
-        self.assertEqual(set(configured_relay_cameras(config)), {'cam19','cam26'})
+        self.assertEqual(set(configured_relay_cameras(config)), {'cam17','cam01'})
         with patch('sentinel_edge.cameras.discover', side_effect=CatalogueUnavailable('unavailable')):
             cameras, fallback = discover_live_pair(config)
         self.assertTrue(fallback)
-        self.assertEqual([c.camera_id for c in cameras], ['cam19','cam26'])
-        self.assertEqual(cameras[1].rtsp_url, 'rtsp://103.250.160.189:8554/stream/cam26')
-        self.assertEqual(cameras[1].name, 'CAM26')
+        self.assertEqual([c.camera_id for c in cameras], ['cam17','cam01'])
+        self.assertEqual(cameras[0].rtsp_url, 'rtsp://103.250.160.189:8554/stream/cam17')
+        self.assertEqual(cameras[0].name, 'CAM17')
 
     def test_current_pair_must_still_be_live_in_a_valid_catalogue(self):
         from sentinel_edge.cameras import Camera, discover_live_pair
-        config = SimpleNamespace(camera_ids=('cam19','cam26'))
-        with patch('sentinel_edge.cameras.discover', return_value=[Camera('cam19','Test'),Camera('cam26','Test',live=False)]):
-            with self.assertRaisesRegex(ValueError, 'cam26'):
+        config = SimpleNamespace(camera_ids=('cam17','cam01'))
+        with patch('sentinel_edge.cameras.discover', return_value=[Camera('cam17','Test'),Camera('cam01','Test',live=False)]):
+            with self.assertRaisesRegex(ValueError, 'cam01'):
                 discover_live_pair(config)
 
     def test_fallback_is_only_the_existing_approved_local_pair(self):
         from sentinel_edge.live_detection_viewer import configured_relay_cameras
         config = SimpleNamespace(camera_ids=('cam01','cam02'),media_relay_base_url='rtsp://mediamtx:8554')
         self.assertEqual(set(configured_relay_cameras(config)),{'cam01','cam02'})
-        config.camera_ids = ('cam01','cam17')
+        config.camera_ids = ('cam01','cam18')
         self.assertEqual(configured_relay_cameras(config),{})
         config.camera_ids = ('cam01','cam02')
         config.media_relay_base_url = 'rtsp://external.invalid:8554'

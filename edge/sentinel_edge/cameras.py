@@ -100,7 +100,8 @@ def documented_stream_urls(config: Config, camera_id: str) -> tuple[str, str]:
             f"{config.sentinel_base_url}/{escaped}/index.m3u8")
 
 
-APPROVED_MANUAL_PAIRS = (frozenset({'cam01', 'cam02'}), frozenset({'cam19', 'cam26'}))
+APPROVED_MANUAL_PAIRS = (frozenset({'cam01', 'cam02'}), frozenset({'cam19', 'cam26'}),
+                         frozenset({'cam17', 'cam01'}))
 
 
 def discover_live_pair(config: Config) -> tuple[list[Camera], bool]:
@@ -109,8 +110,8 @@ def discover_live_pair(config: Config) -> tuple[list[Camera], bool]:
         catalogue = discover(config)
     except (CatalogueUnavailable, OSError):
         if len(config.camera_ids) != 2 or frozenset(config.camera_ids) not in APPROVED_MANUAL_PAIRS:
-            raise ValueError("Catalogue unavailable; use the approved current pair CAMERA_IDS=cam19,cam26") from None
-        names = {"cam01": "Chiman bhai Bridge", "cam02": "Janpath", 'cam19':'CAM19', 'cam26':'CAM26'}
+            raise ValueError("Catalogue unavailable; configure one of the explicitly approved camera pairs") from None
+        names = {"cam01": "Chiman bhai Bridge", "cam02": "Janpath", 'cam19':'CAM19', 'cam26':'CAM26', 'cam17':'CAM17'}
         cameras = [Camera(camera_id, names[camera_id], *documented_stream_urls(config, camera_id))
                    for camera_id in config.camera_ids]
         return cameras, True
