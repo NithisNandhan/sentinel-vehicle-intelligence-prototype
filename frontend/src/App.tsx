@@ -15,6 +15,7 @@ import {
 import MapPanel from './MapPanel';
 import LivePlayer from './LivePlayer';
 import CatalogueSearch from './CatalogueSearch';
+import RecognitionPanel from './RecognitionPanel';
 
 type Page = 'overview' | 'alerts' | 'cameras' | 'routes' | 'reports';
 type Connection = 'connected' | 'reconnecting' | 'locked';
@@ -305,6 +306,8 @@ export default function App() {
         {!operatorKey && <div className="locked-banner"><KeyRound size={20} /><div><strong>Operator access is locked</strong><span>Enter the local operator key to load cameras, alerts and reports.</span></div><button className="button primary" onClick={() => setKeyOpen(true)}>Unlock</button></div>}
         {(error || actionError) && <div className="error-banner" role="alert"><CircleAlert size={18} /><span>{actionError || error}</span><button onClick={() => { setActionError(''); void refresh(); }} aria-label="Retry"><RefreshCw size={16} /></button></div>}
         {loading && <div className="loading-note"><RefreshCw size={16} className="spinning" /> Loading command centre…</div>}
+
+        {operatorKey && (page === 'overview' || page === 'cameras') && <RecognitionPanel operatorKey={operatorKey} />}
 
         {operatorKey && page === 'overview' && <>
           <CatalogueSearch />

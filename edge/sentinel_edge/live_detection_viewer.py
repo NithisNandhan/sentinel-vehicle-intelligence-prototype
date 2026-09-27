@@ -11,6 +11,7 @@ import base64
 import hashlib
 import hmac
 import json
+import os
 import statistics
 import secrets
 import threading
@@ -62,12 +63,28 @@ class LiveState:
                     (capture_stop is None or capture_stop is self.capture_stop)):
                 self.value = value
 
-    def snapshot(self):
+    def heartbeat(self, camera_id):
+        with self.lock:
+            if camera_id is None or camera_id != self.camera_id:
+                raise ValueError('The shared camera session changed')
+            self.last_heartbeat = self.clock()
+
+    def snapshot(self, *, engineering=False):
         with self.lock:
             result = dict(self.value)
+            if not engineering:
+                result.pop('debug', None)
             if result.get('published_at'):
                 result['frame_age_seconds'] = round(self.clock() - result['published_at'], 1)
+                if result['frame_age_seconds'] > 5:
+                    # Do not transmit old sensitive evidence even if a caller
+                    # bypasses the browser's own freshness checks.
+                    result.pop('frame',None); result.pop('crop',None); result.pop('debug',None)
             return result
+
+    def operator_snapshot(self):
+        from .recognition_contract import operator_snapshot
+        return operator_snapshot(self.snapshot(engineering=True))
 
 
 def safe_request(host, origin, mutation, port=7780):
@@ -337,11 +354,39 @@ def viewer_page(token,detector_profile=None):
     return page
 
 
+def configured_relay_cameras(config):
+    from urllib.parse import urlsplit
+    from .cameras import Camera
+    base = getattr(config, 'media_relay_base_url', '')
+    if (set(getattr(config, 'camera_ids', ())) != {'cam01', 'cam02'} or
+            len(config.camera_ids) != 2 or not base):
+        return {}
+    parsed = urlsplit(base)
+    if (parsed.scheme != 'rtsp' or parsed.hostname not in {'mediamtx','localhost','127.0.0.1'}
+            or parsed.username or parsed.password or parsed.query or parsed.fragment or parsed.path not in ('','/')):
+        return {}
+    names = {'cam01': 'Chiman bhai Bridge · configured relay', 'cam02': 'Janpath · configured relay'}
+    return {key: Camera(key,names[key],rtsp_url=base.rstrip('/')+'/'+key) for key in config.camera_ids}
+
+
 def serve(config, cache, checkpoint, port=7780, lifetime=1800, bind_host='127.0.0.1',
-          detector_profile=None, training_root=None):
+          detector_profile=None, training_root=None, operator_key=None, deliver=False,
+          configured_relays=False):
     state, shutdown = LiveState(), threading.Event()
     token = secrets.token_urlsafe(32)
-    catalogue = {'available': False, 'cameras': []}
+    operator_key = operator_key if operator_key is not None else os.getenv('OPERATOR_API_KEY', '')
+    # Tests with no live configuration retain the legacy masked-only page.
+    privileged = config is not None or bool(operator_key)
+    if privileged and not operator_key:
+        raise ValueError('OPERATOR_API_KEY is required for the engineering console')
+    catalogue = {'available': False, 'scope': 'unavailable', 'cameras': []}
+    delivery = None
+    if deliver:
+        if config is None or not detector_profile:
+            raise ValueError('Delivery requires a configured tracked detector profile')
+        from .shared_delivery import SharedDelivery
+        delivery = SharedDelivery(config, detector_profile)
+        delivery.start(shutdown)
 
     class Handler(BaseHTTPRequestHandler):
         def log_message(self, *_):
@@ -362,9 +407,17 @@ def serve(config, cache, checkpoint, port=7780, lifetime=1800, bind_host='127.0.
                 pass
 
         def allowed(self, mutation=False):
+            if self.path.startswith('/internal/'):
+                expected = getattr(config, 'edge_api_key', '')
+                valid = bool(expected) and secrets.compare_digest(self.headers.get('X-Edge-Key', ''), expected)
+                if not valid:
+                    self.reply(403, b'{"error":"Shared recognition access rejected"}')
+                return valid
             valid = safe_request(self.headers.get('Host'), self.headers.get('Origin'), mutation, port)
             if self.path != '/' or mutation:
                 valid = valid and secrets.compare_digest(self.headers.get('X-Viewer-Token', ''), token)
+                if privileged:
+                    valid = valid and secrets.compare_digest(self.headers.get('X-Operator-Key', ''), operator_key)
             if not valid:
                 self.reply(403, b'{"error":"Local viewer access rejected"}')
             return valid
@@ -373,10 +426,22 @@ def serve(config, cache, checkpoint, port=7780, lifetime=1800, bind_host='127.0.
             if not self.allowed():
                 return
             if self.path == '/':
-                self.reply(200, viewer_page(token,detector_profile).encode(), 'text/html; charset=utf-8')
+                if privileged:
+                    from .engineering_page import engineering_page
+                    page = engineering_page(token, detector_profile)
+                else:
+                    page = viewer_page(token,detector_profile)
+                self.reply(200, page.encode(), 'text/html; charset=utf-8')
             elif self.path == '/snapshot':
                 self.reply(200, json.dumps(state.snapshot()).encode())
-            elif self.path == '/cameras':
+            elif self.path == '/engineering' and privileged:
+                self.reply(200, json.dumps(state.snapshot(engineering=True)).encode())
+            elif self.path == '/internal/status':
+                snapshot = state.operator_snapshot()
+                snapshot['model_profile'] = detector_profile or 'legacy'
+                snapshot['delivery'] = {'enabled': delivery is not None, 'outbox_depth': delivery.depth() if delivery else 0}
+                self.reply(200, json.dumps(snapshot).encode())
+            elif self.path in ('/cameras', '/internal/cameras'):
                 self.reply(200, json.dumps(catalogue).encode())
             else:
                 self.reply(404, b'{}')
@@ -384,7 +449,7 @@ def serve(config, cache, checkpoint, port=7780, lifetime=1800, bind_host='127.0.
         def do_POST(self):
             if not self.allowed(True):
                 return
-            if self.path != '/session':
+            if self.path not in ('/session', '/heartbeat', '/internal/session', '/internal/heartbeat'):
                 self.reply(404, b'{}'); return
             try:
                 self.connection.settimeout(5)
@@ -394,8 +459,22 @@ def serve(config, cache, checkpoint, port=7780, lifetime=1800, bind_host='127.0.
                 data = json.loads(self.rfile.read(length))
                 if not isinstance(data, dict) or set(data) != {'camera_id'}:
                     raise ValueError()
-                state.select(data['camera_id'])
-                self.reply(200, b'{"ok":true}')
+                if not (data['camera_id'] is None or isinstance(data['camera_id'], str)):
+                    raise ValueError()
+                if self.path.endswith('/heartbeat'):
+                    try:
+                        state.heartbeat(data['camera_id'])
+                    except ValueError:
+                        self.reply(409, b'{"error":"The shared camera session changed"}'); return
+                else:
+                    state.select(data['camera_id'])
+                if self.path.startswith('/internal/'):
+                    snapshot = state.operator_snapshot()
+                    snapshot['model_profile'] = detector_profile or 'legacy'
+                    snapshot['delivery'] = {'enabled': delivery is not None, 'outbox_depth': delivery.depth() if delivery else 0}
+                    self.reply(200, json.dumps(snapshot).encode())
+                else:
+                    self.reply(200, b'{"ok":true}')
             except (ValueError, TypeError, KeyError):
                 self.reply(400, b'{"error":"Select an authorised live catalogue ID or null"}')
 
@@ -408,14 +487,23 @@ def serve(config, cache, checkpoint, port=7780, lifetime=1800, bind_host='127.0.
                     from .diagnostic_gateway import discover
                     cameras = {c.camera_id: c for c in discover(config) if c.live}
                     state.authorise(cameras)
-                    catalogue = {'available': True, 'cameras': [{'id': c.camera_id, 'name': c.name} for c in cameras.values()]}
+                    catalogue = {'available': True, 'scope': 'authorised_catalogue',
+                                 'cameras': [{'id': c.camera_id, 'name': c.name} for c in cameras.values()]}
                 except Exception:
-                    # No guessing new camera paths when JSON access fails.
-                    with state.lock:
-                        selected, stop = state.camera_id, state.capture_stop
-                    if selected:
-                        state.publish({'camera_id': selected, 'status': 'unavailable'}, stop)
-                    shutdown.wait(15); continue
+                    # Only opt-in use of the already approved/configured local
+                    # pair. This is not a cached or fabricated full catalogue.
+                    if configured_relays:
+                        cameras = configured_relay_cameras(config)
+                    if cameras:
+                        state.authorise(cameras)
+                        catalogue = {'available': True, 'scope': 'configured_relays',
+                                     'cameras': [{'id': c.camera_id, 'name': c.name} for c in cameras.values()]}
+                    else:
+                        with state.lock:
+                            selected, stop = state.camera_id, state.capture_stop
+                        if selected:
+                            state.publish({'camera_id': selected, 'status': 'unavailable'}, stop)
+                        shutdown.wait(15); continue
             with state.lock:
                 selected, stop = state.camera_id, state.capture_stop
             if not selected:
@@ -428,7 +516,8 @@ def serve(config, cache, checkpoint, port=7780, lifetime=1800, bind_host='127.0.
                         detector_profile=detector_profile, training_root=training_root)
                 if detector_profile:
                     from .tracked_live_viewer import observe_tracked
-                    observe_tracked(config, cameras[selected], model, detector, vehicle, state, stop)
+                    observe_tracked(config, cameras[selected], model, detector, vehicle, state, stop,
+                                    debug=True, delivery=delivery, detector_profile=detector_profile)
                 else:
                     observe(config, cameras[selected], model, detector, vehicle, state, stop)
             except Exception:
@@ -462,7 +551,11 @@ if __name__ == '__main__':
     parser.add_argument('--container-bind', action='store_true', help='Use only with a Docker loopback-only port publication')
     parser.add_argument('--detector-profile', choices=('legacy','general','plate_adapted','indian_adapted'))
     parser.add_argument('--training-root', type=Path, default=Path('/training'))
+    parser.add_argument('--deliver', action='store_true', help='Durably deliver strictly model-accepted sightings, never candidates or imagery')
+    parser.add_argument('--lifetime', type=int, default=1800)
+    parser.add_argument('--configured-relays', action='store_true', help='When discovery fails, use only the previously approved CAM01/CAM02 local relays; not full catalogue access')
     args = parser.parse_args()
     serve(Config.from_env(live=True), args.cache, args.checkpoint,
           bind_host='0.0.0.0' if args.container_bind else '127.0.0.1',
-          detector_profile=args.detector_profile, training_root=args.training_root)
+          detector_profile=args.detector_profile, training_root=args.training_root, deliver=args.deliver,
+          lifetime=max(60,min(28800,args.lifetime)), configured_relays=args.configured_relays)

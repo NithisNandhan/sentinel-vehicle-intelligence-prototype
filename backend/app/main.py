@@ -14,6 +14,7 @@ from sqlalchemy.orm import Session, selectinload
 
 from .config import get_settings
 from .catalogue import gateway_request
+from .recognition import router as recognition_router
 from .db import Base, SessionLocal, engine, get_db
 from .models import Alert, AlertAudit, Camera, HealthReport, Sighting, WatchlistEntry, utc_now
 from .schemas import (AlertOut, AlertPatch, AuditOut, CameraSyncIn, CatalogueSearchOut,
@@ -23,6 +24,7 @@ from .security import check_edge_key, check_operator_key, plate_token
 
 settings = get_settings()
 app = FastAPI(title="Sentinel Vehicle Intelligence API", version="1.0.0")
+app.include_router(recognition_router)
 app.add_middleware(
     CORSMiddleware,
     allow_origins=settings.cors_origin_list,

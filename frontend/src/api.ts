@@ -38,6 +38,39 @@ export interface PreviewSession {
   preview_url: string;
 }
 
+export type RecognitionState = 'reading' | 'uncertain' | 'model_accepted' | 'unreadable' | 'paused' | 'unavailable';
+
+/** Operator-safe metadata only. Crops, full hypotheses and source URLs stay in the local console. */
+export interface RecognitionStatus {
+  schema_version: '1.0';
+  status: 'paused' | 'connecting' | 'live' | 'unavailable';
+  camera_id: string | null;
+  source_mode: 'live';
+  frame_age_seconds?: number | null;
+  resolution?: [number, number] | null;
+  vehicle_boxes?: number;
+  decoded_frames?: number;
+  analysed_frames?: number;
+  plate_crops?: number;
+  unique_model_accepted_unverified?: number;
+  model_profile?: string;
+  recognition_state: RecognitionState;
+  tracks: {
+    track_id: string;
+    observations: number;
+    masked_plate: string | null;
+    recognition_state: RecognitionState;
+    candidate_count: number;
+  }[];
+  delivery?: { enabled: boolean; outbox_depth: number };
+}
+
+export interface RecognitionCameras {
+  available: boolean;
+  scope?: 'configured_relays' | 'authorised_catalogue' | 'unavailable';
+  cameras: { id: string; name: string }[];
+}
+
 export interface Alert {
   id: string;
   sighting_id: string;
@@ -146,6 +179,26 @@ async function request<T>(path: string, init?: RequestInit, protectedRequest = f
 
 export async function getCameras(): Promise<Camera[]> {
   return unwrapList<Camera>(await request<unknown>('/v1/cameras', undefined, true), ['cameras', 'items']);
+}
+
+export function getRecognitionStatus(): Promise<RecognitionStatus> {
+  return request<RecognitionStatus>('/v1/recognition/status', { cache: 'no-store' }, true);
+}
+
+export function getRecognitionCameras(): Promise<RecognitionCameras> {
+  return request<RecognitionCameras>('/v1/recognition/cameras', { cache: 'no-store' }, true);
+}
+
+export function setRecognitionSession(cameraId: string | null): Promise<RecognitionStatus> {
+  return request<RecognitionStatus>('/v1/recognition/session', {
+    method: 'POST', body: JSON.stringify({ camera_id: cameraId }),
+  }, true);
+}
+
+export function heartbeatRecognition(cameraId: string): Promise<unknown> {
+  return request<unknown>('/v1/recognition/heartbeat', {
+    method: 'POST', body: JSON.stringify({ camera_id: cameraId }),
+  }, true);
 }
 
 export async function searchCatalogue(query: string, offset = 0): Promise<CatalogueSearchResponse> {

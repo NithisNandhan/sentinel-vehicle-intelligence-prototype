@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { cameraPreview, formatTime, getAlerts, getHourlyReports, injectDemo,
-  searchCatalogue, setOperatorKey, startCataloguePreview } from './api';
+  searchCatalogue, setOperatorKey, startCataloguePreview, getRecognitionStatus,
+  getRecognitionCameras, setRecognitionSession, heartbeatRecognition } from './api';
 
 const values = new Map<string, string>();
 
@@ -68,6 +69,58 @@ describe('operator API boundary', () => {
     await startCataloguePreview('cam03');
     expect(fetcher.mock.calls[0][0]).toBe('/v1/catalogue/cam03/preview');
     expect((fetcher.mock.calls[0][1] as RequestInit).method).toBe('POST');
+  });
+});
+
+describe('shared recognition API', () => {
+  it('rejects locked reads without sending a network request', async () => {
+    const fetcher = vi.fn();
+    vi.stubGlobal('fetch', fetcher);
+    await expect(getRecognitionStatus()).rejects.toThrow('operator key');
+    await expect(getRecognitionCameras()).rejects.toThrow('operator key');
+    expect(fetcher).not.toHaveBeenCalled();
+  });
+  it('observes status without implicitly starting inference', async () => {
+    setOperatorKey('test-operator-key');
+    const fetcher = vi.fn().mockResolvedValue({ ok: true, status: 200, json: async () => ({
+      schema_version: '1.0', status: 'paused', camera_id: null, source_mode: 'live',
+      recognition_state: 'paused', tracks: [],
+    }) });
+    vi.stubGlobal('fetch', fetcher);
+    expect((await getRecognitionStatus()).status).toBe('paused');
+    expect(fetcher.mock.calls[0][0]).toBe('/v1/recognition/status');
+    const init = fetcher.mock.calls[0][1] as RequestInit;
+    expect(init.method).toBeUndefined();
+    expect(init.cache).toBe('no-store');
+    expect((init.headers as Headers).get('X-Operator-Key')).toBe('test-operator-key');
+  });
+  it('preserves an explicitly limited configured-relay scope', async () => {
+    setOperatorKey('test-operator-key');
+    const fetcher = vi.fn().mockResolvedValue({ ok: true, status: 200, json: async () => ({
+      available: true, scope: 'configured_relays', cameras: [{ id: 'cam01', name: 'CAM01' }],
+    }) });
+    vi.stubGlobal('fetch', fetcher);
+    const catalogue = await getRecognitionCameras();
+    expect(catalogue.scope).toBe('configured_relays');
+    expect(catalogue.cameras.map(camera => camera.id)).toEqual(['cam01']);
+    expect(fetcher.mock.calls[0][0]).toBe('/v1/recognition/cameras');
+    expect(((fetcher.mock.calls[0][1] as RequestInit).headers as Headers).get('X-Operator-Key'))
+      .toBe('test-operator-key');
+  });
+  it('uses explicit camera-only start, keepalive and pause requests', async () => {
+    setOperatorKey('test-operator-key');
+    const fetcher = vi.fn().mockResolvedValue({ ok: true, status: 200, json: async () => ({}) });
+    vi.stubGlobal('fetch', fetcher);
+    await setRecognitionSession('cam17');
+    await heartbeatRecognition('cam17');
+    await setRecognitionSession(null);
+    expect(fetcher.mock.calls.map(call => call[0])).toEqual([
+      '/v1/recognition/session', '/v1/recognition/heartbeat', '/v1/recognition/session',
+    ]);
+    expect(fetcher.mock.calls.map(call => (call[1] as RequestInit).body)).toEqual([
+      '{"camera_id":"cam17"}', '{"camera_id":"cam17"}', '{"camera_id":null}',
+    ]);
+    for (const call of fetcher.mock.calls) expect((call[1] as RequestInit).method).toBe('POST');
   });
 });
 

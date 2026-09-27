@@ -8,10 +8,11 @@ from .live_detection_viewer import encoded
 from .tracked_ocr import TrackedOCR
 
 
-def observe_tracked(config,camera,model,detector,vehicle,state,stop):
+def observe_tracked(config,camera,model,detector,vehicle,state,stop, *, debug=False, delivery=None, detector_profile=None):
     import cv2
     from .live_detection_viewer import viewer_frames
-    pipeline = TrackedOCR(model,detector,threshold=config.ocr_min_confidence)
+    callback = (lambda track, candidate, pts: delivery.accept(camera.camera_id, track, candidate, pts)) if delivery else None
+    pipeline = TrackedOCR(model,detector,threshold=config.ocr_min_confidence, debug=debug, on_accepted=callback)
     vehicle.reset()
     sequence = 0
     last_pts = sampled_pts = first = last_crop = None
@@ -34,6 +35,7 @@ def observe_tracked(config,camera,model,detector,vehicle,state,stop):
             sampled_pts = frame.pts_ms
             started = time.monotonic()
             tracks = vehicle.track(frame.image)
+            vehicle_ms = (time.monotonic()-started)*1000
             displays = pipeline.process(frame.image,tracks,frame.pts_ms)
             view = frame.image.copy()
             for track in tracks:
@@ -52,11 +54,23 @@ def observe_tracked(config,camera,model,detector,vehicle,state,stop):
             crop_display = dict(last_crop) if last_crop and now-last_crop['seen_at'] <= 10 else None
             if crop_display:crop_display['age_seconds'] = round(now-crop_display.pop('seen_at'),1)
             timings.append((now-started)*1000)
-            state.publish(dict(pipeline.summary(),camera_id=camera.camera_id,status='live',published_at=now,
+            details = pipeline.debug_snapshot() if debug else {}
+            if debug:
+                details['stage_ms']['vehicle'] = round(vehicle_ms,2)
+                details['stage_ms'] = {key:round(value,2) for key,value in details['stage_ms'].items()}
+                details['overwritten_frames'] = getattr(tap,'overwritten',0)
+                details['original_frame'] = encoded(frame.image,'.jpg')
+            snapshot = dict(pipeline.summary(),camera_id=camera.camera_id,status='live',published_at=now,
                 pts_ms=frame.pts_ms,frame=encoded(view,'.jpg'),crop=crop_display,
                 vehicle_boxes=len(tracks),decoded_frames=tap.decoded,
                 plate_in_frame=bool(displays),resolution=[frame.image.shape[1],frame.image.shape[0]],
                 observed_seconds=round(now-first,2),median_processing_ms=round(statistics.median(timings)),
-                processing_ms=round((now-started)*1000),ocr_status='tracked multi-frame experiment'),stop)
+                processing_ms=round((time.monotonic()-started)*1000),ocr_status='tracked multi-frame experiment',
+                model_profile=detector_profile or 'general')
+            if debug:
+                snapshot['debug'] = details
+            if delivery:
+                snapshot['delivery'] = {'enabled':True,'outbox_depth':delivery.depth()}
+            state.publish(snapshot,stop)
         if tap.failed or not pipeline.metrics['analysed_frames'] or not stop.is_set():
             raise RuntimeError('Experimental viewer stream unavailable')

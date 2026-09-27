@@ -10,6 +10,7 @@ class Settings(BaseSettings):
     watchlist_hmac_key: str
     demo_mode: bool = False
     catalogue_gateway_url: str = ""
+    recognition_gateway_url: str = ""
     cors_origins: str = "http://localhost:5173,http://127.0.0.1:5173,http://localhost:3000"
 
     model_config = SettingsConfigDict(env_file=".env", extra="ignore")

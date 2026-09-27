@@ -423,3 +423,37 @@ repeat. The browser displayed the upgraded profile and 30 authorised catalogue
 entries. No live recognition success is claimed.
 Detailed counts, limitations and reproduction:
 [DETECTOR_OCR_INTEGRATION.md](docs/DETECTOR_OCR_INTEGRATION.md).
+
+## Dual-interface integration — 27 September 2026
+
+The operator command centre and protected engineering console now consume one
+explicitly selected tracked recognition session. Operator metadata passes a
+strict allowlist; full hypotheses/native crops stay in protected localhost RAM.
+The engineering console shows original/overlay scene displays, distinct crops,
+character alternatives, candidates, gate reasons and measured stage times.
+Reconstruction is honestly labelled inactive in this session.
+
+Final regression: **253 edge tests passed, one optional Node behaviour test
+skipped in the Python-only container (13.81 s)**; all nine renderer tests,
+including executable Node behaviour, passed separately on the host. **53 backend
+tests passed (3.15 s)** and **15 frontend tests plus production build passed**.
+Launcher syntax and Git whitespace checks passed. API/dashboard were rebuilt;
+the shared service uses mounted current code and previously cached models.
+
+Browser evidence: engineering-started CAM17 appeared in the operator panel;
+operator-switched CAM01 appeared in the engineering console with native crops,
+partial OCR and character alternatives. A deployed central status request
+reported CAM01 live, 1,795 decoded frames, 166 analysed frames, seven plate crops,
+0.1-second frame age and **zero model-accepted readings**; its response contained
+no image/crop/debug/full-text keys. Catalogue access initially failed then
+recovered on retry to 30 authorised cameras. An opt-in existing-local-pair
+fallback is explicitly labelled, not presented as a complete catalogue.
+
+This verifies two-consumer integration and software/privacy boundaries, not new
+OCR accuracy, two-feed endurance, measured scaling or independent plate truth.
+Final stale-evidence fix also expires OCR observations when a vehicle stays
+tracked but subsequent plate detection misses. Delivery uses a separate durable
+metadata-only outbox; uncertain candidates never enter it. The existing
+production worker remains separate, and its old model profile is not relabelled.
+
+Usage, scope and recorded limitations: [DUAL_INTERFACES.md](docs/DUAL_INTERFACES.md).

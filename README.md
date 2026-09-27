@@ -1,12 +1,22 @@
 # Sentinel Vehicle Intelligence Prototype
 
+## Two working interfaces
+
+Use `scripts/start-dual-interfaces.ps1` for the operator dashboard at
+http://127.0.0.1:5173/ and protected engineering console at
+http://127.0.0.1:7780/. They share one explicitly started recognition session.
+See [dual-interface usage and evidence](docs/DUAL_INTERFACES.md) for privacy,
+model scope, camera fallback and measured limitations. This does not claim
+verified live plate recognition or replace the separate production worker.
+
 This repository contains a two-camera demonstration of a regional vehicle-intelligence system. It has an **online** mode for authorised Sentinel feeds and an **offline** mode that sends clearly labelled synthetic events through the same central alert workflow. The 80,000-camera figure in the source brief is an architectural target, not measured capacity of this prototype.
 
 The system does not perform face recognition. Genuine camera frames, crops, clips, and plaintext number plates are not persisted. Offline demonstration imagery is synthetic.
 
-The isolated GPU OCR adaptation and its measured limitations are documented in
-[DEEP_OCR_ADAPTATION.md](docs/DEEP_OCR_ADAPTATION.md). The new checkpoint improves
-a small licensed still-image diagnostic; it is not deployed and does not establish
+The GPU OCR adaptation and its measured limitations are documented in
+[DEEP_OCR_ADAPTATION.md](docs/DEEP_OCR_ADAPTATION.md). The adapted checkpoint is
+used in the opt-in shared engineering pipeline; the separate production worker
+is unchanged. Improvement on the small licensed diagnostic does not establish
 live accuracy. Local results: <http://127.0.0.1:7777/indian-corpus-summary.html>.
 
 The isolated eight-model detection comparison, dataset audit and fine-tuning
