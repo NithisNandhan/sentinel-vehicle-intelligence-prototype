@@ -9,6 +9,11 @@ The isolated GPU OCR adaptation and its measured limitations are documented in
 a small licensed still-image diagnostic; it is not deployed and does not establish
 live accuracy. Local results: <http://127.0.0.1:7777/indian-corpus-summary.html>.
 
+The isolated eight-model detection comparison, dataset audit and fine-tuning
+results are documented in [DETECTOR_COMPARISON.md](docs/DETECTOR_COMPARISON.md)
+and [DETECTOR_DATASETS.md](docs/DETECTOR_DATASETS.md). Improved coverage does not
+establish plate-text accuracy; experimental checkpoints are not live defaults.
+
 ## Before starting
 
 - Windows with WSL2, Docker Desktop, hardware virtualization, and enough free memory for the database, dashboard, media gateway, and AI worker. The online worker needs a working NVIDIA GPU container or the native Windows fallback.
