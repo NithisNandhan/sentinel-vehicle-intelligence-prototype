@@ -97,7 +97,8 @@ The live worker now combines pretrained deep-learning plate OCR with per-vehicle
 
 ## Local verification
 
-To watch the models work on CAM01/CAM02, run
+To watch the models work on an authorised catalogue camera (with CAM01/CAM02
+retained as difficult baselines), run
 `.\scripts\start-live-detection-viewer.ps1` and open
 http://127.0.0.1:7780/. This opt-in, local-only diagnostic shows aligned vehicle
 and possible-plate boxes, native crops and masked multi-frame OCR status without

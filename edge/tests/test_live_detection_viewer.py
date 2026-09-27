@@ -20,6 +20,39 @@ class LiveViewerTests(unittest.TestCase):
         self.assertIsNone(state.camera_id)
         self.assertNotIn('frame', state.snapshot())
 
+    def test_catalogue_authorised_ids_replace_viewer_allowlist(self):
+        state = LiveState()
+        state.authorise(['cam01', 'cam12'])
+        state.select('cam12')
+        self.assertEqual(state.camera_id, 'cam12')
+        with self.assertRaises(ValueError): state.select('cam03')
+        state.authorise(['cam01'])
+        self.assertIsNone(state.camera_id)
+
+    def test_all_vehicle_boxes_displayed_but_roi_budget_rotates(self):
+        import numpy as np
+        image = np.zeros((100, 400, 3), dtype=np.uint8)
+        coords = [[i*50, 0, i*50+40, 90] for i in range(6)]
+        boxes = SimpleNamespace(xyxy=SimpleNamespace(tolist=lambda: coords),
+                                conf=SimpleNamespace(tolist=lambda: [.9]*6))
+        model = SimpleNamespace(predict=lambda *a, **kw: [SimpleNamespace(boxes=boxes)])
+        calls = []
+        detector = SimpleNamespace(box=lambda frame: calls.append(frame.shape) or None)
+        from sentinel_edge.live_detection_viewer import roi_schedule
+        vehicles, _ = detect_regions(image, model, detector, roi_offset=3)
+        self.assertEqual(len(vehicles), 6)
+        self.assertEqual(len(calls), 4)  # one full frame + three vehicle regions
+        self.assertEqual(roi_schedule(6, 0), [0, 1, 2])
+        self.assertEqual(roi_schedule(6, 3), [3, 4, 5])
+        self.assertEqual(roi_schedule(2, 3), [1, 0])
+
+    def test_probe_summary_never_contains_images_or_plate_text(self):
+        from sentinel_edge.live_detection_viewer import safe_metrics
+        result = safe_metrics({'camera_id': 'cam12', 'decoded_frames': 5, 'frame': 'private pixels',
+                               'crop': {'image': 'pixels', 'masked_plate': 'AP****34'},
+                               'plate': 'AP01AB1234', 'source_url': 'secret'})
+        self.assertEqual(result, {'camera_id': 'cam12', 'decoded_frames': 5})
+
     def test_switch_and_stop_clear_old_camera_media(self):
         state = LiveState()
         state.select('cam01')

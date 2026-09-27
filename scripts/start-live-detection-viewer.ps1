@@ -6,7 +6,7 @@ $dockerExecutable = if ($dockerCommand) { $dockerCommand.Source } else {
 }
 if (!(Test-Path -LiteralPath $dockerExecutable)) { throw 'Docker Desktop was not found.' }
 if (!(Test-Path -LiteralPath (Join-Path $projectRoot '.env'))) { throw 'The local .env file is required.' }
-Write-Host 'Open http://127.0.0.1:7780/ and choose CAM01 or CAM02. No footage is recorded.'
+Write-Host 'Open http://127.0.0.1:7780/ and choose an authorised catalogue camera. No footage is recorded.'
 Write-Host 'The viewer pauses when idle and shuts down after 30 minutes. Ctrl+C stops it sooner.'
 & $dockerExecutable run --rm --name sentinel-live-detection-viewer --gpus all `
     --network sentinel-prototype_default --env-file (Join-Path $projectRoot '.env') `

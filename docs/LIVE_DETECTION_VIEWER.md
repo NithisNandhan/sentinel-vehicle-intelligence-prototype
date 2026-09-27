@@ -12,8 +12,10 @@ and credentials configured in the local `.env`:
 .\scripts\start-live-detection-viewer.ps1
 ```
 
-Open **http://127.0.0.1:7780/** and choose CAM01 or CAM02. One selected camera is
-decoded at a time through the existing MediaMTX relay, with the existing direct
+Open **http://127.0.0.1:7780/** and select a camera from the authorised live JSON
+catalogue. CAM01/CAM02 remain quick-access difficult baselines. Only one selected
+camera is decoded at a time. New diagnostic cameras use direct RTSP-over-TCP/HLS;
+the original production pair uses its existing MediaMTX relay, with direct
 RTSP-over-TCP/HLS reader as fallback if the relay supplies no first frame within
 30 seconds. Each initial source wait is bounded; unavailable access is displayed
 explicitly and retried with a delay. Pause closes that capture;
@@ -24,9 +26,15 @@ script again for a new session. Ctrl+C stops the foreground launcher sooner.
 
 ## What the screen means
 
-- Green boxes: the three highest-confidence YOLOv8n vehicle regions, if present.
+- Green boxes: **all** vehicle regions returned by YOLOv8n at the existing .25
+  threshold and 640 inference setting. There is no three-box display cap. The
+  classes remain cars, motorcycles, buses and trucks; this does not mean every
+  visible vehicle is detected.
 - Yellow box: the highest-confidence full-frame plate proposal, or the first
-  detected plate in one of those native vehicle regions. These can be false
+  detected plate in one of at most three native vehicle regions searched per
+  frame. That search budget rotates across all detections instead of always
+  choosing only the three highest-confidence vehicles. At most one plate is
+  passed to OCR per sampled frame. These proposals can be false
   positives; they are not human-verified plate labels.
 - The full image and boxes belong to the **same analysed frame**. Detection is
   sampled using PTS with a minimum 500 ms interval. CPU detection/OCR speed can
@@ -49,7 +57,10 @@ script again for a new session. Ctrl+C stops the foreground launcher sooner.
 
 ## Privacy and scope
 
-Only CAM01 and CAM02 are accepted. Genuine images exist only in server/browser
+The viewer accepts only live camera IDs returned by authorised catalogue JSON;
+new IDs are never guessed if access fails. `/cameras` exposes only IDs and names,
+never source URLs. Production `.env` camera IDs and Compose services are unchanged.
+Genuine images exist only in server/browser
 memory; nothing writes them to files, reports, databases or central APIs.
 Snapshot responses carry in-memory images and masked text with `Cache-Control:
 no-store`; there is no download/recording endpoint. Users can still capture their
@@ -61,11 +72,12 @@ cross-site mutations and DNS rebinding. Tokens and stream credentials are never
 included in logs or committed source. The standalone module defaults to binding
 localhost; `--container-bind` is only for a loopback-published Docker port.
 
-Eleven focused tests cover native pixels, ROI coordinate alignment, masked OCR,
+Fourteen viewer tests cover native pixels, ROI coordinate alignment, masked OCR,
 old-session exclusion, camera restrictions, idle expiry, headers and HTTP
 token/origin protection, bounded startup, direct fallback and OCR-first GPU
 initialization/warmup before YOLO loads the production Torch libraries. The full
-edge suite passes 190 tests. Browser/live
+edge suite passes 199 tests, including sequential screening/report privacy and
+protected-gateway fallback/temporary-preview cleanup tests. Browser/live
 validation is separate from those automated checks.
 
 An actual GPU smoke check also loaded the fine-tuned reader, ran its warmup,
@@ -84,3 +96,70 @@ check showed aligned green vehicle boxes on the Janpath feed (1,592 decoded,
 was established. CAM01 live display in this viewer remains unverified. These are
 point-in-time checks, not feed-stability guarantees. No genuine images were saved
 and no synthetic substitutions were used to conceal the earlier access blocker.
+
+## Sequential suitability screening
+
+`sentinel_edge.camera_suitability` reuses these same models and gates, validates
+each requested ID against current authorised JSON, and opens candidate feeds one
+at a time. Its ignored JSON report contains only frame dimensions, counts,
+recent median native crop widths/quality, repeat-observation spans, candidate
+windows and HMAC-counted unverified accepted identifiers. It retains no images,
+masked/full OCR strings, source URLs or credentials. Default screening is 45
+seconds after first frame, with a separately bounded startup/whole-attempt timer.
+The quality medians describe the most recent 256 samples, not calibrated OCR
+confidence. Start/report-update timestamps are local diagnostic UTC times, not
+camera video timestamps.
+
+These measurements separate vehicle proposals, plate localisation and temporal
+OCR. Frame instances are **not unique vehicles**; crop counts are **not verified
+plates**. Without independently labelled visible vehicles/plates there is no
+detection recall or OCR accuracy percentage. Scene speed is inspected visually;
+no km/h estimate is inferred from uncalibrated camera geometry. Preference for a
+clearer test scene does not improve or conceal the CAM01/CAM02 baseline results.
+
+If a new direct catalogue login fails, the diagnostic can reuse the existing
+operator-key-protected internal catalogue gateway. It receives only authorised
+live IDs/names, then opens an existing temporary preview for the selected camera.
+The gateway fallback searches documented `cam`-prefixed grid IDs; a differently
+named future grid would require an explicit catalogue integration update.
+That preview is heartbeated every 20 seconds, closed in a finally block, and
+subject to the gateway's two-preview cap and 60-second idle expiry. A gateway
+authorisation/catalogue failure also fails closed. This does not add cameras to
+the production AI worker or expose Sentinel URLs to the browser.
+
+### Measured initial screen — 2026-09-27
+
+Each camera ran sequentially for approximately 45 seconds after its first frame.
+These are aggregate live measurements, not a labelled accuracy benchmark.
+
+| Camera | Frame size | Analysed frames | Vehicle box instances | Plate crops | Median crop width | Maximum observations | Candidate windows | Accepted, unverified |
+|---|---|---:|---:|---:|---:|---:|---:|---:|
+| CAM12 | 1280×720 | 68 | 3 | 0 | — | 0 | 0 | 0 |
+| CAM14 | 1920×1080 | 57 | 320 | 14 | 63.5 px | 3 | 1 | 0 |
+| CAM17 | 1920×1080 | 65 | 461 | 32 | 41 px | 8 | 15 | 0 |
+| CAM19 | 1280×720 | 61 | 0 | 0 | — | 0 | 0 | 0 |
+
+CAM17 is a provisional repeat-observation test scene, not a proven readable-plate
+feed: the browser showed daytime parked motorcycles and passing traffic, with
+small, angled, often two-line plates. Its longest associated observation span
+was 12.481 seconds. Catalogue names are labels, not verified scene locations.
+CAM14's inspected scene was a night intersection with headlight glare and visible
+compression damage; its higher nominal resolution did not establish clearer
+characters. Sparse detections on CAM12/CAM19 do not prove detector misses without
+ground truth. No full plate was accepted in this initial screen.
+
+An additional sequential screen requested 30 seconds each. Startup delays and
+the bounded whole-attempt timer left partial analysed windows; these are not
+four completed 30-second benchmarks:
+
+| Camera | Resolution | Observed window | Analysed frames | Plate crops | Median crop width | Maximum observations |
+|---|---|---:|---:|---:|---:|---:|
+| CAM07 | 1920×1080 | 25.08 s | 27 | 0 | — | 0 |
+| CAM10 | 854×480 | 9.29 s | 12 | 3 | 32 px | 1 |
+| CAM18 | 1920×1080 | 5.39 s | 7 | 0 | — | 0 |
+| CAM30 | 1920×1080 | 27.63 s | 12 | 5 | 92 px | 1 |
+
+No additional camera produced a candidate fusion window or an accepted reading.
+CAM30's larger crops justify visual inspection, not an accuracy claim. Camera
+comparisons use differing scene/time windows and cannot establish detector recall.
+New screening reports flag whether the requested observation window completed.
