@@ -149,6 +149,7 @@ class CTCPlateReader:
         self.samples = deque(maxlen=window)
         self._cache = None
         self._peaks = {}
+        self._proposals = ()
 
     @property
     def observation_count(self):
@@ -170,6 +171,18 @@ class CTCPlateReader:
         self._cache = None
         return True
 
+    def propose(self, candidates):
+        """Derived-view suggestions only: never add observations or scores.
+
+        All suggestions are rescored against the original-frame posteriors.
+        Reserve at most 32 search slots, keeping the total search bounded.
+        """
+        values = tuple(dict.fromkeys(text for text in candidates
+                                    if isinstance(text, str) and indian_plate_format(text)))[:32]
+        if values != self._proposals:
+            self._proposals = values
+            self._cache = None
+
     def candidates(self):
         if self._cache is not None:
             return self._cache
@@ -180,7 +193,8 @@ class CTCPlateReader:
             for text, score in candidates:
                 if indian_plate_format(text):
                     proposals[text] = max(proposals.get(text, NEG), score)
-        proposals = sorted(proposals, key=lambda text: -proposals[text])[:200]
+        originals = sorted(proposals, key=lambda text: -proposals[text])
+        proposals = list(dict.fromkeys((*self._proposals, *originals)))[:200]
         result, self._peaks = [], {}
         for text in proposals:
             likelihoods, peaks = [], []

@@ -111,7 +111,7 @@ async function catalogue(){
     if(!catalogueCount){const option=node('option',null,'Catalogue unavailable');option.value='';$('camera-select').append(option);}
     if([...$('camera-select').options].some(option=>option.value===previous))$('camera-select').value=previous;
     catalogueAvailable=result.available===true;
-    text('catalogue-status',result.scope==='configured_relays'?'Configured CAM01/CAM02 relays only; full catalogue unavailable':catalogueAvailable?catalogueCount+' authorised live cameras · choose explicitly to start':'Catalogue unavailable. Any listed fallback cameras are not the full catalogue.');updateControls();
+    text('catalogue-status',result.scope==='configured_relays'?'Configured relays only; full catalogue unavailable':catalogueAvailable?catalogueCount+' authorised live cameras · choose explicitly to start':'Catalogue unavailable. Any listed fallback cameras are not the full catalogue.');updateControls();
   }catch(error){text('catalogue-status','Authorised catalogue unavailable. No new camera paths are guessed.');if(error.status===401||error.status===403)handleError(error);}
   finally{catalogueBusy=false;}
 }
@@ -129,7 +129,7 @@ function summary(snapshot){
   text('overwritten',safeNumber(overwritten));updateControls();return status;
 }
 function renderStageTimes(debug){
-  $('stage-bars').replaceChildren();const values=['vehicle','plate','ocr','fusion'];const times=debug.stage_ms||{};
+  $('stage-bars').replaceChildren();const values=['vehicle','plate','ocr','reconstruction','fusion'];const times=debug.stage_ms||{};
   const maximum=Math.max(1,...values.map(name=>typeof times[name]==='number'&&Number.isFinite(times[name])?Math.max(0,times[name]):0));
   for(const name of values){const row=node('div','stagebar');row.append(node('span',null,name==='ocr'?'OCR':name.charAt(0).toUpperCase()+name.slice(1)));const track=node('div','bartrack');const fill=node('div','barfill');
     const measured=times[name];fill.style.width=(typeof measured==='number'&&Number.isFinite(measured)?Math.max(0,Math.min(100,measured/maximum*100)):0)+'%';track.append(fill);row.append(track,node('span','time',safeNumber(measured,1)+' ms'));$('stage-bars').append(row);}
@@ -185,6 +185,17 @@ function renderSelectedTrack(){
   if(!reasons.length)$('gate-list').append(node('li',null,'No gate details supplied. Do not infer correctness from the absence of a rejection.'));
   const reconstruction=track.reconstruction||{status:'not_run',reason:'Reconstruction is not enabled in this session'};
   text('reconstruction-state',String(reconstruction.status||'not_run')+' · '+String(reconstruction.reason||'No reconstruction evidence supplied'));
+  if(reconstruction.status==='reconstructed'){
+    const card=node('article','evidencecard');const top=node('div','evidencetop');top.append(node('span',null,'RECONSTRUCTED · DERIVED'),node('span','mono','0 extra observations'));card.append(top);
+    const wrap=node('div','evidenceimage');const image=node('img');image.alt='Aligned multi-frame reconstruction, not an independent observation';
+    if(setImage(image,reconstruction.image,'png'))wrap.append(image);else wrap.append(node('span','muted small','Reconstruction image unavailable'));card.append(wrap);
+    const body=node('div','evidencebody');body.append(node('div','frametext',reconstruction.text||'No text decoded'));
+    const chars=node('div','characters');for(const item of (Array.isArray(reconstruction.characters)?reconstruction.characters.slice(0,24):[])){
+      const element=node('span','character');element.append(node('span',null,item.character||'?'),node('small',null,safeNumber(item.score,2)));element.title='Derived-view character score, not an additional temporal vote';chars.append(element);}
+    body.append(chars,node('p','evidencefoot',safeNumber(reconstruction.width)+' × '+safeNumber(reconstruction.height)+' reference-grid pixels · '+safeNumber(reconstruction.contributing_originals)+' aligned originals · '+safeNumber(reconstruction.elapsed_ms,1)+' ms · learned restoration not enabled'));
+    for(const item of (Array.isArray(reconstruction.candidates)?reconstruction.candidates.slice(0,5):[]))body.append(node('p','small mono','Derived suggestion: '+String(item.plate||'')+' · score '+safeNumber(item.score,3)));
+    body.append(node('p','small muted','Suggestions are rescored on original frames. Reconstruction is not super-resolution or a verified reading.'));card.append(body);$('evidence-grid').append(card);
+  }
   text('evidence-count',frames.length+' retained distinct frames');$('evidence-empty').hidden=!!frames.length;
   frames.forEach((frame,index)=>{
     const card=node('article','evidencecard');const top=node('div','evidencetop');top.append(node('span',null,'FRAME '+(index+1)),node('span','mono','PTS '+safeNumber(frame.pts_ms)+' ms'));card.append(top);

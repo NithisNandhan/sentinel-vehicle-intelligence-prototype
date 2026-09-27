@@ -47,7 +47,7 @@ Run these commands in the same PowerShell window. On a per-user Docker Desktop i
 
 Open <http://localhost:5173>. The operator key is in the uncommitted `.env` file as `OPERATOR_API_KEY`; enter it in the dashboard unlock field. The demo injector and operator actions require that key. API documentation is at <http://localhost:8000/docs>.
 
-Online mode requires the registered Sentinel email and access password in `.env`. The adapter signs in through the portal form when the catalogue redirects to sign-in and keeps the resulting session cookie in memory only. `SENTINEL_COOKIE` remains an optional local override; normally leave it blank. YOLOv8n and FastALPR weights are downloaded automatically into persistent Docker volumes. `CAMERA_IDS=cam01,cam02` selects the first two portal cameras for this prototype:
+Online mode requires the registered Sentinel email and access password in `.env`. The adapter signs in through the portal form when the catalogue redirects to sign-in and keeps the resulting session cookie in memory only. `SENTINEL_COOKIE` remains an optional local override; normally leave it blank. YOLOv8n and FastALPR weights are downloaded automatically into persistent Docker volumes. The current user-selected pair is `CAMERA_IDS=cam19,cam26`:
 
 For direct RTSP access, the adapter first reads `cameras.json`, preserving any supplied stream URLs. For catalogue IDs without URLs, it uses the documented `rtsp://103.250.160.189:8554/stream/<id>` and `https://cctv.corp8.cloud/<id>/index.m3u8` patterns. It percent-encodes credentials and adds them only to `SENTINEL_RTSP_HOST` (default `103.250.160.189`), never to unrelated hosts.
 
@@ -58,9 +58,9 @@ docker compose --profile online up --build
 
 If Docker cannot expose the GPU to the AI container, start the central services and CPU media relay with `docker compose --profile native up --build`, then run the edge package on Windows with the same `.env` keys and `CENTRAL_API_URL=http://localhost:8000`, `MEDIA_RELAY_BASE_URL=rtsp://localhost:8554`. The native worker setup is documented in `edge/README.md`.
 
-Only two cameras are selected for AI processing. The worker tries the newer public-grid `/cameras.json` catalogue first. If it is unavailable, **only the explicitly configured `cam01,cam02` pair** may use the documented URL patterns as a temporary prototype fallback; a valid catalogue that omits a selected camera still rejects that selection. Online mode does not start without Sentinel credentials. Avoid starting both online and offline profiles together, since that mixes synthetic and live activity.
+Only two cameras are selected for AI processing. The worker tries the newer public-grid `/cameras.json` catalogue first. If it is unavailable, only an explicitly configured approved pair may use the documented URL patterns as a temporary prototype fallback (current `cam19,cam26`; legacy `cam01,cam02` remains supported). A valid catalogue that omits a selected camera still rejects that selection. Online mode does not start without Sentinel credentials. Avoid starting both online and offline profiles together, since that mixes synthetic and live activity.
 
-The selected portal cards are CAM01 (Chiman bhai Bridge) and CAM02 (Janpath); their documented public-grid IDs are `cam01` and `cam02`. The local `.env` is pinned to those IDs. The offline simulator has its own synthetic route and does not use `CAMERA_IDS`.
+The local `.env` is now pinned to CAM19 and CAM26 (`cam19,cam26`) as requested on 27 September. The shared analysis camera list prioritises this pair; the full authorised catalogue remains searchable. Location names come from the catalogue, not guessed labels. The offline simulator has its own synthetic route and does not use `CAMERA_IDS`. Historical validation below concerns the earlier pair, not new-camera accuracy.
 
 Access update on 2026-09-26: the updated credentials successfully sign in, `/cameras.json` returns 30 cameras, and CAM01/CAM02 decode over RTSP/TCP and authenticated HLS. Docker subsequently recovered, and a three-minute concurrent live GPU test ran approximately five sampled inference calls per second on each camera. Vehicle detection works in this sample, but FastALPR produced no confirmed plates; number-plate recognition is not yet accepted. See `VALIDATION.md` for timing, crop diagnostics and remaining gates. No footage was retained.
 
@@ -120,7 +120,7 @@ probes still produced no accepted reading. Production defaults remain unchanged.
 See [integration and measured boundaries](docs/DETECTOR_OCR_INTEGRATION.md) and
 the [local result viewer](http://127.0.0.1:7777/detector-summary.html).
 
-To watch the models work on an authorised catalogue camera (with CAM01/CAM02
+To watch the models work on an authorised catalogue camera (with the configured
 retained as difficult baselines), run
 `.\scripts\start-live-detection-viewer.ps1` and open
 http://127.0.0.1:7780/. This opt-in, local-only diagnostic shows aligned vehicle

@@ -356,16 +356,17 @@ def viewer_page(token,detector_profile=None):
 
 def configured_relay_cameras(config):
     from urllib.parse import urlsplit
-    from .cameras import Camera
+    from .cameras import Camera, APPROVED_MANUAL_PAIRS
     base = getattr(config, 'media_relay_base_url', '')
-    if (set(getattr(config, 'camera_ids', ())) != {'cam01', 'cam02'} or
+    if (frozenset(getattr(config, 'camera_ids', ())) not in APPROVED_MANUAL_PAIRS or
             len(config.camera_ids) != 2 or not base):
         return {}
     parsed = urlsplit(base)
     if (parsed.scheme != 'rtsp' or parsed.hostname not in {'mediamtx','localhost','127.0.0.1'}
             or parsed.username or parsed.password or parsed.query or parsed.fragment or parsed.path not in ('','/')):
         return {}
-    names = {'cam01': 'Chiman bhai Bridge · configured relay', 'cam02': 'Janpath · configured relay'}
+    names = {'cam01': 'Chiman bhai Bridge · configured relay', 'cam02': 'Janpath · configured relay',
+             'cam19':'CAM19 · configured relay', 'cam26':'CAM26 · configured relay'}
     return {key: Camera(key,names[key],rtsp_url=base.rstrip('/')+'/'+key) for key in config.camera_ids}
 
 
@@ -488,7 +489,10 @@ def serve(config, cache, checkpoint, port=7780, lifetime=1800, bind_host='127.0.
                     cameras = {c.camera_id: c for c in discover(config) if c.live}
                     state.authorise(cameras)
                     catalogue = {'available': True, 'scope': 'authorised_catalogue',
-                                 'cameras': [{'id': c.camera_id, 'name': c.name} for c in cameras.values()]}
+                                 'cameras': [{'id': c.camera_id, 'name': c.name} for c in sorted(cameras.values(),
+                                     key=lambda c:(c.camera_id not in config.camera_ids,
+                                                   config.camera_ids.index(c.camera_id) if c.camera_id in config.camera_ids else 0,
+                                                   c.camera_id))]}
                 except Exception:
                     # Only opt-in use of the already approved/configured local
                     # pair. This is not a cached or fabricated full catalogue.

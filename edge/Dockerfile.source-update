@@ -1,0 +1,5 @@
+# Source-only deployment onto the locally validated runtime. No package updates.
+# Use the normal Dockerfile when dependency/runtime changes are intended.
+ARG BASE_IMAGE=sentinel-prototype-edge-worker:latest
+FROM ${BASE_IMAGE}
+COPY edge/sentinel_edge /app/sentinel_edge

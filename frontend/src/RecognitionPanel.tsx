@@ -138,7 +138,7 @@ export default function RecognitionPanel({ operatorKey }: { operatorKey: string 
       <p className="recognition-session-note"><Camera size={14} />{status?.camera_id
         ? <>Analysing <strong>{status.camera_id.toUpperCase()}{cameraName ? ` · ${cameraName}` : ''}</strong>. Both interfaces observe this same session.</>
         : <>Select a camera and start analysis explicitly. Opening this page does not start the models.</>}</p>
-      {catalogue?.scope === 'configured_relays' && <p className="recognition-session-note" role="status">Configured CAM01/CAM02 relays only · full Sentinel catalogue unavailable.</p>}
+      {catalogue?.scope === 'configured_relays' && <p className="recognition-session-note" role="status">Configured relays only · full Sentinel catalogue unavailable.</p>}
       {error && <div className="recognition-error" role="alert"><CircleAlert size={16} /><span>{error}</span></div>}
       {catalogueError && !error && <div className="recognition-error" role="alert"><CircleAlert size={16} /><span>Camera selection unavailable: {catalogueError}</span></div>}
       {catalogue && !catalogue.available && !error && <div className="recognition-error" role="status"><CircleAlert size={16} /><span>Live analysis is unavailable. Check the local processing service and authorised camera access.</span></div>}

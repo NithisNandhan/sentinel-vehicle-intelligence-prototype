@@ -68,7 +68,9 @@ class EngineeringPageTests(unittest.TestCase):
         self.assertIn("status:'not_run'", page)
         self.assertIn('Model acceptance is not human verification', page)
         self.assertIn('Full text is an unverified hypothesis', page)
-        self.assertIn("['vehicle','plate','ocr','fusion']", page)
+        self.assertIn("['vehicle','plate','ocr','reconstruction','fusion']", page)
+        self.assertIn('RECONSTRUCTED · DERIVED', page)
+        self.assertIn('0 extra observations', page)
         self.assertIn('debug.original_frame', page)
         self.assertIn('scene displays use JPEG; native crops below use PNG', page)
 
@@ -84,7 +86,7 @@ class EngineeringPageTests(unittest.TestCase):
     def test_configured_relays_are_not_presented_as_full_catalogue(self):
         page = engineering_page('token')
         self.assertIn("result.scope==='configured_relays'", page)
-        self.assertIn('Configured CAM01/CAM02 relays only; full catalogue unavailable', page)
+        self.assertIn('Configured relays only; full catalogue unavailable', page)
 
     @unittest.skipUnless(shutil.which('node'), 'Node.js is optional for renderer behaviour tests')
     def test_browser_behaviour_unlock_clear_safe_text_and_shared_heartbeat(self):
@@ -123,6 +125,8 @@ assert.equal(requests.filter(request=>request.path==='/session').length,0,'Unloc
 assert.equal($('frame').src,'data:image/jpeg;base64,AA==');
 assert.equal($('candidate-body').children[0].children[1].textContent,'<img src=x onerror=alert(1)>');
 assert.equal($('candidate-body').children[0].children[1].children.length,0,'Hypothesis must be text, never markup');
+const reconstructed=structuredClone(fixture);reconstructed.debug.tracks[0].reconstruction={status:'reconstructed',image:'AA==',text:'<script>never execute</script>',characters:[],contributing_originals:3,width:160,height:48,elapsed_ms:10,candidates:[]};
+render(reconstructed);assert.ok($('evidence-grid').textContent.includes('RECONSTRUCTED · DERIVED'));assert.ok($('evidence-grid').textContent.includes('0 extra observations'));assert.ok($('evidence-grid').textContent.includes('<script>never execute</script>'));
 $('show-original').listeners.click();assert.equal($('frame').src,'data:image/jpeg;base64,AQ==');
 $('camera-select').value='cam14';timers.find(timer=>timer.ms===20000).fn();await flush();
 assert.equal(JSON.parse(requests.at(-1).body).camera_id,'cam17','Heartbeat must use active shared camera, not pending dropdown');

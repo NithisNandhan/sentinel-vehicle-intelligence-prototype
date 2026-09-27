@@ -12,7 +12,8 @@ def observe_tracked(config,camera,model,detector,vehicle,state,stop, *, debug=Fa
     import cv2
     from .live_detection_viewer import viewer_frames
     callback = (lambda track, candidate, pts: delivery.accept(camera.camera_id, track, candidate, pts)) if delivery else None
-    pipeline = TrackedOCR(model,detector,threshold=config.ocr_min_confidence, debug=debug, on_accepted=callback)
+    pipeline = TrackedOCR(model,detector,threshold=config.ocr_min_confidence, debug=debug, on_accepted=callback,
+                          reconstruction=True)
     vehicle.reset()
     sequence = 0
     last_pts = sampled_pts = first = last_crop = None

@@ -41,6 +41,10 @@ def describe_track(track_id, history, samples, threshold):
     reader = history.reader
     candidates = reader.candidates() if reader.observation_count >= 3 else []
     accepted = reader.accepted(threshold) if candidates else None
+    from .live_reconstruction import disagreement, snapshot
+    conflict = disagreement(history.reconstruction, accepted, threshold)
+    if conflict:
+        accepted = None
     lookup = {sample.source_id: sample for sample in samples}
     frames = []
     for pts, source, rows, _, quality in reader.samples:
@@ -52,6 +56,9 @@ def describe_track(track_id, history, samples, threshold):
                        'characters': characters(rows, reader.tokens), 'image': encoded(sample.image, '.png')})
     from .privacy import mask_plate
     reasons = gate_reasons(reader, candidates, threshold)
+    if conflict:
+        reasons = [r for r in reasons if not r.startswith('Model gates passed')]
+        reasons.append('Original and reconstructed OCR disagree; reading withheld')
     if not reader.observation_count:
         reasons.insert(0, history.last_plate_failure or ('Vehicle ROI has not been searched in the rotating budget yet' if not history.searches else 'No distinct usable plate observation'))
     return {'track_id': track_id, 'vehicle_box': history.box, 'vehicle_class': history.vehicle_class,
@@ -62,4 +69,5 @@ def describe_track(track_id, history, samples, threshold):
                             'minimum_character_score': round(c.minimum_character_score, 4),
                             'log_score': round(c.log_score, 4), 'observations': c.observations} for c in candidates],
             'gate_reasons': reasons, 'frames': frames,
-            'reconstruction': {'status': 'not_run', 'reason': 'Native OCR baseline; reconstruction is not enabled in this session'}}
+            'reconstruction': snapshot(history.reconstruction, reader.tokens) if history.reconstruction is not None else
+                              {'status': 'not_run', 'reason': 'Reconstruction has no retained crop window yet or is disabled'}}

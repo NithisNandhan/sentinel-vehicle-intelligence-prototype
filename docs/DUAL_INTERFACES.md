@@ -48,7 +48,7 @@ process token and local Host/Origin controls. Full candidate text, images, OCR
 posteriors and stream URLs never enter the central recognition proxy responses.
 
 When current catalogue access fails, the opt-in launcher may offer only the
-previously approved/configured local CAM01/CAM02 relays. This scope is explicitly
+approved/configured local pair (now CAM19/CAM26). This scope is explicitly
 labelled `configured_relays`, not a complete catalogue. Full-catalogue search
 keeps its independent unavailable state; no portal scraping is introduced.
 
@@ -71,9 +71,14 @@ JPEG; only native crops are lossless. Display enlargement adds no information.
 
 These are observable model inputs/outputs, not access to internal thoughts.
 Character scores, quality scores and ranking margins are not calibrated
-probabilities. Reconstruction is explicitly `not_run` in this session; no
-reconstruction output or accuracy benefit is claimed. Existing offline hybrid
-experiments are separate.
+probabilities. The shared tracked session now enables checked ECC alignment and
+native-grid multi-frame reconstruction. The console shows the derived PNG,
+its OCR suggestions, contributing-original count and elapsed time beside the
+unchanged native crops. Suggestions are rescored against original-frame OCR;
+they add no independent observations. Alignment/OCR failure keeps the original
+path available. Learned neural restoration remains `not_run`; reconstruction
+is not super-resolution or proof of improved accuracy. Existing offline hybrid
+experiments are separate. See [live reconstruction](LIVE_RECONSTRUCTION.md).
 
 Images, full hypotheses and posterior histories stay in bounded RAM. Crop bank
 budget is 32 MiB/32 tracks/eight frames per track; detailed snapshots include at

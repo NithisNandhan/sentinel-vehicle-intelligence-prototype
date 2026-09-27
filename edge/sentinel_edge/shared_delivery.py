@@ -34,7 +34,7 @@ class SharedDelivery:
         event = sighting(edge_id=self.config.edge_id+'-shared', camera_id=camera_id,
                          plate=candidate.plate, hmac_key=self.config.hmac_key,
                          confidence=candidate.score, source_mode='live', stream_pts_ms=pts_ms,
-                         track_id=track_id, model_version='tracked-'+self.profile+'+awiros-ctc;unverified')
+                         track_id=track_id, model_version='tracked-'+self.profile+'+awiros-ctc+ecc-reconstruction-proposals;unverified')
         self.outbox.put('/v1/sightings',event)
         self.sent[key] = now
         while len(self.sent) > 4096:

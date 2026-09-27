@@ -24,10 +24,11 @@ class History:
     searches: int = 0
     plate_detections: int = 0
     last_plate_failure: str | None = None
+    reconstruction: object | None = None
 
 
 class TrackedOCR:
-    def __init__(self, ocr, detector, *, roi_budget=3, gap_ms=2500, threshold=.85, debug=False, on_accepted=None):
+    def __init__(self, ocr, detector, *, roi_budget=3, gap_ms=2500, threshold=.85, debug=False, on_accepted=None, reconstruction=False):
         if not 1 <= roi_budget <= 8 or not 150 <= gap_ms <= 5000 or not 0 < threshold <= 1:
             raise ValueError('Invalid diagnostic tracking bounds')
         self.ocr, self.detector = ocr, detector
@@ -43,8 +44,9 @@ class TrackedOCR:
         self.offset = 0
         self.on_accepted = on_accepted
         self.stage_ms = {}
+        self.debug_enabled, self.reconstruction_enabled = debug, reconstruction
         self.crop_bank = None
-        if debug:
+        if debug or reconstruction:
             from .reconstruction import CropBank
             self.crop_bank = CropBank(max_bytes=32*1024*1024, max_frames=8, max_tracks=32)
 
@@ -63,7 +65,7 @@ class TrackedOCR:
             median_crop_quality=round(statistics.median(self.qualities),3) if self.qualities else None)
 
     def debug_snapshot(self):
-        if self.crop_bank is None:
+        if not self.debug_enabled:
             return {}
         from .recognition_debug import describe_track
         histories = sorted(self.histories.items(), key=lambda item: item[1].seen_pts, reverse=True)
@@ -92,10 +94,11 @@ class TrackedOCR:
         for key, history in self.histories.items():
             if history.reader.samples and pts_ms-history.reader.samples[-1][0] > self.gap_ms:
                 history.reader = CTCPlateReader(self.ocr.tokens)
+                history.reconstruction = None
                 if self.crop_bank is not None:
                     self.crop_bank.drop(key)
                 self.metrics['ocr_gap_resets'] += 1
-        self.stage_ms = dict(plate=0., ocr=0., fusion=0.)
+        self.stage_ms = dict(plate=0., ocr=0., reconstruction=0., fusion=0.)
         eligible = []
         for track in tracks:
             box = clipped_box(image,track.box)
@@ -115,6 +118,9 @@ class TrackedOCR:
                     if self.crop_bank is not None:
                         self.crop_bank.drop(oldest)
                 state = self.histories[track.track_id] = History(CTCPlateReader(self.ocr.tokens),box,track.vehicle_class,pts_ms)
+                if self.reconstruction_enabled:
+                    from .live_reconstruction import ReconstructionState
+                    state.reconstruction = ReconstructionState()
                 self.metrics['vehicle_track_segments'] += 1
             state.box,state.vehicle_class,state.seen_pts = box,track.vehicle_class,pts_ms
             eligible.append((track,state))
@@ -140,12 +146,14 @@ class TrackedOCR:
             center = ((local[0]+local[2])/(2*region.shape[1]),(local[1]+local[3])/(2*region.shape[0]))
             if state.plate_center and sum((a-b)**2 for a,b in zip(center,state.plate_center)) > .12:
                 state.reader = CTCPlateReader(self.ocr.tokens)
+                state.reconstruction = None
                 if self.crop_bank is not None:
                     self.crop_bank.drop(track.track_id)
                 self.metrics['plate_region_resets'] += 1
             state.plate_center = center
             if state.reader.samples and pts_ms-state.reader.samples[-1][0] > self.gap_ms:
                 state.reader = CTCPlateReader(self.ocr.tokens)
+                state.reconstruction = None
                 if self.crop_bank is not None:
                     self.crop_bank.drop(track.track_id)
                 self.metrics['ocr_gap_resets'] += 1
@@ -173,6 +181,20 @@ class TrackedOCR:
                     self.metrics['distinct_ocr_observations'] += 1
                     if self.crop_bank is not None:
                         self.crop_bank.add(track.track_id,crop,pts_ms,quality=quality)
+                        # Eviction must also release processed previews/proposals.
+                        for key, history in self.histories.items():
+                            if key not in self.crop_bank.tracks and history.reconstruction is not None:
+                                history.reconstruction = None
+                                history.reader.propose(())
+                        if self.reconstruction_enabled:
+                            from .live_reconstruction import ReconstructionState, update
+                            if state.reconstruction is None:
+                                state.reconstruction = ReconstructionState()
+                            if update(state.reconstruction, state.reader, self.crop_bank.get(track.track_id), self.ocr, pts_ms):
+                                self.stage_ms['reconstruction'] += state.reconstruction.elapsed_ms
+                                self.metrics['reconstruction_attempts'] += 1
+                                self.metrics['reconstructed_windows'] += state.reconstruction.status == 'reconstructed'
+                                self.metrics['reconstruction_failures'] += state.reconstruction.status == 'error'
             else:
                 self.metrics['duplicate_or_close_crops'] += 1
             count = state.reader.observation_count
@@ -182,6 +204,10 @@ class TrackedOCR:
             started = time.monotonic()
             candidates = state.reader.candidates() if count >= 3 else []
             accepted = state.reader.accepted(self.threshold) if count >= 3 else None
+            from .live_reconstruction import disagreement
+            if disagreement(state.reconstruction, accepted, self.threshold):
+                accepted = None
+                self.metrics['reconstruction_disagreements'] += 1
             self.stage_ms['fusion'] += (time.monotonic()-started)*1000
             self.metrics['eligible_fusion_windows'] += count >= 3
             self.metrics['candidate_windows'] += bool(candidates)

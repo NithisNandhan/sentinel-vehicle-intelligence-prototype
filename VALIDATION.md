@@ -457,3 +457,38 @@ metadata-only outbox; uncertain candidates never enter it. The existing
 production worker remains separate, and its old model profile is not relabelled.
 
 Usage, scope and recorded limitations: [DUAL_INTERFACES.md](docs/DUAL_INTERFACES.md).
+
+# Shared live reconstruction integration — 27 September 2026
+
+The shared tracked viewer now calls checked ECC native-grid reconstruction and
+the cached fine-tuned GPU OCR on that result. The protected console renders a
+derived-image card. Derived OCR proposes up to 32 hypotheses, which are rescored
+on the distinct original-frame evidence; no extra temporal vote is counted.
+Original evidence gates remain unchanged, conflicts withhold delivery, failures
+fall back to original OCR, and reconstruction state follows privacy cleanup.
+
+Final regression: 265 edge tests run (264 passed, one optional Node test skipped
+in the Python container); all nine renderer tests passed separately with host
+Node. All 15 frontend tests and the production dashboard build passed.
+The cached GPU synthetic plumbing check reconstructed three originals, ran OCR
+on the result, and retained three observations/zero additional votes. The derived
+path took 331.68 ms in that cold check; this is not a road accuracy benchmark.
+
+Two sequential 90-second live checks: CAM17 had 251 decoded/20 analysed frames,
+seven plate crops, three reconstructed windows, no reconstruction errors, and
+zero model-accepted readings. Maximum polled reconstruction-stage time: 81.68 ms.
+CAM14 had 109 decoded/13 analysed frames and no plate crops. Feed delivery was
+intermittent; CAM17's final snapshot age was seven seconds, so sensitive evidence
+was correctly omitted. No genuine frames, reconstructions or plaintext plates
+were retained. No live accuracy or improved recognition rate is established.
+Learned restoration remains inactive. Full detail: `docs/LIVE_RECONSTRUCTION.md`.
+
+Following the user's new camera selection, `.env` now uses `cam19,cam26` and
+the viewer launcher no longer hard-codes CAM01/CAM02. Both deployed stream/AI
+services report the new pair and the shared catalogue orders them first.
+Sequential 90-second authorised live checks connected both: CAM19 decoded
+1,310/analysed 81 frames; CAM26 decoded 1,684/analysed 107. Both yielded zero
+plate crops, reconstruction attempts and accepted readings. Final frame ages
+were 0.9/0.1 seconds. The new pair is selected, but plate localisation remains
+the immediate blocker there; the successful live reconstruction result above
+belongs to the earlier CAM17 check. The shared session is paused for handoff.

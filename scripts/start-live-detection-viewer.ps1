@@ -26,7 +26,7 @@ if ($DeliverAccepted) { $deliveryArgs = @('--deliver') }
     --network sentinel-prototype_default --env-file (Join-Path $projectRoot '.env') `
     -e MODEL_CACHE_DIR=/models -e MEDIA_RELAY_BASE_URL=rtsp://mediamtx:8554 `
     -e CENTRAL_API_URL=http://api:8000 -e EDGE_DB_PATH=/data/shared-recognition.sqlite3 `
-    -e CAMERA_IDS=cam01,cam02 -e YOLO_CONFIG_DIR=/tmp/sentinel-yolo `
+    -e YOLO_CONFIG_DIR=/tmp/sentinel-yolo `
     -p 127.0.0.1:7780:7780 `
     --mount "type=bind,source=$projectRoot/edge,target=/workspace/edge,readonly" `
     --mount "type=bind,source=$projectRoot/tools,target=/workspace/tools,readonly" `
