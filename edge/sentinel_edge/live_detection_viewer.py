@@ -139,6 +139,18 @@ def viewer_frames(config, camera, stop):
     raise TimeoutError('No live frames received; no media retained')
 
 
+def load_models(config, cache, checkpoint):
+    # Paddle's isolated CUDA 12 libraries must initialize before importing
+    # Torch/YOLO (the production image bundles a different CUDA/cuDNN version).
+    import numpy as np
+    from .awiros_experiment import AwirosExperiment
+    reader = AwirosExperiment(cache, device='gpu', checkpoint=checkpoint)
+    reader.probabilities(np.zeros((32, 120, 3), dtype=np.uint8))
+    from ultralytics import YOLO
+    from .ocr_selection_benchmark import PlateDetectorExperiment
+    return reader, PlateDetectorExperiment(), YOLO(str(config.model_cache_dir/'yolov8n.pt'))
+
+
 def observe(config, camera, model, detector, vehicle_model, state, stop):
     import cv2
     from .ctc_fusion import CTCPlateReader
@@ -292,15 +304,10 @@ def serve(config, cache, checkpoint, port=7780, lifetime=1800, bind_host='127.0.
                 if model is None:
                     import av
                     av.logging.set_level(av.logging.PANIC)
-                    from ultralytics import YOLO
-                    from .awiros_experiment import AwirosExperiment
-                    from .ocr_selection_benchmark import PlateDetectorExperiment
                     from .cameras import discover_live_pair
                     cameras, _ = discover_live_pair(config)
                     cameras = {c.camera_id: c for c in cameras}
-                    detector = PlateDetectorExperiment()
-                    vehicle = YOLO(str(config.model_cache_dir/'yolov8n.pt'))
-                    model = AwirosExperiment(cache, device='gpu', checkpoint=checkpoint)
+                    model, detector, vehicle = load_models(config, cache, checkpoint)
                 observe(config, cameras[selected], model, detector, vehicle, state, stop)
             except Exception:
                 state.publish({'camera_id': selected, 'status': 'unavailable'}, stop)

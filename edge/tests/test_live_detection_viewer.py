@@ -99,6 +99,20 @@ class LiveViewerTests(unittest.TestCase):
             with self.assertRaises(TimeoutError):
                 list(viewer_frames(Config(), None, threading.Event()))
 
+    def test_gpu_ocr_is_warmed_before_yolo_construction(self):
+        import sys
+        from pathlib import Path
+        from sentinel_edge.live_detection_viewer import load_models
+        order = []
+        model = SimpleNamespace(probabilities=lambda image: order.append('ocr_warmup'))
+        yolo = SimpleNamespace(YOLO=lambda path: order.append('yolo') or 'vehicle')
+        with patch('sentinel_edge.awiros_experiment.AwirosExperiment', return_value=model), \
+                patch('sentinel_edge.ocr_selection_benchmark.PlateDetectorExperiment', return_value='detector'), \
+                patch.dict(sys.modules, {'ultralytics': yolo}):
+            result = load_models(SimpleNamespace(model_cache_dir=Path('/models')), None, None)
+        self.assertEqual(order, ['ocr_warmup', 'yolo'])
+        self.assertEqual(result, (model, 'detector', 'vehicle'))
+
     def test_http_security_headers_and_origin_token_requirements(self):
         import http.client
         import re

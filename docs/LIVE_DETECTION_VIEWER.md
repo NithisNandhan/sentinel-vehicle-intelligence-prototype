@@ -61,11 +61,17 @@ cross-site mutations and DNS rebinding. Tokens and stream credentials are never
 included in logs or committed source. The standalone module defaults to binding
 localhost; `--container-bind` is only for a loopback-published Docker port.
 
-Ten focused tests cover native pixels, ROI coordinate alignment, masked OCR,
+Eleven focused tests cover native pixels, ROI coordinate alignment, masked OCR,
 old-session exclusion, camera restrictions, idle expiry, headers and HTTP
-token/origin protection, bounded startup and direct fallback. The full edge suite
-passes 189 tests. Browser/live
+token/origin protection, bounded startup, direct fallback and OCR-first GPU
+initialization/warmup before YOLO loads the production Torch libraries. The full
+edge suite passes 190 tests. Browser/live
 validation is separate from those automated checks.
+
+An actual GPU smoke check also loaded the fine-tuned reader, ran its warmup,
+ran CPU YOLO on synthetic pixels, then ran GPU OCR again successfully. This
+validates library coexistence, not live OCR accuracy. OCR-first initialization
+avoids the CUDA/cuDNN library conflict found when Torch loaded first.
 
 On 2026-09-27 the page, camera controls and paused state were exercised in the
 local browser. During this implementation's access recheck the catalogue became
