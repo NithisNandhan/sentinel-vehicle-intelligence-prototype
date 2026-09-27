@@ -97,6 +97,14 @@ The live worker now combines pretrained deep-learning plate OCR with per-vehicle
 
 ## Local verification
 
+To watch the models work on CAM01/CAM02, run
+`.\scripts\start-live-detection-viewer.ps1` and open
+http://127.0.0.1:7780/. This opt-in, local-only diagnostic shows aligned vehicle
+and possible-plate boxes, native crops and masked multi-frame OCR status without
+recording footage or changing production alerts. See
+[live detection viewer](docs/LIVE_DETECTION_VIEWER.md) for prerequisites,
+privacy boundaries and interpretation.
+
 The opt-in multi-frame degradation benchmark separates localization and OCR
 failures on explicitly licensed, labelled input. Its initial one-vehicle pilot
 does not establish general accuracy or live timing. PARSeq is research-only;
