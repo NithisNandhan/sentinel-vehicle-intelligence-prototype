@@ -110,3 +110,23 @@ they are not substitutes for a verified live plate read. No live registration
 was model-accepted or independently verified in these runs. Accuracy and
 end-to-end live readiness remain **unproven**. Do not use a candidate or an
 uncalibrated model score as a confirmed suspicious-vehicle match.
+
+## Follow-up diagnostic run
+
+The [per-frame evidence viewer](http://127.0.0.1:7777/crop-collection-frame-evidence-20260928.html)
+was regenerated from the same frozen three-frame development sequence. It
+adds each sampled native crop and its OCR reading to the visual comparison;
+it is **not** a new dataset or an independent accuracy test. The four methods
+again accepted the labelled identifier in 13/21 degradation conditions each,
+with zero wrong accepted identifiers on this one sequence. Reconstruction did
+not improve that count.
+
+The diagnostic transport probe was extended to use only the explicitly
+approved configured camera pair when the catalogue is unavailable, and it
+labels that source separately. For both CAM01 and CAM17, the catalogue was
+unavailable, direct RTSP returned an HTTP authentication failure, and HLS
+portal sign-in failed. The probe prints failure classes, not credentials or
+authenticated URLs. These results explain why another sustained live OCR run
+would be invalid now. They do not establish that the media server is down or
+that the recognition model cannot read a clear live plate; authorised access
+must be restored before either claim can be tested.
