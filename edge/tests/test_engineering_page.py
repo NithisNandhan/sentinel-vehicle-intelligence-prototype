@@ -72,6 +72,9 @@ class EngineeringPageTests(unittest.TestCase):
         self.assertIn('RECONSTRUCTED · DERIVED', page)
         self.assertIn('0 extra observations', page)
         self.assertIn('debug.original_frame', page)
+        self.assertIn('id="collection-status"', page)
+        self.assertIn('debug.dropped_sampled_frames', page)
+        self.assertIn('separate bounded stages', page)
         self.assertIn('scene displays use JPEG; native crops below use PNG', page)
 
     def test_standalone_page_has_no_remote_scripts_or_media(self):

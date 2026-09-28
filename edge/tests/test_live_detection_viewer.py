@@ -166,7 +166,7 @@ class LiveViewerTests(unittest.TestCase):
         with socket.socket() as sock:
             sock.bind(('127.0.0.1', 0)); port = sock.getsockname()[1]
         thread = threading.Thread(target=serve, args=(None, None, None),
-                                  kwargs={'port': port, 'lifetime': 2}, daemon=True)
+                                  kwargs={'port': port, 'lifetime': 2, 'operator_key': ''}, daemon=True)
         thread.start()
         for _ in range(50):
             try:

@@ -3,7 +3,7 @@ from collections import deque
 import statistics
 import time
 
-from .detector_ocr_shadow import LatestFrames
+from .crop_collector import CropCollector as LatestFrames
 from .live_detection_viewer import encoded
 from .tracked_ocr import TrackedOCR
 
@@ -12,13 +12,14 @@ def observe_tracked(config,camera,model,detector,vehicle,state,stop, *, debug=Fa
     import cv2
     from .live_detection_viewer import viewer_frames
     callback = (lambda track, candidate, pts: delivery.accept(camera.camera_id, track, candidate, pts)) if delivery else None
-    pipeline = TrackedOCR(model,detector,threshold=config.ocr_min_confidence, debug=debug, on_accepted=callback,
+    from .plate_search import TargetedPlateSearch
+    pipeline = TrackedOCR(model,TargetedPlateSearch(detector),threshold=config.ocr_min_confidence, debug=debug, on_accepted=callback,
                           reconstruction=True)
-    vehicle.reset()
     sequence = 0
     last_pts = sampled_pts = first = last_crop = None
     timings = deque(maxlen=256)
-    with LatestFrames(lambda token:viewer_frames(config,camera,token),stop) as tap:
+    with LatestFrames(lambda token:viewer_frames(config,camera,token),stop,vehicle,pipeline.detector) as tap:
+        if not hasattr(tap,'vehicle'):vehicle.reset()
         while not stop.is_set():
             item = tap.take(sequence)
             if item is None:
@@ -28,16 +29,17 @@ def observe_tracked(config,camera,model,detector,vehicle,state,stop, *, debug=Fa
             if first is None:first = time.monotonic()
             if frame.discontinuity or (last_pts is not None and frame.pts_ms is not None and
                                        (frame.pts_ms < last_pts or frame.pts_ms-last_pts > 2500)):
-                pipeline.reset(); vehicle.reset()
+                pipeline.reset()
+                if not hasattr(frame,'plate_cache'):vehicle.reset()
                 sampled_pts = last_crop = None
             if frame.pts_ms is None:continue
             last_pts = frame.pts_ms
             if sampled_pts is not None and frame.pts_ms-sampled_pts < 500:continue
             sampled_pts = frame.pts_ms
             started = time.monotonic()
-            tracks = vehicle.track(frame.image)
-            vehicle_ms = (time.monotonic()-started)*1000
-            displays = pipeline.process(frame.image,tracks,frame.pts_ms)
+            tracks = frame.tracks if hasattr(frame,'tracks') else vehicle.track(frame.image)
+            vehicle_ms = frame.vehicle_ms if hasattr(frame,'vehicle_ms') else (time.monotonic()-started)*1000
+            displays = pipeline.process(frame.image,tracks,frame.pts_ms,plate_cache=getattr(frame,'plate_cache',None))
             view = frame.image.copy()
             for track in tracks:
                 cv2.rectangle(view,track.box[:2],track.box[2:],(90,220,90),2)
@@ -60,14 +62,20 @@ def observe_tracked(config,camera,model,detector,vehicle,state,stop, *, debug=Fa
                 details['stage_ms']['vehicle'] = round(vehicle_ms,2)
                 details['stage_ms'] = {key:round(value,2) for key,value in details['stage_ms'].items()}
                 details['overwritten_frames'] = getattr(tap,'overwritten',0)
+                details['sampled_frames'] = getattr(tap,'sampled',0)
+                details['dropped_sampled_frames'] = getattr(tap,'dropped_samples',0)
+                details['decode_queue_peak_bytes'] = getattr(tap,'peak_bytes',0)
+                details['collector_input_drops'] = getattr(tap,'input_dropped',0)
+                details['collected_native_crops'] = getattr(tap,'collected_crops',0)
                 details['original_frame'] = encoded(frame.image,'.jpg')
-            snapshot = dict(pipeline.summary(),camera_id=camera.camera_id,status='live',published_at=now,
+            snapshot = dict(pipeline.summary(),camera_id=camera.camera_id,status='live',published_at=getattr(frame,'captured_at',now) or now,
                 pts_ms=frame.pts_ms,frame=encoded(view,'.jpg'),crop=crop_display,
                 vehicle_boxes=len(tracks),decoded_frames=tap.decoded,
                 plate_in_frame=bool(displays),resolution=[frame.image.shape[1],frame.image.shape[0]],
                 observed_seconds=round(now-first,2),median_processing_ms=round(statistics.median(timings)),
                 processing_ms=round((time.monotonic()-started)*1000),ocr_status='tracked multi-frame experiment',
                 model_profile=detector_profile or 'general')
+            snapshot['crop_first_search'] = True
             if debug:
                 snapshot['debug'] = details
             if delivery:

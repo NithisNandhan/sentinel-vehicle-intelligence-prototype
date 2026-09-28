@@ -30,10 +30,14 @@ class CropSample:
 
 
 class CropBank:
-    def __init__(self, *, max_bytes=64 * 1024 * 1024, max_frames=8, max_tracks=128):
+    def __init__(self, *, max_bytes=64 * 1024 * 1024, max_frames=8, max_tracks=128,
+                 retain_best=False, max_age_ms=None):
         if min(max_bytes, max_frames, max_tracks) < 1:
             raise ValueError('Invalid crop bank bounds')
         self.max_bytes, self.max_frames, self.max_tracks = max_bytes, max_frames, max_tracks
+        if max_age_ms is not None and max_age_ms < 150:
+            raise ValueError('Invalid crop bank age bound')
+        self.retain_best, self.max_age_ms = retain_best, max_age_ms
         self.tracks = OrderedDict()
         self.bytes_used = 0
 
@@ -62,13 +66,26 @@ class CropBank:
         if samples and (pts_ms - samples[-1].pts_ms < 150 or
                         any(s.source_id == fingerprint for s in samples)):
             return False
+        if self.max_age_ms is not None:
+            samples = self.tracks.get(track_id, deque())
+            while samples and pts_ms-samples[0].pts_ms > self.max_age_ms:
+                self.bytes_used -= samples.popleft().image.nbytes
         # Budget eviction can remove the current track; fetch its deque afterwards.
         while self.tracks and (self.bytes_used + image.nbytes > self.max_bytes or
                                (track_id not in self.tracks and len(self.tracks) >= self.max_tracks)):
             self.drop(next(iter(self.tracks)))
         samples = self.tracks.setdefault(track_id, deque())
         if len(samples) == self.max_frames:
-            self.bytes_used -= samples.popleft().image.nbytes
+            # Keep the latest observation and the clearest older views rather
+            # than letting a blurry tail replace every sharp crop. PTS spacing
+            # and exact-source deduplication still determine independence.
+            if self.retain_best and self.max_frames >= 3:
+                index = min(range(len(samples)-1), key=lambda i:(samples[i].quality,samples[i].pts_ms))
+                victim = samples[index]
+                del samples[index]
+            else:
+                victim = samples.popleft()
+            self.bytes_used -= victim.image.nbytes
         copy = image.copy()
         samples.append(CropSample(copy, pts_ms, fingerprint, max(.1, min(1., quality))))
         self.bytes_used += copy.nbytes

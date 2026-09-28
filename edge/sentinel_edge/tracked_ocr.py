@@ -48,7 +48,8 @@ class TrackedOCR:
         self.crop_bank = None
         if debug or reconstruction:
             from .reconstruction import CropBank
-            self.crop_bank = CropBank(max_bytes=32*1024*1024, max_frames=8, max_tracks=32)
+            self.crop_bank = CropBank(max_bytes=32*1024*1024, max_frames=8, max_tracks=32,
+                                      retain_best=True, max_age_ms=gap_ms)
 
     def reset(self):
         self.histories.clear()
@@ -74,7 +75,7 @@ class TrackedOCR:
                 'roi_budget': self.roi_budget, 'crop_bytes': self.crop_bank.bytes_used,
                 'score_notice': 'Uncalibrated character scores; not probabilities of correct registration'}
 
-    def process(self, image, tracks, pts_ms, *, posterior_cache=None):
+    def process(self, image, tracks, pts_ms, *, posterior_cache=None, plate_cache=None):
         if isinstance(pts_ms,bool) or not isinstance(pts_ms,int) or pts_ms < 0:
             raise ValueError('PTS required, never substitute arrival time')
         if self.last_pts is not None and pts_ms <= self.last_pts:
@@ -125,15 +126,20 @@ class TrackedOCR:
             state.box,state.vehicle_class,state.seen_pts = box,track.vehicle_class,pts_ms
             eligible.append((track,state))
         displays = []
-        for index in roi_schedule(len(eligible),self.offset,self.roi_budget):
+        selection = (roi_schedule(len(eligible),self.offset,self.roi_budget) if plate_cache is None else
+                     [i for i,(track,_) in enumerate(eligible) if track.track_id in plate_cache][:self.roi_budget])
+        for index in selection:
             track,state = eligible[index]
             region = crop_box(image,state.box)
             self.metrics['vehicle_crop_calls'] += 1
             state.searches += 1
             state.last_plate_failure = None
             started = time.monotonic()
-            local = self.detector.box(region)
-            self.stage_ms['plate'] += (time.monotonic()-started)*1000
+            prepared = plate_cache[track.track_id] if plate_cache is not None else None
+            local = prepared['box'] if prepared is not None else self.detector.box(region)
+            self.metrics['plate_detector_calls'] += prepared['calls'] if prepared is not None else getattr(self.detector,'last_calls',1)
+            self.metrics['targeted_searches'] += prepared['fallback'] if prepared is not None else bool(getattr(self.detector,'last_fallback',False))
+            self.stage_ms['plate'] += prepared['ms'] if prepared is not None else (time.monotonic()-started)*1000
             if local is None:
                 state.last_plate_failure = 'Plate detector found no region in this vehicle ROI'
                 continue
@@ -157,7 +163,7 @@ class TrackedOCR:
                 if self.crop_bank is not None:
                     self.crop_bank.drop(track.track_id)
                 self.metrics['ocr_gap_resets'] += 1
-            crop = crop_box(region,local)
+            crop = prepared['crop'] if prepared is not None else crop_box(region,local)
             quality = crop_quality(crop)
             self.metrics['plate_crops'] += 1
             self.widths.append(crop.shape[1]); self.qualities.append(quality)
