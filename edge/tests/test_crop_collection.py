@@ -92,6 +92,72 @@ class QualityBankTests(unittest.TestCase):
 
 
 class CollectorTests(unittest.TestCase):
+    def test_adaptive_sampling_uses_faster_cadence_only_near_vehicle(self):
+        parent = threading.Event()
+        frames = [('rtsp', VideoFrame(np.full((60,180,3),i,np.uint8),i*250,False)) for i in range(5)]
+        vehicle = SimpleNamespace(reset=lambda:None,
+            track=lambda image: [VehicleTrack('1',(0,0,180,60),2)] if image[0,0,0] < 3 else [])
+        detector = SimpleNamespace(box=lambda image:(10,10,110,40))
+        with CropCollector(iter(frames),parent,vehicle,detector,adaptive_sampling=True) as collector:
+            collector.thread.join(2)
+            self.assertFalse(collector.failed)
+            self.assertEqual([frame.pts_ms for _,frame in collector.queue],[0,250,500,750,1000])
+
+    def test_full_image_fallback_reuses_native_pixels_and_track_identity(self):
+        parent = threading.Event()
+        image = np.arange(60*180*3,dtype=np.uint8).reshape(60,180,3)
+        vehicle = SimpleNamespace(reset=lambda:None,
+            track=lambda image:[VehicleTrack('7',(20,10,160,50),2)])
+        calls = []
+        def detect(region):
+            calls.append(region.shape[:2])
+            return (50,30,100,40) if region.shape[:2] == (60,180) else None
+        detector = SimpleNamespace(box=detect)
+        with CropCollector(iter([('rtsp',VideoFrame(image,0,False))]),parent,vehicle,detector,
+                           adaptive_sampling=True,full_image_fallback=True) as collector:
+            collector.thread.join(2)
+            self.assertFalse(collector.failed)
+            _,frame = collector.take(0)
+            entry = frame.plate_cache['7']
+            self.assertEqual(entry['box'],(30,20,80,30))
+            self.assertEqual(entry['source'],'full_image')
+            np.testing.assert_array_equal(entry['crop'],image[30:40,50:100])
+            self.assertEqual(collector.full_image_calls,1)
+            self.assertEqual(collector.full_image_crops,1)
+            self.assertIn((60,180),calls)
+
+    def test_full_image_fallback_does_not_assign_plate_outside_vehicle(self):
+        parent = threading.Event()
+        image = np.zeros((60,180,3),np.uint8)
+        vehicle = SimpleNamespace(reset=lambda:None,
+            track=lambda image:[VehicleTrack('7',(20,10,100,50),2)])
+        detector = SimpleNamespace(box=lambda region:(130,30,170,40) if region.shape[:2] == (60,180) else None)
+        with CropCollector(iter([('rtsp',VideoFrame(image,0,False))]),parent,vehicle,detector,
+                           full_image_fallback=True) as collector:
+            collector.thread.join(2)
+            self.assertFalse(collector.failed)
+            self.assertIsNone(collector.take(0)[1].plate_cache['7']['crop'])
+            self.assertEqual(collector.full_image_crops,0)
+
+    def test_full_image_fallback_is_bounded_and_skips_usable_roi(self):
+        parent = threading.Event()
+        frames = [('rtsp',VideoFrame(np.full((60,180,3),i,np.uint8),i*250,False)) for i in range(5)]
+        vehicle = SimpleNamespace(reset=lambda:None,
+            track=lambda image:[VehicleTrack('7',(0,0,180,60),2)])
+        calls = []
+        def detect(region):
+            calls.append(int(region[0,0,0]))
+            return (10,10,110,40) if region[0,0,0] == 4 else None
+        detector = SimpleNamespace(box=detect)
+        with CropCollector(iter(frames),parent,vehicle,detector,adaptive_sampling=True,
+                           full_image_fallback=True) as collector:
+            collector.thread.join(2)
+            self.assertFalse(collector.failed)
+            self.assertEqual(collector.full_image_calls,1)
+            self.assertEqual(collector.full_image_crops,0)
+            self.assertEqual(collector.collected_crops,1)
+
+
     def test_collects_crops_before_ocr_consumer_and_releases_all_bytes(self):
         parent = threading.Event()
         frames = [('rtsp',VideoFrame(np.full((60,180,3),i,np.uint8),i*500,False)) for i in range(3)]

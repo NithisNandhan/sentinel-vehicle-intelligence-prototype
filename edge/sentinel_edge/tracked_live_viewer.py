@@ -8,7 +8,8 @@ from .live_detection_viewer import encoded
 from .tracked_ocr import TrackedOCR
 
 
-def observe_tracked(config,camera,model,detector,vehicle,state,stop, *, debug=False, delivery=None, detector_profile=None):
+def observe_tracked(config,camera,model,detector,vehicle,state,stop, *, debug=False, delivery=None,
+                    detector_profile=None, plate_recovery=False):
     import cv2
     from .live_detection_viewer import viewer_frames
     callback = (lambda track, candidate, pts: delivery.accept(camera.camera_id, track, candidate, pts)) if delivery else None
@@ -18,7 +19,9 @@ def observe_tracked(config,camera,model,detector,vehicle,state,stop, *, debug=Fa
     sequence = 0
     last_pts = sampled_pts = first = last_crop = None
     timings = deque(maxlen=256)
-    with LatestFrames(lambda token:viewer_frames(config,camera,token),stop,vehicle,pipeline.detector) as tap:
+    collector_options = dict(adaptive_sampling=True,full_image_fallback=True) if plate_recovery else {}
+    with LatestFrames(lambda token:viewer_frames(config,camera,token),stop,vehicle,pipeline.detector,
+                      **collector_options) as tap:
         if not hasattr(tap,'vehicle'):vehicle.reset()
         while not stop.is_set():
             item = tap.take(sequence)
@@ -34,7 +37,7 @@ def observe_tracked(config,camera,model,detector,vehicle,state,stop, *, debug=Fa
                 sampled_pts = last_crop = None
             if frame.pts_ms is None:continue
             last_pts = frame.pts_ms
-            if sampled_pts is not None and frame.pts_ms-sampled_pts < 500:continue
+            if sampled_pts is not None and frame.pts_ms-sampled_pts < (250 if plate_recovery else 500):continue
             sampled_pts = frame.pts_ms
             started = time.monotonic()
             tracks = frame.tracks if hasattr(frame,'tracks') else vehicle.track(frame.image)
@@ -68,6 +71,9 @@ def observe_tracked(config,camera,model,detector,vehicle,state,stop, *, debug=Fa
                 details['decode_queue_peak_bytes'] = getattr(tap,'peak_bytes',0)
                 details['collector_input_drops'] = getattr(tap,'input_dropped',0)
                 details['collected_native_crops'] = getattr(tap,'collected_crops',0)
+                details['full_image_detector_calls'] = getattr(tap,'full_image_calls',0)
+                details['full_image_recovered_crops'] = getattr(tap,'full_image_crops',0)
+                details['adaptive_sampling_enabled'] = plate_recovery
                 details['original_frame'] = encoded(frame.image,'.jpg')
             snapshot = dict(pipeline.summary(),camera_id=camera.camera_id,status='live',published_at=getattr(frame,'captured_at',now) or now,
                 pts_ms=frame.pts_ms,frame=encoded(view,'.jpg'),crop=crop_display,

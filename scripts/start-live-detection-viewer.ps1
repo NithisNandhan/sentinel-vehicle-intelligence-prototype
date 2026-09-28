@@ -2,6 +2,7 @@ param(
     [ValidateSet('legacy', 'general', 'plate_adapted', 'indian_adapted')]
     [string]$DetectorProfile = 'general',
     [switch]$DeliverAccepted,
+    [switch]$PlateRecovery,
     [switch]$Background,
     [ValidateRange(1, 480)]
     [int]$LifetimeMinutes = 30
@@ -21,6 +22,8 @@ $backgroundArgs = @()
 if ($Background) { $backgroundArgs = @('-d') }
 $deliveryArgs = @()
 if ($DeliverAccepted) { $deliveryArgs = @('--deliver') }
+$recoveryArgs = @()
+if ($PlateRecovery) { $recoveryArgs = @('--plate-recovery') }
 & $dockerExecutable run --rm --name sentinel-live-detection-viewer --gpus all `
     @backgroundArgs `
     --network sentinel-prototype_default --env-file (Join-Path $projectRoot '.env') `
@@ -38,5 +41,5 @@ if ($DeliverAccepted) { $deliveryArgs = @('--deliver') }
     python /workspace/tools/run_ocr_research.py -m sentinel_edge.live_detection_viewer `
     --cache /models/experiments/awiros `
     --checkpoint /models/experiments/awiros/adaptations/indian-corpus-encoder.safetensors `
-    --container-bind --detector-profile $DetectorProfile --lifetime ($LifetimeMinutes * 60) --configured-relays @deliveryArgs
+    --container-bind --detector-profile $DetectorProfile --lifetime ($LifetimeMinutes * 60) --configured-relays @deliveryArgs @recoveryArgs
 if ($LASTEXITCODE -ne 0) { throw 'The viewer stopped with an error. Check Docker and the cached models.' }

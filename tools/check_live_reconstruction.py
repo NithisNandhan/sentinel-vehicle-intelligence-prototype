@@ -87,10 +87,10 @@ def main():
                 last = value
                 session_statuses[value.get('status','missing')] += 1
                 fresh += value.get('status')=='live' and isinstance(value.get('frame_age_seconds'),(int,float)) and value['frame_age_seconds']<=5
-                for key in ('decoded_frames','analysed_frames','plate_crops','reconstruction_attempts','reconstructed_windows','reconstruction_failures','unique_model_accepted_unverified','maximum_distinct_observations'):
+                for key in ('decoded_frames','analysed_frames','vehicle_box_instances','plate_detector_calls','plate_crops','reconstruction_attempts','reconstructed_windows','reconstruction_failures','unique_model_accepted_unverified','maximum_distinct_observations'):
                     counts[key] = max(counts[key], value.get(key, 0) or 0)
                 debug = value.get('debug', {})
-                for key in ('sampled_frames','dropped_sampled_frames','decode_queue_peak_bytes','collector_input_drops','collected_native_crops'):
+                for key in ('sampled_frames','dropped_sampled_frames','decode_queue_peak_bytes','collector_input_drops','collected_native_crops','full_image_detector_calls','full_image_recovered_crops'):
                     collection[key] = max(collection[key],debug.get(key,0) or 0)
                 ms = debug.get('stage_ms', {}).get('reconstruction', 0)
                 if ms:timing.append(ms)

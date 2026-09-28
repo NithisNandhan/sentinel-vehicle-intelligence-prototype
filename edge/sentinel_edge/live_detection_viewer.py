@@ -374,7 +374,7 @@ def configured_relay_cameras(config):
 
 def serve(config, cache, checkpoint, port=7780, lifetime=1800, bind_host='127.0.0.1',
           detector_profile=None, training_root=None, operator_key=None, deliver=False,
-          configured_relays=False):
+          configured_relays=False, plate_recovery=False):
     state, shutdown = LiveState(), threading.Event()
     token = secrets.token_urlsafe(32)
     operator_key = operator_key if operator_key is not None else os.getenv('OPERATOR_API_KEY', '')
@@ -523,7 +523,8 @@ def serve(config, cache, checkpoint, port=7780, lifetime=1800, bind_host='127.0.
                 if detector_profile:
                     from .tracked_live_viewer import observe_tracked
                     observe_tracked(config, cameras[selected], model, detector, vehicle, state, stop,
-                                    debug=True, delivery=delivery, detector_profile=detector_profile)
+                                    debug=True, delivery=delivery, detector_profile=detector_profile,
+                                    plate_recovery=plate_recovery)
                 else:
                     observe(config, cameras[selected], model, detector, vehicle, state, stop)
             except Exception as exc:
@@ -562,10 +563,12 @@ if __name__ == '__main__':
     parser.add_argument('--detector-profile', choices=('legacy','general','plate_adapted','indian_adapted'))
     parser.add_argument('--training-root', type=Path, default=Path('/training'))
     parser.add_argument('--deliver', action='store_true', help='Durably deliver strictly model-accepted sightings, never candidates or imagery')
+    parser.add_argument('--plate-recovery', action='store_true', help='Opt-in native full-image fallback and 250 ms sampling near tracked vehicles')
     parser.add_argument('--lifetime', type=int, default=1800)
     parser.add_argument('--configured-relays', action='store_true', help='When discovery fails, use only the previously approved CAM01/CAM02 local relays; not full catalogue access')
     args = parser.parse_args()
     serve(Config.from_env(live=True), args.cache, args.checkpoint,
           bind_host='0.0.0.0' if args.container_bind else '127.0.0.1',
           detector_profile=args.detector_profile, training_root=args.training_root, deliver=args.deliver,
-          lifetime=max(60,min(28800,args.lifetime)), configured_relays=args.configured_relays)
+          lifetime=max(60,min(28800,args.lifetime)), configured_relays=args.configured_relays,
+          plate_recovery=args.plate_recovery)

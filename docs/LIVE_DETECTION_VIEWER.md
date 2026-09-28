@@ -21,6 +21,16 @@ and credentials configured in the local `.env`:
 .\scripts\start-live-detection-viewer.ps1
 ```
 
+To try the bounded plate-recovery experiment in the engineering console, start
+with `-PlateRecovery`. It keeps the idle 500 ms PTS sampling cadence, samples at
+250 ms while a sufficiently large tracked vehicle remains visible, and permits
+one direct full-image plate-detector call per second when selected vehicle ROIs
+yield no usable crop. A full-image proposal is used only when its entire plate
+box fits inside a tracked vehicle box. This does not add untracked vehicles or
+change OCR acceptance thresholds. The switch is opt-in until live, per-vehicle
+accuracy and processing load are measured. The console reports fallback calls
+and recovered crops separately; a recovered crop is not a verified plate read.
+
 Open **http://127.0.0.1:7780/** and select a camera from the authorised live JSON
 catalogue. CAM01/CAM02 remain quick-access difficult baselines. Only one selected
 camera is decoded at a time. New diagnostic cameras use direct RTSP-over-TCP/HLS;
@@ -50,7 +60,8 @@ and retried by the viewer, rather than reusing stale frames as fresh evidence.
   may be false positives and are not human-verified plate labels. The older
   no-profile diagnostic instead searches full-frame first and selects one plate.
 - The full image and boxes belong to the **same analysed frame**. Detection is
-  sampled using PTS with a minimum 500 ms interval. Detection/OCR speed can
+  sampled using PTS with a minimum 500 ms interval by default (250 ms near a
+  tracked vehicle with `-PlateRecovery`). Detection/OCR speed can
   reduce actual update rate; this is not full-frame-rate preview.
 - The last native plate crop remains visible for up to ten seconds of active
   processing with an age label. The model receives original crop pixels before
@@ -64,8 +75,8 @@ and retried by the viewer, rather than reusing stale frames as fresh evidence.
   plate-position and stale-OCR guards. Gaps over 2.5 seconds or scene/PTS resets
   clear histories. Continuous decoding keeps the latest frame and drops backlog;
   this can still miss observations under load. The older no-profile diagnostic
-  retains plate-box IoU association. Neither mode runs reconstruction or learned
-  deblurring, and neither demonstrates verified live accuracy by itself.
+  retains plate-box IoU association. The tracked experiment includes bounded
+  reconstruction, but neither mode demonstrates verified live accuracy by itself.
 - Accepted means the model's evidence gates passed, **not verified correctness
   or calibrated confidence**. No accuracy can be inferred without ground truth.
 - A stale-frame warning means the image is no longer a current live view.
