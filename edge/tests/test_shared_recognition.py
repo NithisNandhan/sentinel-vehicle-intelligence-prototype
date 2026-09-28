@@ -134,6 +134,21 @@ class SharedRecognitionTests(unittest.TestCase):
         self.assertEqual(row['frames'][0]['text'],TEXT)
         self.assertIn('three distinct',row['gate_reasons'][0])
 
+    def test_one_frame_best_guess_is_engineering_only_not_accepted(self):
+        engine = self.engine()
+        track = SimpleNamespace(track_id='1',box=(0,0,180,60),vehicle_class=2)
+        engine.process(self.image(1),[track],0)
+        row = engine.debug_snapshot()['tracks'][0]
+        self.assertEqual(row['best_guess']['plate'],TEXT)
+        self.assertEqual(row['best_guess']['observations'],1)
+        self.assertEqual(row['candidates'],[])
+        self.assertEqual(row['recognition_state'],'reading')
+        self.assertIn('three distinct',row['gate_reasons'][0])
+        safe = operator_snapshot({'status':'live','camera_id':'cam01','debug':engine.debug_snapshot()})
+        self.assertNotIn(TEXT,json.dumps(safe))
+        self.assertIsNone(safe['tracks'][0]['masked_plate'])
+        self.assertEqual(safe['tracks'][0]['candidate_count'],0)
+
     def test_plate_evidence_expires_even_when_vehicle_stays_and_detector_misses(self):
         engine = self.engine()
         track = SimpleNamespace(track_id='1',box=(0,0,180,60),vehicle_class=2)

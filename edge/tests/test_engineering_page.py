@@ -68,6 +68,8 @@ class EngineeringPageTests(unittest.TestCase):
         self.assertIn("status:'not_run'", page)
         self.assertIn('Model acceptance is not human verification', page)
         self.assertIn('Full text is an unverified hypothesis', page)
+        self.assertIn('id="best-reading-value"', page)
+        self.assertIn('Best available guess', page)
         self.assertIn("['vehicle','plate','ocr','reconstruction','fusion']", page)
         self.assertIn('RECONSTRUCTED · DERIVED', page)
         self.assertIn('0 extra observations', page)
@@ -114,7 +116,7 @@ globalThis.document={visibilityState:'visible',getElementById:id=>{if(!elements.
 globalThis.window={addEventListener:()=>{}};
 globalThis.setInterval=(fn,ms)=>{timers.push({fn,ms});return timers.length;};
 globalThis.setTimeout=()=>1;globalThis.clearTimeout=()=>{};
-const fixture={status:'live',camera_id:'cam17',frame_age_seconds:.1,frame:'AA==',resolution:[1920,1080],pts_ms:4000,decoded_frames:20,analysed_frames:3,vehicle_boxes:2,plate_crops:3,maximum_distinct_observations:3,unique_model_accepted_unverified:0,model_profile:'general',debug:{original_frame:'AQ==',stage_ms:{vehicle:100,plate:20,ocr:30,fusion:4},roi_budget:3,tracks:[{track_id:'7',vehicle_box:[1,2,3,4],vehicle_class:'car',observations:3,recognition_state:'uncertain',masked_plate:'MH****37',seen_pts_ms:4000,candidates:[{plate:'<img src=x onerror=alert(1)>',score:.6,minimum_character_score:.4,log_score:-10,observations:3}],gate_reasons:['Uncertain character'],frames:[{image:'AA==',width:120,height:32,pts_ms:4000,quality:.8,text:'MH02EK0837',characters:[{character:'M',score:.8,alternatives:[{character:'N',score:.2}]}]}],reconstruction:{status:'not_run',reason:'Native OCR baseline'}}]}};
+const fixture={status:'live',camera_id:'cam17',frame_age_seconds:.1,frame:'AA==',resolution:[1920,1080],pts_ms:4000,decoded_frames:20,analysed_frames:3,vehicle_boxes:2,plate_crops:3,maximum_distinct_observations:3,unique_model_accepted_unverified:0,model_profile:'general',debug:{original_frame:'AQ==',stage_ms:{vehicle:100,plate:20,ocr:30,fusion:4},roi_budget:3,tracks:[{track_id:'7',vehicle_box:[1,2,3,4],vehicle_class:'car',observations:3,recognition_state:'uncertain',masked_plate:'MH****37',seen_pts_ms:4000,best_guess:{plate:'<img src=x onerror=alert(1)>',score:.6,observations:1},candidates:[{plate:'<img src=x onerror=alert(1)>',score:.6,minimum_character_score:.4,log_score:-10,observations:3}],gate_reasons:['Uncertain character'],frames:[{image:'AA==',width:120,height:32,pts_ms:4000,quality:.8,text:'MH02EK0837',characters:[{character:'M',score:.8,alternatives:[{character:'N',score:.2}]}]}],reconstruction:{status:'not_run',reason:'Native OCR baseline'}}]}};
 let deny=false;
 globalThis.fetch=async(path,options)=>{requests.push({path,headers:{...options.headers},body:options.body});return{ok:!deny,status:deny?403:200,json:async()=>path==='/cameras'?{available:true,cameras:[{id:'cam17',name:'Test authorised camera'}]}:path==='/engineering'?structuredClone(fixture):{ok:true}};};
 const flush=()=>new Promise(resolve=>setImmediate(resolve));
@@ -126,14 +128,25 @@ assert.equal(operatorKey,'test-operator-key');assert.equal($('operator-key').val
 assert.ok(requests.some(request=>request.path==='/engineering'&&request.headers['X-Operator-Key']==='test-operator-key'));
 assert.equal(requests.filter(request=>request.path==='/session').length,0,'Unlock must not start a camera');
 assert.equal($('frame').src,'data:image/jpeg;base64,AA==');
+assert.equal($('best-reading-value').textContent,'<img src=x onerror=alert(1)>');
+assert.equal($('best-reading-value').children.length,0,'Best guess must be text, never markup');
+assert.ok($('best-reading-label').textContent.includes('unverified'));
+assert.ok($('best-reading-note').textContent.includes('review only'));
 assert.equal($('candidate-body').children[0].children[1].textContent,'<img src=x onerror=alert(1)>');
 assert.equal($('candidate-body').children[0].children[1].children.length,0,'Hypothesis must be text, never markup');
+const oneFrame=structuredClone(fixture);oneFrame.debug.tracks[0].observations=1;oneFrame.debug.tracks[0].candidates=[];
+render(oneFrame);assert.equal($('best-reading-value').textContent,'<img src=x onerror=alert(1)>');
+assert.equal($('candidate-body').children[0].textContent,'No complete candidate yet. Per-frame partial text is evidence, not a confirmed registration.');
+oneFrame.debug.tracks[0].best_guess=null;render(oneFrame);assert.equal($('best-reading-value').textContent,'MH02EK0837');
+assert.ok($('best-reading-label').textContent.includes('Partial OCR'));
+oneFrame.debug.tracks[0].frames=[];render(oneFrame);assert.equal($('best-reading-value').textContent,'—');
 const reconstructed=structuredClone(fixture);reconstructed.debug.tracks[0].reconstruction={status:'reconstructed',image:'AA==',text:'<script>never execute</script>',characters:[],contributing_originals:3,width:160,height:48,elapsed_ms:10,candidates:[]};
 render(reconstructed);assert.ok($('evidence-grid').textContent.includes('RECONSTRUCTED · DERIVED'));assert.ok($('evidence-grid').textContent.includes('0 extra observations'));assert.ok($('evidence-grid').textContent.includes('<script>never execute</script>'));
 $('show-original').listeners.click();assert.equal($('frame').src,'data:image/jpeg;base64,AQ==');
 $('camera-select').value='cam14';timers.find(timer=>timer.ms===20000).fn();await flush();
 assert.equal(JSON.parse(requests.at(-1).body).camera_id,'cam17','Heartbeat must use active shared camera, not pending dropdown');
 $('lock').listeners.click();assert.equal(operatorKey,'');assert.equal(latestSnapshot,null);assert.equal($('frame').src,undefined);assert.equal($('evidence-grid').children.length,0);assert.equal($('inspection').hidden,true);
+assert.equal($('best-reading-value').textContent,'');
 const count=requests.length;await refresh();await catalogue();assert.equal(requests.length,count);
 deny=true;$('operator-key').value='wrong-key';await $('unlock-form').listeners.submit({preventDefault:()=>{}});
 assert.equal(operatorKey,'');assert.equal($('inspection').hidden,true);assert.equal(latestSnapshot,null);

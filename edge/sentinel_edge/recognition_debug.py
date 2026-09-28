@@ -39,7 +39,10 @@ def gate_reasons(reader, candidates, threshold):
 def describe_track(track_id, history, samples, threshold):
     from .live_detection_viewer import encoded
     reader = history.reader
-    candidates = reader.candidates() if reader.observation_count >= 3 else []
+    # Debug-only early hypothesis. Do not let it change the acceptance path or
+    # the masked operator contract, which still require temporal evidence.
+    ranked = reader.candidates() if reader.observation_count else []
+    candidates = ranked if reader.observation_count >= 3 else []
     accepted = reader.accepted(threshold) if candidates else None
     from .live_reconstruction import disagreement, snapshot
     conflict = disagreement(history.reconstruction, accepted, threshold)
@@ -55,7 +58,7 @@ def describe_track(track_id, history, samples, threshold):
                        'quality': round(quality, 3), 'text': greedy_text(rows, reader.tokens),
                        'characters': characters(rows, reader.tokens), 'image': encoded(sample.image, '.png')})
     from .privacy import mask_plate
-    reasons = gate_reasons(reader, candidates, threshold)
+    reasons = gate_reasons(reader, ranked, threshold)
     if conflict:
         reasons = [r for r in reasons if not r.startswith('Model gates passed')]
         reasons.append('Original and reconstructed OCR disagree; reading withheld')
@@ -65,6 +68,8 @@ def describe_track(track_id, history, samples, threshold):
             'seen_pts_ms': history.seen_pts, 'observations': reader.observation_count,
             'recognition_state': 'model_accepted' if accepted else 'uncertain' if candidates else 'reading' if reader.observation_count < 3 else 'unreadable',
             'masked_plate': mask_plate(candidates[0].plate) if candidates else None,
+            'best_guess': {'plate': ranked[0].plate, 'score': round(ranked[0].score, 4),
+                           'observations': ranked[0].observations} if ranked else None,
             'candidates': [{'plate': c.plate, 'score': round(c.score, 4),
                             'minimum_character_score': round(c.minimum_character_score, 4),
                             'log_score': round(c.log_score, 4), 'observations': c.observations} for c in candidates],
