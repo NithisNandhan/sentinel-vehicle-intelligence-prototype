@@ -80,6 +80,8 @@ class LiveState:
                     # Do not transmit old sensitive evidence even if a caller
                     # bypasses the browser's own freshness checks.
                     result.pop('frame',None); result.pop('crop',None); result.pop('debug',None)
+                    if result.get('status') == 'live':
+                        result['status'] = 'unavailable'
             return result
 
     def operator_snapshot(self):
@@ -160,17 +162,17 @@ def viewer_frames(config, camera, stop):
             guard.started = True
             yield transport, frame
         return
-    # Only the production pair has pre-existing local relays. New diagnostic
-    # cameras use the catalogue's direct sources, never alter those relays.
+    # Reuse the production pair's relay to avoid extra source copies. After
+    # bounded relay failures, try the authorised direct RTSP/HLS sources.
     if camera is not None and camera.camera_id not in getattr(config, 'camera_ids', ('cam01', 'cam02')):
         config = replace(config, media_relay_base_url='')
-    options = [config]
-    if config.media_relay_base_url:
-        options.append(replace(config, media_relay_base_url=''))
+    options = ([config,replace(config,media_relay_base_url='')]
+               if config.media_relay_base_url else [config])
     for candidate in options:
         guard = StartupStop(stop)
         received = False
-        for transport, frame in read_camera(candidate, camera, stop=guard):
+        for transport, frame in read_camera(candidate, camera, stop=guard,
+                retry_limit=3 if candidate is config and len(options)>1 else None):
             if stop.is_set():
                 return
             received = guard.started = True
@@ -524,8 +526,12 @@ def serve(config, cache, checkpoint, port=7780, lifetime=1800, bind_host='127.0.
                                     debug=True, delivery=delivery, detector_profile=detector_profile)
                 else:
                     observe(config, cameras[selected], model, detector, vehicle, state, stop)
-            except Exception:
-                state.publish({'camera_id': selected, 'status': 'unavailable'}, stop)
+            except Exception as exc:
+                # Class names are safe diagnostics; third-party messages may
+                # contain authenticated stream URLs and must never leave RAM.
+                code = getattr(exc,'failure_code',type(exc).__name__)
+                state.publish({'camera_id': selected, 'status': 'unavailable',
+                               'failure_code': code if isinstance(code,str) and code.isidentifier() else 'CaptureFailure'}, stop)
                 stop.wait(5)  # Redact third-party exceptions; retry, never tight-loop.
 
     server = ThreadingHTTPServer((bind_host, port), Handler)

@@ -56,12 +56,13 @@ def observe_tracked(config,camera,model,detector,vehicle,state,stop, *, debug=Fa
             now = time.monotonic()
             crop_display = dict(last_crop) if last_crop and now-last_crop['seen_at'] <= 10 else None
             if crop_display:crop_display['age_seconds'] = round(now-crop_display.pop('seen_at'),1)
-            timings.append((now-started)*1000)
+            collection_ms = getattr(frame,'collection_ms',0.)
+            timings.append((now-started)*1000+collection_ms)
             details = pipeline.debug_snapshot() if debug else {}
             if debug:
                 details['stage_ms']['vehicle'] = round(vehicle_ms,2)
                 details['stage_ms'] = {key:round(value,2) for key,value in details['stage_ms'].items()}
-                details['overwritten_frames'] = getattr(tap,'overwritten',0)
+                details['overwritten_frames'] = (getattr(tap,'input_dropped',0)+getattr(tap,'dropped_samples',0))
                 details['sampled_frames'] = getattr(tap,'sampled',0)
                 details['dropped_sampled_frames'] = getattr(tap,'dropped_samples',0)
                 details['decode_queue_peak_bytes'] = getattr(tap,'peak_bytes',0)
@@ -73,7 +74,7 @@ def observe_tracked(config,camera,model,detector,vehicle,state,stop, *, debug=Fa
                 vehicle_boxes=len(tracks),decoded_frames=tap.decoded,
                 plate_in_frame=bool(displays),resolution=[frame.image.shape[1],frame.image.shape[0]],
                 observed_seconds=round(now-first,2),median_processing_ms=round(statistics.median(timings)),
-                processing_ms=round((time.monotonic()-started)*1000),ocr_status='tracked multi-frame experiment',
+                processing_ms=round((time.monotonic()-started)*1000+collection_ms),ocr_status='tracked multi-frame experiment',
                 model_profile=detector_profile or 'general')
             snapshot['crop_first_search'] = True
             if debug:
@@ -82,4 +83,6 @@ def observe_tracked(config,camera,model,detector,vehicle,state,stop, *, debug=Fa
                 snapshot['delivery'] = {'enabled':True,'outbox_depth':delivery.depth()}
             state.publish(snapshot,stop)
         if tap.failed or not pipeline.metrics['analysed_frames'] or not stop.is_set():
-            raise RuntimeError('Experimental viewer stream unavailable')
+            error = RuntimeError('Experimental viewer stream unavailable')
+            error.failure_code = getattr(tap,'failure_code','NoUsableFrames')
+            raise error

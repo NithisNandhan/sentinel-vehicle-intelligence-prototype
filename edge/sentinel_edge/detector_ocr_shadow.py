@@ -62,8 +62,9 @@ class LatestFrames:
                     self.sequence += 1
                     self.latest = frame
                     self.condition.notify_all()
-        except Exception:
+        except Exception as exc:
             self.failed = True  # Never serialize source URL or third-party message.
+            self.failure_code = type(exc).__name__
         finally:
             with self.condition:
                 self.finished = True

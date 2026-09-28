@@ -62,8 +62,51 @@ requires a larger, independently labelled Indian multi-frame set with separate
 vehicle/scene groups, clear footage permission, and blind post-training scoring.
 False accepted identifiers must be counted separately from abstentions.
 
-Automated checks: 275 edge tests passed (one optional browser test skipped in
+Automated checks: 278 edge tests passed (one optional browser test skipped in
 the Docker image); nine standalone engineering-page tests passed with Node.
-The current live camera check is reported separately after completion. A
-browser rendering or local-server HTTP response is not proof of live plate
-recognition.
+
+## First live check (before relay-fallback repair)
+
+Both authorised feeds were polled for three minutes. CAM17 yielded 2,969
+decoded frames, 187 analysed frames, 13 plate crops, and a maximum of seven
+distinct observations on a track; four reconstruction windows were counted.
+CAM01 yielded 2,007 decoded frames, 77 analysed frames, nine plate crops, and
+at most two distinct observations. **Neither produced a model-accepted plate.**
+No live ground-truth transcript exists, so neither OCR accuracy nor correctly
+read registrations can be claimed from these counters.
+
+Only 47/88 CAM17 polls and 32/90 CAM01 polls had evidence no more than five
+seconds old. CAM01's last view was 111 seconds old. A separate probe found its
+local `rtsp://mediamtx:8554/cam01` relay returned **404 Not Found**. The initial
+diagnostic reader kept retrying that relay. Follow-up comparison found the
+long-running relay container had older credential values than the current
+local `.env` and diagnostic viewer; no value was printed. Recreating the relay
+and edge-worker containers from `.env` started two FFmpeg publishers, and
+FFprobe confirmed both local camera paths now expose 1920×1080 H.264. This
+identifies an environment/configuration failure, not an OCR-model failure.
+The viewer also marks stale evidence unavailable and bounds relay retries
+before trying authorised direct RTSP/HLS. A third live run checks the repaired
+relays separately; the connectivity repair alone does not prove plate accuracy.
+
+The live reports contain only aggregate counters and UTC timings. No camera
+pixels, source URLs, plaintext registrations or credentials are retained.
+
+## Final live acceptance status
+
+A second 90-second check, before refreshing the relay containers, still yielded
+zero accepted identifiers. After credential refresh, a 120-second check per
+camera **failed** the two-feed acceptance gate: CAM17 analysed seven frames
+with no plate crop; CAM01 analysed zero frames. Both ended unavailable. A
+separate authorised transport probe had decoded a single 1920×1080 H.264
+CAM01 frame through RTSP and HLS, and both local relay paths briefly exposed
+the same codec/resolution. Those probes establish momentary connectivity,
+**not sustained feed delivery**. Subsequently the portal catalogue reported a
+sign-in failure and the catalogue gateway returned HTTP 503. The viewer
+recorded a safe `TimeoutError` category without exposing the authenticated
+address. Continued live testing therefore needs restored Sentinel access.
+
+The benchmark development result and the offline interface remain available;
+they are not substitutes for a verified live plate read. No live registration
+was model-accepted or independently verified in these runs. Accuracy and
+end-to-end live readiness remain **unproven**. Do not use a candidate or an
+uncalibrated model score as a confirmed suspicious-vehicle match.

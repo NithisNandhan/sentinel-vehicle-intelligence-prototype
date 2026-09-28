@@ -50,6 +50,7 @@ class CropCollector(SampledFrames):
                         if tap.finished:
                             if tap.failed:
                                 self.failed = True
+                                self.failure_code = getattr(tap,'failure_code','DecoderFailure')
                             break
                         continue
                     sequence,frame = item
@@ -99,8 +100,9 @@ class CropCollector(SampledFrames):
                         self.bytes_used += size
                         self.peak_bytes = max(self.peak_bytes,self.bytes_used)
                         self.condition.notify_all()
-        except Exception:
+        except Exception as exc:
             self.failed = True
+            self.failure_code = type(exc).__name__
         finally:
             with self.condition:
                 self.finished = True

@@ -43,15 +43,21 @@ def _decode(url: str, *, transport: str, headers: dict[str, str] | None = None) 
         raise OSError("Video decoding interrupted or unavailable") from None
 
 
-def read_camera(config: Config, camera: Camera, *, stop=None) -> Iterator[tuple[str, VideoFrame]]:
+def read_camera(config: Config, camera: Camera, *, stop=None, retry_limit=None) -> Iterator[tuple[str, VideoFrame]]:
     """Prefer local relay if configured; else try RTSP then HLS, with bounded backoff."""
     rtsp, hls = source_urls(camera)
     rtsp = rtsp_access_url(config, rtsp)
     sources = [(config.media_relay_base_url + "/" + camera.camera_id, "rtsp")] if config.media_relay_base_url else [
         (url, transport) for url, transport in ((rtsp, "rtsp"), (hls, "hls")) if url
     ]
+    if not sources:
+        return
     backoff = 2
+    failures = 0
+    if retry_limit is not None and not 1 <= retry_limit <= 10:
+        raise ValueError('Invalid temporary source retry limit')
     while stop is None or not stop.is_set():
+        delivered = False
         for url, transport in sources:
             if stop is not None and stop.is_set():
                 return
@@ -59,12 +65,16 @@ def read_camera(config: Config, camera: Camera, *, stop=None) -> Iterator[tuple[
                 headers = hls_headers(config, url) if transport == "hls" else None
                 for frame in _decode(url, transport=transport, headers=headers):
                     backoff = 2
+                    delivered = True
                     yield transport, frame
             except (OSError, ValueError, RuntimeError):
                 # Never log URLs: RTSP userinfo and HLS headers contain credentials.
                 if transport == "hls":
                     portal_session(config).invalidate()
                 continue
+        failures = 0 if delivered else failures + 1
+        if retry_limit is not None and failures >= retry_limit:
+            return
         if stop is not None:
             stop.wait(backoff)
         else:

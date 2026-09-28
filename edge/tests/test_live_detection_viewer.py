@@ -86,6 +86,32 @@ class LiveViewerTests(unittest.TestCase):
         state.publish({'camera_id': 'cam01', 'frame': 'stale'}, old)
         self.assertNotIn('frame', state.snapshot())
 
+    def test_stale_live_frame_is_unavailable_and_private_evidence_is_cleared(self):
+        clock = [1.]
+        state = LiveState(clock=lambda:clock[0]); state.select('cam01')
+        state.publish({'camera_id':'cam01','status':'live','published_at':1.,
+                       'frame':'pixels','debug':{'tracks':['private']}})
+        clock[0] = 7.
+        snapshot = state.snapshot(engineering=True)
+        self.assertEqual(snapshot['status'],'unavailable')
+        self.assertNotIn('frame',snapshot)
+        self.assertNotIn('debug',snapshot)
+
+    def test_temporary_relay_reader_stops_after_bounded_failures(self):
+        from sentinel_edge.stream import read_camera
+        from sentinel_edge.cameras import Camera
+        config = SimpleNamespace(media_relay_base_url='rtsp://mediamtx:8554')
+        stop = SimpleNamespace(is_set=lambda:False,wait=lambda seconds:None)
+        with patch('sentinel_edge.stream._decode',side_effect=OSError('relay down')) as decode:
+            self.assertEqual(list(read_camera(config,Camera('cam01','Bridge'),stop=stop,retry_limit=3)),[])
+        self.assertEqual(decode.call_count,3)
+
+    def test_reader_with_no_urls_does_not_loop_forever(self):
+        from sentinel_edge.stream import read_camera
+        from sentinel_edge.cameras import Camera
+        config = SimpleNamespace(media_relay_base_url='')
+        self.assertEqual(list(read_camera(config,Camera('cam01','Bridge'))),[])
+
     def test_native_crop_is_encoded_before_overlay_and_text_is_masked(self):
         import numpy as np
         from sentinel_edge.live_detection_viewer import observe
@@ -132,12 +158,12 @@ class LiveViewerTests(unittest.TestCase):
         class Config:
             media_relay_base_url: str = 'rtsp://mediamtx:8554'
         attempts = []
-        def read(config, camera, stop):
-            attempts.append(config.media_relay_base_url)
+        def read(config, camera, stop, retry_limit):
+            attempts.append((config.media_relay_base_url,retry_limit))
             return iter([] if config.media_relay_base_url else [('rtsp', 'native frame')])
         with patch('sentinel_edge.stream.read_camera', side_effect=read):
             self.assertEqual(list(viewer_frames(Config(), None, threading.Event())), [('rtsp', 'native frame')])
-        self.assertEqual(attempts, ['rtsp://mediamtx:8554', ''])
+        self.assertEqual(attempts, [('rtsp://mediamtx:8554',3), ('',None)])
         with patch('sentinel_edge.stream.read_camera', return_value=iter([])):
             with self.assertRaises(TimeoutError):
                 list(viewer_frames(Config(), None, threading.Event()))
