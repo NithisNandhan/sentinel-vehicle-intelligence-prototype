@@ -104,6 +104,8 @@ def main():
     parser.add_argument('--root', default='.')
     parser.add_argument('--assets', required=True, action='append')
     parser.add_argument('--tag', required=True)
+    parser.add_argument('--release-id', type=int,
+                        help='Resume a known draft even when GitHub gives it an untagged placeholder.')
     parser.add_argument('--target', required=True)
     parser.add_argument('--notes', required=True)
     parser.add_argument('--publish', action='store_true')
@@ -136,7 +138,10 @@ def main():
         raise ValueError('Incomplete staging cannot publish a release')
     if actual != expected and not args.stage_completed:
         raise ValueError('Archive inventory is incomplete; unfinished parts cannot be published')
-    release = find_release(github, args.tag)
+    release = (github.request('GET', f'/releases/{args.release_id}')
+               if args.release_id else find_release(github, args.tag))
+    if args.release_id and (not release or release['name'] != 'Complete teammate handoff — 7 October 2026'):
+        raise ValueError('Release ID does not identify the authorised handoff')
     if args.reset_unfinished_draft_parts:
         if not release or not release['draft'] or args.publish:
             raise ValueError('Recovery is restricted to the unpublished handoff draft')
@@ -155,7 +160,8 @@ def main():
             'body': Path(args.notes).read_text(encoding='utf-8')})
     elif release['draft']:
         release = github.request('PATCH', f'/releases/{release["id"]}', {
-            'target_commitish': args.target, 'body': Path(args.notes).read_text(encoding='utf-8')})
+            'tag_name': args.tag, 'target_commitish': args.target,
+            'body': Path(args.notes).read_text(encoding='utf-8')})
     uploaded = {}
     page = 1
     while True:
@@ -199,9 +205,11 @@ def main():
     with ThreadPoolExecutor(max_workers=max(1, min(args.workers, 4))) as executor:
         list(executor.map(publish_file, files))
     if args.publish:
-        github.request('PATCH', f'/releases/{release["id"]}', {'draft': False})
+        release = github.request('PATCH', f'/releases/{release["id"]}', {
+            'draft': False, 'tag_name': args.tag, 'target_commitish': args.target})
     print(json.dumps({'release': release['html_url'], 'files': len(files),
-                      'published': args.publish, 'target_commit': args.target}), flush=True)
+                      'published': args.publish, 'target_commit': args.target,
+                      'release_id': release['id']}), flush=True)
 
 
 if __name__ == '__main__':
