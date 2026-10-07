@@ -56,6 +56,18 @@ def find_release(github, tag):
         page += 1
 
 
+def recover_starter_assets(github, release, uploaded, eligible_names):
+    """Remove only zero-byte failed uploads, never a completed release asset."""
+    if not release.get('draft'):
+        raise ValueError('Failed upload recovery requires an unpublished draft')
+    for name, asset in list(uploaded.items()):
+        if (name in eligible_names and asset.get('state') == 'starter'
+                and asset.get('size') == 0 and not asset.get('digest')):
+            github.request('DELETE', f'/releases/assets/{asset["id"]}')
+            del uploaded[name]
+            print(f'Removed zero-byte failed upload: {name}', flush=True)
+
+
 class GitHub:
     def __init__(self, token, repository):
         self.token, self.repository = token, repository
@@ -112,6 +124,8 @@ def main():
     parser.add_argument('--workers', type=int, default=3)
     parser.add_argument('--stage-completed', action='store_true',
                         help='Upload only closed completed parts to a draft while other exports run.')
+    parser.add_argument('--recover-starter-assets', action='store_true',
+                        help='Retry zero-byte failed uploads belonging to this unpublished handoff.')
     parser.add_argument('--reset-unfinished-draft-parts', action='store_true',
                         help='Remove only failed incomplete archive uploads from this draft, then exit.')
     args = parser.parse_args()
@@ -126,10 +140,14 @@ def main():
         raise ValueError('Target commit must already be pushed and match the requested SHA')
     # All archive manifests must exist before any partial archive can be uploaded.
     expected = set()
+    expected_hashes = {}
     for manifest_path in (p for directory in directories for p in directory.glob('*.manifest.json')):
         manifest = json.loads(manifest_path.read_text(encoding='utf-8'))
         for entry in manifest['parts']:
             expected.add(entry['name'])
+            if entry['name'] in expected_hashes:
+                raise ValueError(f'Duplicate part in manifests: {entry["name"]}')
+            expected_hashes[entry['name']] = entry['sha256']
             candidates = [directory / entry['name'] for directory in directories
                           if (directory / entry['name']).is_file()]
             if len(candidates) != 1:
@@ -189,8 +207,12 @@ def main():
                 unfinished.setdefault(group, []).append(path)
         incomplete = {parts[-1].name for parts in unfinished.values()}
         files = [path for path in files if path.name not in incomplete]
+    if args.recover_starter_assets and release['draft']:
+        recover_starter_assets(github, release, uploaded, {path.name for path in files})
     def publish_file(path):
         local_hash = sha256(path)
+        if path.name in expected_hashes and local_hash != expected_hashes[path.name]:
+            raise ValueError(f'Local archive differs from its manifest: {path.name}')
         existing = uploaded.get(path.name)
         if existing:
             if existing.get('size') != path.stat().st_size or existing.get('digest') != 'sha256:' + local_hash:

@@ -14,6 +14,7 @@ from pathlib import Path
 import handoff_archives as archives
 import handoff_events as events
 import publish_handoff_release as publisher
+import finish_handoff_upload as finisher
 
 
 class HandoffTests(unittest.TestCase):
@@ -125,6 +126,32 @@ class HandoffTests(unittest.TestCase):
         response.__exit__ = Mock(return_value=False)
         with patch.object(publisher.urllib.request, 'urlopen', return_value=response):
             self.assertEqual(publisher.GitHub('test-token', 'owner/repo').request('DELETE', '/test'), {})
+
+    def test_recovery_only_deletes_eligible_zero_byte_starter(self):
+        github = Mock()
+        uploaded = {
+            'failed.part001': {'id': 1, 'state': 'starter', 'size': 0, 'digest': None},
+            'valid.part001': {'id': 2, 'state': 'uploaded', 'size': 100, 'digest': 'sha256:ok'},
+            'other.part001': {'id': 3, 'state': 'starter', 'size': 0, 'digest': None},
+            'nonempty.part001': {'id': 4, 'state': 'starter', 'size': 100, 'digest': None},
+        }
+        with contextlib.redirect_stdout(io.StringIO()):
+            publisher.recover_starter_assets(github, {'draft': True}, uploaded,
+                                            {'failed.part001', 'valid.part001', 'nonempty.part001'})
+        github.request.assert_called_once_with('DELETE', '/releases/assets/1')
+        self.assertEqual(set(uploaded), {'valid.part001', 'other.part001', 'nonempty.part001'})
+
+    def test_recovery_refuses_published_release(self):
+        with self.assertRaisesRegex(ValueError, 'unpublished draft'):
+            publisher.recover_starter_assets(Mock(), {'draft': False}, {}, set())
+
+    def test_finish_requires_every_bundle_manifest(self):
+        self.output.mkdir()
+        for name in finisher.REQUIRED_BUNDLES - {'benchmark-data'}:
+            (self.output / f'{name}.manifest.json').write_text('{}')
+        self.assertFalse(finisher.complete_inventory([self.output]))
+        (self.output / 'benchmark-data.manifest.json').write_text('{}')
+        self.assertTrue(finisher.complete_inventory([self.output]))
 
     def test_outbox_restore_refuses_overwrite(self):
         source = self.source / 'queue.sqlite3'

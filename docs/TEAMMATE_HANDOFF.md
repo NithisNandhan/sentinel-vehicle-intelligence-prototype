@@ -174,7 +174,7 @@ change to the acceptance threshold.
 
 Before this handoff: edge regression suite 287 passed, 1 optional test skipped;
 central API 53 passed; frontend 15 passed and production build succeeded;
-handoff tool tests 10 passed. The handoff tests cover multipart restoration,
+handoff tool tests 13 passed. The handoff tests cover multipart restoration,
 byte-identical resumption, corruption, non-overwrite, safe
 extraction and SQLite snapshot redaction. See release metadata for asset hashes.
 
@@ -182,3 +182,20 @@ The publishing tools never print GitHub credentials, publish only to the existin
 private repository, verify upload hashes, and do not force-push. `.env`, assistant
 state, Docker registry credentials and original authenticated URLs are excluded.
 Files/media from genuine Sentinel feeds were not retained and cannot be supplied.
+
+### Interrupted release upload recovery (owner only)
+
+`tools/finish_handoff_upload.py` resumes the existing private draft, skips
+checksum-verified assets, and retries transport failures up to five times.
+It removes only zero-byte `starter` uploads for eligible local assets in that
+unpublished draft; completed assets are never overwritten. It stops on integrity
+errors. All six bundle manifests must exist before it can publish.
+
+The owner runs it after starting the task-owned benchmark exporter, supplying
+the two staging directories, pushed commit SHA, existing release ID and an
+ignored `data/` status-file path. It is not needed by the receiving teammate.
+Run only one uploader at a time. Inspect its status JSON and stdout/stderr logs;
+`published` means publication finished, not merely that the process started.
+The laptop must remain awake and connected, and Docker must stay running until
+the benchmark export completes. This helper does not change power settings,
+stop the application's services or include credentials in the handoff.
