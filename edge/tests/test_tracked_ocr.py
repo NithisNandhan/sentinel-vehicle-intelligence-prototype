@@ -88,6 +88,31 @@ class TrackedOCRTests(unittest.TestCase):
         self.assertEqual(len(engine.histories),3)
         self.assertEqual(len({id(s.reader) for s in engine.histories.values()}),3)
 
+    def test_default_search_visits_every_eligible_track_without_three_roi_cap(self):
+        engine = self.engine()
+        tracks = [VehicleTrack(str(i),(0,0,180,60),2) for i in range(10)]
+        with patch('sentinel_edge.tracked_ocr.crop_quality',return_value=.9):
+            displays = engine.process(self.image(1),tracks,0)
+        self.assertEqual(len(displays),10)
+        self.assertEqual(engine.metrics['eligible_vehicle_tracks'],10)
+        self.assertEqual(engine.metrics['plate_roi_searches'],10)
+        self.assertEqual(engine.metrics['plate_roi_unsearched_tracks'],0)
+        self.assertEqual(len(self.crops),10)
+
+    def test_debug_track_list_includes_every_active_track(self):
+        from sentinel_edge.tracked_ocr import MAX_TRACK_HISTORIES
+        engine = TrackedOCR(SimpleNamespace(tokens=TOKENS,probabilities=posterior),
+            SimpleNamespace(box=lambda image:(5,5,150,35)),debug=True)
+        tracks = [VehicleTrack(str(i),(0,0,180,60),2) for i in range(20)]
+        with patch('sentinel_edge.tracked_ocr.crop_quality',return_value=.9), patch(
+                'sentinel_edge.recognition_debug.describe_track',
+                side_effect=lambda key,state,samples,threshold:{'track_id':key}):
+            engine.process(self.image(1),tracks,0)
+            snapshot = engine.debug_snapshot()
+        self.assertEqual(len(snapshot['tracks']),20)
+        self.assertEqual(snapshot['roi_budget'],'all eligible tracks')
+        self.assertEqual(snapshot['track_history_capacity'],MAX_TRACK_HISTORIES)
+
     def test_frame_cache_saves_computation_not_temporal_evidence(self):
         first = self.engine(); second = self.engine()
         cache = {}
@@ -140,6 +165,25 @@ class TrackedOCRTests(unittest.TestCase):
 
 
 class DetectorContractTests(unittest.TestCase):
+    def test_vehicle_boxes_without_bytetrack_ids_are_retained_with_local_association(self):
+        def detection(box,identity=None):
+            coordinate = SimpleNamespace(cpu=lambda:SimpleNamespace(tolist=lambda:box))
+            return SimpleNamespace(cls=SimpleNamespace(item=lambda:2),id=identity,xyxy=[coordinate])
+        class Boxes(list):
+            id = None
+        results = iter([
+            SimpleNamespace(boxes=Boxes([detection([0,0,80,80]),detection([100,0,180,80])])),
+            SimpleNamespace(boxes=Boxes([detection([5,0,85,80]),detection([105,0,185,80])])),
+        ])
+        model = VehicleTracker.__new__(VehicleTracker)
+        model.name='yolov8n'
+        model.model=SimpleNamespace(track=lambda *args,**kwargs:[next(results)])
+        first = model.track(np.zeros((100,200,3),np.uint8))
+        second = model.track(np.zeros((100,200,3),np.uint8))
+        self.assertEqual(len(first),2)
+        self.assertEqual({track.track_id for track in first},{track.track_id for track in second})
+        self.assertTrue(all(track.track_id.startswith('det-') for track in first))
+
     def test_tampered_assets_fail_before_loading(self):
         with tempfile.TemporaryDirectory() as directory:
             path = Path(directory)/'model'

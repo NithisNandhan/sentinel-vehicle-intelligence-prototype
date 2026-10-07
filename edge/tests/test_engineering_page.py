@@ -7,6 +7,13 @@ from sentinel_edge.engineering_page import engineering_page
 
 
 class EngineeringPageTests(unittest.TestCase):
+    def test_page_exposes_all_track_search_policy_and_live_coverage_counters(self):
+        page = engineering_page('test-token')
+        self.assertIn("debug.roi_budget==='all eligible tracks'",page)
+        self.assertIn('plate_roi_searches',page)
+        self.assertIn('plate_roi_unsearched_tracks',page)
+        self.assertIn("Array.isArray(debug.tracks)?debug.tracks:[]",page)
+
     def test_token_cannot_close_script_and_profile_is_escaped(self):
         page = engineering_page('</script><img src=x onerror=alert(1)>', 'general<script>')
         self.assertNotIn('</script><img', page)

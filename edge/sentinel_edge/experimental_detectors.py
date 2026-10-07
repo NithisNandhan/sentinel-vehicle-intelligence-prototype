@@ -5,6 +5,7 @@ import json
 from pathlib import Path
 
 from .detector_comparison import PlateModel, decode_yolo11, letterbox
+from .vision import associate_vehicle_tracks
 
 PROFILES = {
     'legacy': ('yolov8n', 'parent'),
@@ -53,26 +54,38 @@ class VehicleTracker:
         expected = set(range(13)) if name == 'bmd' else set(range(80))
         if set(self.model.names) != expected:
             raise ValueError('Vehicle taxonomy changed; refuse incompatible class filtering')
+        self.frame_index = 0
+        self.next_detection_id = 0
+        self.previous_tracks = {}
 
     def reset(self):
+        self.frame_index = 0
+        self.previous_tracks.clear()
         predictor = getattr(self.model, 'predictor', None)
         for tracker in getattr(predictor, 'trackers', ()):
             tracker.reset()
 
     def track(self, image):
+        self.frame_index = getattr(self,'frame_index',0)+1
+        if not hasattr(self,'previous_tracks'):
+            self.previous_tracks = {}
+        if not hasattr(self,'next_detection_id'):
+            self.next_detection_id = 0
         classes = list(BMD_TO_COCO) if self.name == 'bmd' else list(COCO_CLASSES)
         result = self.model.track(image, persist=True, tracker='bytetrack.yaml',
             imgsz=640, classes=classes, device='cpu', conf=.25, iou=.45,
             verbose=False, save=False)[0]
-        if result.boxes is None or result.boxes.id is None:
-            return []
-        tracks = []
-        for item in result.boxes:
+        detections = []
+        for item in (result.boxes if result.boxes is not None else ()):
             cls = int(item.cls.item())
             coarse = BMD_TO_COCO[cls] if self.name == 'bmd' else cls
             coords = tuple(int(v) for v in item.xyxy[0].cpu().tolist())
-            tracks.append(VehicleTrack(str(int(item.id.item())), coords, coarse))
-        return tracks
+            identity = getattr(item,'id',None)
+            detections.append((str(int(identity.item())) if identity is not None else None,
+                               coords,coarse))
+        tracks,self.previous_tracks,self.next_detection_id = associate_vehicle_tracks(
+            detections,self.previous_tracks,self.frame_index,self.next_detection_id)
+        return [VehicleTrack(track_id,coords,coarse) for track_id,coords,coarse in tracks]
 
 
 class PlateDetector:

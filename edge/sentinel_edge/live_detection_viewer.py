@@ -105,8 +105,12 @@ def crop_box(image, box):
     return image[y1:y2, x1:x2].copy() if x2 > x1 and y2 > y1 else None
 
 
-def roi_schedule(count, offset, budget=3):
-    return [(offset + i) % count for i in range(min(count, budget))] if count else []
+def roi_schedule(count, offset, budget=None):
+    """Choose eligible vehicle regions; None means search every region this frame."""
+    if not count:
+        return []
+    limit = count if budget is None else min(count, budget)
+    return [(offset + i) % count for i in range(limit)]
 
 
 def detect_regions(image, vehicle_model, detector, *, roi_offset=0):
@@ -327,7 +331,7 @@ h1{margin:6px 0 10px;font-size:30px}.eyebrow{color:#63dbc0;font-size:12px;letter
 <div id="message">Choose a camera to begin. Nothing is recorded.</div><div class="grid"><section class="panel video"><img id="frame" alt="Selected live camera with aligned detection boxes" hidden><p id="empty">Waiting for a selected camera</p></section>
 <aside class="panel"><h2>Last native plate crop</h2><div class="crop"><img id="crop" alt="Last detected plate crop, native pixels" hidden><span id="nocrop" class="muted">No plate crop yet</span></div>
 <p id="cropinfo" class="muted"></p><p id="ocr">No OCR observations yet.</p><dl><dt>Native resolution</dt><dd id="resolution">—</dd><dt>Frames decoded</dt><dd id="decoded">0</dd><dt>Frames analysed</dt><dd id="analysed">0</dd><dt>Plate crops</dt><dd id="plates">0</dd><dt>Vehicle boxes now (all)</dt><dd id="vehicles">0</dd><dt>Peak vehicle boxes</dt><dd id="peak">0</dd><dt>Max distinct plate frames</dt><dd id="observations">0</dd><dt>Candidate windows</dt><dd id="candidates">0</dd><dt>Accepted identifiers (unverified)</dt><dd id="accepted">0</dd><dt>Processing</dt><dd id="timing">—</dd><dt>Frame age</dt><dd id="age">—</dd></dl>
-<p class="note muted">All returned vehicle boxes are drawn. Plate search rotates through at most three vehicle crops per frame, with at most one plate passed to OCR. Fine-tuned OCR + distinct-frame CTC fusion. Plate association here uses conservative box overlap, not the full production tracker. A model-accepted reading is not proof of correctness. OCR output is masked. The crop is lossless PNG; display enlargement adds no information. Full-frame display uses JPEG.</p></aside></div>
+<p class="note muted">All vehicle boxes returned by the detector are drawn. This older no-profile mode searches the full frame, then each detected vehicle crop until the first plate proposal; at most one plate is passed to its OCR history per sample. The tracked profile uses ByteTrack vehicle IDs, searches every eligible tracked vehicle crop and keeps independent OCR histories. In either mode, missed vehicle detections and low-quality plates remain possible. Fine-tuned OCR + distinct-frame CTC fusion. A model-accepted reading is not proof of correctness. OCR output is masked. The crop is lossless PNG; display enlargement adds no information. Full-frame display uses JPEG.</p></aside></div>
 <p class="note muted">No recording, downloads, saved plate text or central alerts. Images stay in server/browser memory. One camera at a time. Pauses after 60 seconds without a browser heartbeat; lab shuts down after 30 minutes.</p></main>
 <script>
 const token=__TOKEN__, $=id=>document.getElementById(id);let camera=null,busy=false,sessionError='';

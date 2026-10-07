@@ -53,7 +53,7 @@ def run(config, cache, checkpoint, camera_ids, seconds, report):
                     'sequential': True, 'requested_seconds_per_camera': seconds,
                     'recordings_saved': False, 'plaintext_plates_saved': False, 'central_writes': False,
                     'ground_truth_available': False, 'accuracy': None,
-                    'caveat': 'One plate proposal per frame; ROI search budget rotates over all displayed vehicles. Counts are not unique verified vehicles or plates.',
+                    'caveat': 'Legacy path returns at most one plate proposal per frame; tracked viewer searches every eligible tracked vehicle ROI. Counts are not unique verified vehicles or plates.',
                     'cameras': results}
         report.write_text(json.dumps(document, indent=2))
         print(json.dumps(result), flush=True)

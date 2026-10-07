@@ -470,7 +470,7 @@ class VisionTests(unittest.TestCase):
             def __getitem__(self, _):
                 return self
         class Box:
-            id = SimpleNamespace(item=lambda: 7)
+            id = None
             xyxy = [SimpleNamespace(tolist=lambda: [0, 0, 200, 100])]
         class Blur:
             def var(self):
@@ -483,7 +483,7 @@ class VisionTests(unittest.TestCase):
             def Laplacian(self, image, _):
                 return Blur()
         class Boxes:
-            id = True
+            id = None
             def __iter__(self):
                 return iter([Box()])
         class TrackingModel:
@@ -501,10 +501,12 @@ class VisionTests(unittest.TestCase):
         vision.tracks = {}
         vision.last_plate_seen = {}
         self.assertEqual(vision.process(Image()), [])
+        self.assertIn('det-1',vision.tracks)
         result = vision.process(Image())
         self.assertEqual(len(result), 1)
         self.assertEqual(result[0].plate, "GJ01AB1234")
         self.assertEqual(vision.process(Image()), [])
+        self.assertEqual(vision.metrics['vehicle_boxes'],3)
 
 
 if __name__ == "__main__":

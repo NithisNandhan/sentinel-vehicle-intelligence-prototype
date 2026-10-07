@@ -135,7 +135,8 @@ function renderStageTimes(debug){
   const maximum=Math.max(1,...values.map(name=>typeof times[name]==='number'&&Number.isFinite(times[name])?Math.max(0,times[name]):0));
   for(const name of values){const row=node('div','stagebar');row.append(node('span',null,name==='ocr'?'OCR':name.charAt(0).toUpperCase()+name.slice(1)));const track=node('div','bartrack');const fill=node('div','barfill');
     const measured=times[name];fill.style.width=(typeof measured==='number'&&Number.isFinite(measured)?Math.max(0,Math.min(100,measured/maximum*100)):0)+'%';track.append(fill);row.append(track,node('span','time',safeNumber(measured,1)+' ms'));$('stage-bars').append(row);}
-  text('roi-budget','ROI budget '+safeNumber(debug.roi_budget));
+  const policy=debug.roi_budget==='all eligible tracks'?'all eligible tracked vehicles':('limited to '+safeNumber(debug.roi_budget)+' per sample');
+  text('roi-budget','Plate search: '+policy+' · '+safeNumber(debug.plate_roi_searches)+' searches · '+safeNumber(debug.plate_roi_unsearched_tracks)+' unsearched');
   if(!$('collection-status'))return;
   text('collection-status','Collected native crops: '+safeNumber(debug.collected_native_crops)+' · sampled views: '+safeNumber(debug.sampled_frames)+' · full-image fallback: '+safeNumber(debug.full_image_recovered_crops)+'/'+safeNumber(debug.full_image_detector_calls)+' · adaptive sampling: '+(debug.adaptive_sampling_enabled?'on':'off')+' · detector queue drops: '+safeNumber(debug.collector_input_drops)+' · OCR queue drops: '+safeNumber(debug.dropped_sampled_frames)+' · crop queue peak: '+safeNumber(typeof debug.decode_queue_peak_bytes==='number'?debug.decode_queue_peak_bytes/(1024*1024):null,1)+' MiB. Decode, vehicle/plate collection and OCR run in separate bounded stages. Video timing uses PTS; display age includes queue waiting.');
 }
@@ -164,7 +165,7 @@ function render(snapshot){
   if(!paintFrame())return;
   text('message','Live evidence · hypotheses are unverified · full text stays in this protected local view.');text('connection-label','Live inspection');$('connection-state').className='pill live';
   const debug=snapshot.debug&&typeof snapshot.debug==='object'?snapshot.debug:{};renderStageTimes(debug);
-  const tracks=Array.isArray(debug.tracks)?debug.tracks.slice(0,128):[];
+  const tracks=Array.isArray(debug.tracks)?debug.tracks:[];
   if(!tracks.some(track=>String(track.track_id)===selectedTrack)){selectedTrack=tracks.length?String(tracks[0].track_id):null;expanded=false;}
   $('track-list').replaceChildren();text('track-count',tracks.length+' tracks');
   for(const track of tracks){const id=String(track.track_id);const button=node('button','trackbutton'+(id===selectedTrack?' selected':''),'Track '+id);

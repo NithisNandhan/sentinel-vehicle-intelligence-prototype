@@ -92,6 +92,22 @@ class QualityBankTests(unittest.TestCase):
 
 
 class CollectorTests(unittest.TestCase):
+    def test_default_collector_searches_every_eligible_vehicle(self):
+        parent = threading.Event()
+        image = np.zeros((100,1000,3),np.uint8)
+        tracks = [VehicleTrack(str(i),(i*90,0,i*90+80,90),2) for i in range(10)]
+        vehicle = SimpleNamespace(reset=lambda:None,track=lambda frame:tracks)
+        calls = []
+        detector = SimpleNamespace(box=lambda region:calls.append(region.shape) or None)
+        with CropCollector(iter([('rtsp',VideoFrame(image,0,False))]),parent,vehicle,detector) as collector:
+            collector.thread.join(2)
+            self.assertFalse(collector.failed)
+            self.assertEqual(len(calls),10)
+            self.assertEqual(collector.roi_searches,10)
+            self.assertEqual(collector.roi_unsearched_tracks,0)
+            packet = collector.take(0)[1]
+            self.assertEqual(set(packet.plate_cache),{str(i) for i in range(10)})
+
     def test_adaptive_sampling_uses_faster_cadence_only_near_vehicle(self):
         parent = threading.Event()
         frames = [('rtsp', VideoFrame(np.full((60,180,3),i,np.uint8),i*250,False)) for i in range(5)]

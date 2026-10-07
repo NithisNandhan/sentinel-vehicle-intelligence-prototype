@@ -53,12 +53,19 @@ and retried by the viewer, rather than reusing stale frames as fresh evidence.
   at .25 confidence and 640 inference setting. There is no three-box display
   cap. General/legacy profiles include bicycles, cars, motorcycles, buses and
   trucks; the BMD profile explicitly maps its 13 classes to coarse families.
-  This does not mean every visible vehicle is detected.
+  Boxes lacking a ByteTrack ID are now retained and conservatively linked to a
+  recent same-class box by overlap, or given a detection-only ID. This avoids
+  discarding a box merely because tracking did not assign an ID. It does not
+  mean every visible vehicle is detected; detector confidence/resolution remain
+  unchanged and must be evaluated against labelled footage.
 - Yellow boxes: the highest-confidence plate proposal in each searched native
-  vehicle region. At most three vehicle ROIs are searched per sampled frame,
-  rotating across eligible tracks. Each track has its own OCR history. Proposals
-  may be false positives and are not human-verified plate labels. The older
-  no-profile diagnostic instead searches full-frame first and selects one plate.
+  vehicle region. The tracked profile now searches every eligible vehicle ROI
+  on each analyzed sample; it no longer has a three-ROI-per-frame cap. Each
+  track has its own OCR history, with a bounded 512-track history limit. Search
+  work rises with scene density, and bounded queues can discard stale samples
+  under load; the viewer exposes queue drops and search counts. Proposals may be
+  false positives and are not human-verified plate labels. The older no-profile
+  diagnostic remains a single-plate OCR compatibility path.
 - The full image and boxes belong to the **same analysed frame**. Detection is
   sampled using PTS with a minimum 500 ms interval by default (250 ms near a
   tracked vehicle with `-PlateRecovery`). Detection/OCR speed can

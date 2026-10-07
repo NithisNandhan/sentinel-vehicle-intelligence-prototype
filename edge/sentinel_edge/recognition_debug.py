@@ -63,7 +63,7 @@ def describe_track(track_id, history, samples, threshold):
         reasons = [r for r in reasons if not r.startswith('Model gates passed')]
         reasons.append('Original and reconstructed OCR disagree; reading withheld')
     if not reader.observation_count:
-        reasons.insert(0, history.last_plate_failure or ('Vehicle ROI has not been searched in the rotating budget yet' if not history.searches else 'No distinct usable plate observation'))
+        reasons.insert(0, history.last_plate_failure or ('Vehicle ROI has not yet been searched' if not history.searches else 'No distinct usable plate observation'))
     return {'track_id': track_id, 'vehicle_box': history.box, 'vehicle_class': history.vehicle_class,
             'seen_pts_ms': history.seen_pts, 'observations': reader.observation_count,
             'recognition_state': 'model_accepted' if accepted else 'uncertain' if candidates else 'reading' if reader.observation_count < 3 else 'unreadable',

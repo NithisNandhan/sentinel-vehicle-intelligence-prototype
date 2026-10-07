@@ -38,8 +38,8 @@ Read-only inspection found these concrete limits in the diagnostic pipeline:
 
 - `tracked_live_viewer.py` samples at a minimum 500 ms source-PTS interval, so it analyses at most two frames per second, before processing overhead. This is not dense burst collection.
 - `experimental_detectors.py` runs vehicle detection at 640 input resolution on CPU. The adapted plate ONNX session explicitly uses CPU execution.
-- Vehicle results without a tracker ID are excluded from the downstream vehicle list. A visible vehicle can therefore be absent from plate processing even if a detection exists.
-- `tracked_ocr.py` defaults to three vehicle ROIs per analysed frame. This bounds compute but can leave crowded scenes poorly sampled.
+- Vehicle results without a tracker ID were excluded from the downstream vehicle list. On 2026-09-29, both production and diagnostic tracking were changed to retain those boxes and conservatively link them to a recent same-class box by overlap, or assign a detection-only ID.
+- At the time of this 2026-09-28 inspection, `tracked_ocr.py` defaulted to three vehicle ROIs per analysed frame. On 2026-09-29 the tracked prototype default was changed to search every eligible tracked vehicle on each analyzed sample. Neither change has yet been load-validated on live feeds; the detector threshold and 640-pixel inference size remain unchanged.
 - `reconstruction.py` preserves exact decoded native crops. Its bank retains up to eight crops per track with FIFO removal: it is not a best-quality-and-diversity selector.
 - The live reconstruction aligns working copies with ECC affine registration and fuses them at the reference crop dimensions. It is **not** a trained multi-frame super-resolution network. The live diagnostic explicitly reports `learned_restoration='not_run'`.
 - OCR and reconstruction run in the analysis path. Slow recognition limits how much fresh evidence that path can collect.

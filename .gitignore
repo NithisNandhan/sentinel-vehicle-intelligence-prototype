@@ -23,3 +23,11 @@ models/
 data/
 logs/
 
+# Local assistant state and handoff scratch files.
+.codex/
+*.ses
+/deliverables/_*/
+# Videos and model/data snapshots are published as GitHub release assets.
+/deliverables/*.mp4
+/deliverables/*.webm
+

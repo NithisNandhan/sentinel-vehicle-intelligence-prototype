@@ -1,5 +1,16 @@
 # Sentinel Vehicle Intelligence Prototype
 
+## Teammate handoff — 7 October 2026
+
+Start with [the complete handoff guide](docs/TEAMMATE_HANDOFF.md). The repository
+contains the current source, tests, documentation and submission artifacts.
+Fine-tuned models, runtime caches, training/benchmark data, saved central events,
+SQLite snapshots and demonstration videos are distributed as checksum-verified
+assets in the private [handoff release](https://github.com/NithisNandhan/sentinel-vehicle-intelligence-prototype/releases/tag/handoff-2026-10-07).
+**A repository ZIP alone does not include these large assets.** No credentials
+are included. The next development direction is permitted downloaded CCTV
+footage, not Sentinel live access; that adapter remains to be implemented.
+
 ## Two working interfaces
 
 Use `scripts/start-dual-interfaces.ps1` for the operator dashboard at

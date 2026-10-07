@@ -1,0 +1,260 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="3200" height="1880" viewBox="0 0 3200 1880" role="img" aria-labelledby="title desc">
+  <title id="title">Sentinel Gujarat prototype architecture</title>
+  <desc id="desc">A four-zone prototype architecture showing two selected live feeds, a production edge alert path, a separate opt-in engineering diagnostic path, central synthetic-watchlist matching, and operator review. Model acceptance is not ground-truth verification, live plate accuracy is unproven, and only two feeds are tested.</desc>
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#081321"/>
+      <stop offset="1" stop-color="#050a12"/>
+    </linearGradient>
+    <linearGradient id="header" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0" stop-color="#10243a"/>
+      <stop offset="1" stop-color="#0b1726"/>
+    </linearGradient>
+    <marker id="arrowCyan" markerWidth="12" markerHeight="12" refX="10" refY="6" orient="auto"><path d="M1 1 L11 6 L1 11 Z" fill="#55d9ef"/></marker>
+    <marker id="arrowGreen" markerWidth="12" markerHeight="12" refX="10" refY="6" orient="auto"><path d="M1 1 L11 6 L1 11 Z" fill="#35d39a"/></marker>
+    <marker id="arrowViolet" markerWidth="12" markerHeight="12" refX="10" refY="6" orient="auto"><path d="M1 1 L11 6 L1 11 Z" fill="#a78bfa"/></marker>
+    <marker id="arrowAmber" markerWidth="12" markerHeight="12" refX="10" refY="6" orient="auto"><path d="M1 1 L11 6 L1 11 Z" fill="#f5b942"/></marker>
+    <style>
+      text { font-family: Arial, Helvetica, sans-serif; fill: #e9f1fa; }
+      .title { font-size: 49px; font-weight: 700; letter-spacing: 1.6px; }
+      .subtitle { font-size: 25px; fill: #92dff0; letter-spacing: .4px; }
+      .status { font-size: 19px; fill: #a9bbd0; letter-spacing: .7px; }
+      .zone { fill: #08111d; stroke: #233d5a; stroke-width: 2; rx: 20; }
+      .zoneHead { fill: url(#header); stroke: #284767; stroke-width: 2; rx: 15; }
+      .zoneTitle { font-size: 25px; font-weight: 700; letter-spacing: 1px; }
+      .zoneNum { font-size: 20px; font-weight: 700; fill: #55d9ef; }
+      .card { fill: #0d1a2a; stroke: #31516f; stroke-width: 2; rx: 15; }
+      .cardCyan { fill: #0c2232; stroke: #49cfe4; stroke-width: 2.5; rx: 15; }
+      .cardViolet { fill: #17152c; stroke: #9f85f5; stroke-width: 2.5; rx: 15; }
+      .cardGreen { fill: #0c241f; stroke: #35d39a; stroke-width: 2.5; rx: 15; }
+      .cardAmber { fill: #281f11; stroke: #f5b942; stroke-width: 2.5; rx: 15; }
+      .cardRose { fill: #271722; stroke: #e879b9; stroke-width: 2.5; rx: 15; }
+      .cardRed { fill: #2a1718; stroke: #f87171; stroke-width: 2.5; rx: 15; }
+      .label { font-size: 22px; font-weight: 700; }
+      .body { font-size: 19px; fill: #d5e1ee; }
+      .small { font-size: 17px; fill: #b4c4d6; }
+      .tiny { font-size: 15px; fill: #a9bbd0; }
+      .green { fill: #53e0aa; }
+      .amber { fill: #ffd36f; }
+      .violet { fill: #c0adff; }
+      .rose { fill: #f49bd0; }
+      .muted { fill: #9bacc0; }
+      .lineCyan { fill: none; stroke: #55d9ef; stroke-width: 4; marker-end: url(#arrowCyan); }
+      .lineGreen { fill: none; stroke: #35d39a; stroke-width: 4; marker-end: url(#arrowGreen); }
+      .lineViolet { fill: none; stroke: #a78bfa; stroke-width: 3; stroke-dasharray: 10 8; marker-end: url(#arrowViolet); }
+      .lineAmber { fill: none; stroke: #f5b942; stroke-width: 3; stroke-dasharray: 10 8; marker-end: url(#arrowAmber); }
+      .divider { stroke: #27405b; stroke-width: 2; stroke-dasharray: 6 8; }
+    </style>
+  </defs>
+  <rect width="3200" height="1880" fill="url(#bg)"/>
+
+  <text x="1600" y="67" text-anchor="middle" class="title">SENTINEL GUJARAT — PROTOTYPE ARCHITECTURE</text>
+  <text x="1600" y="113" text-anchor="middle" class="subtitle">Selected live feeds → edge inference → gate-accepted candidate metadata → central matching → operator review</text>
+  <text x="3160" y="151" text-anchor="end" class="status">TWO-FEED PROTOTYPE · LIVE ACCURACY AND REGIONAL CAPACITY UNPROVEN</text>
+
+  <!-- Zone 1: authorised media -->
+  <rect x="40" y="175" width="450" height="1360" class="zone"/>
+  <rect x="55" y="190" width="420" height="70" class="zoneHead"/>
+  <text x="76" y="235" class="zoneNum">1</text>
+  <text x="116" y="235" class="zoneTitle">AUTHORISED FEEDS</text>
+
+  <rect x="70" y="292" width="390" height="170" class="cardCyan"/>
+  <text x="265" y="333" text-anchor="middle" class="label">AI-PROCESSED FEEDS</text>
+  <text x="265" y="380" text-anchor="middle" class="body">CAM17 · stationary scene</text>
+  <text x="265" y="418" text-anchor="middle" class="body">CAM01 · moving traffic</text>
+
+  <rect x="70" y="490" width="390" height="175" class="card"/>
+  <text x="265" y="531" text-anchor="middle" class="label">AUTHORISED CATALOGUE</text>
+  <text x="265" y="572" text-anchor="middle" class="body">Other cameras may be searched</text>
+  <text x="265" y="610" text-anchor="middle" class="small">Preview only; does not add AI workload</text>
+  <text x="265" y="642" text-anchor="middle" class="small">Catalogue access can be unavailable</text>
+
+  <rect x="70" y="694" width="390" height="190" class="cardCyan"/>
+  <text x="265" y="737" text-anchor="middle" class="label">STREAM ACCESS</text>
+  <text x="265" y="781" text-anchor="middle" class="body">RTSP over TCP first</text>
+  <text x="265" y="819" text-anchor="middle" class="body">HLS fallback when needed</text>
+  <text x="265" y="857" text-anchor="middle" class="small">Credentials stay in the local gateway</text>
+
+  <rect x="70" y="918" width="390" height="180" class="card"/>
+  <text x="265" y="961" text-anchor="middle" class="label">LIVE VIDEO IS NOT ARCHIVED</text>
+  <text x="265" y="1005" text-anchor="middle" class="body">Decode continuously; sample by PTS</text>
+  <text x="265" y="1043" text-anchor="middle" class="small">No central recording or footage download</text>
+  <text x="265" y="1075" text-anchor="middle" class="small">Only two streams feed the AI workers</text>
+
+  <rect x="70" y="1132" width="390" height="155" class="cardAmber"/>
+  <text x="265" y="1174" text-anchor="middle" class="label amber">ON-DEMAND PREVIEW</text>
+  <text x="265" y="1217" text-anchor="middle" class="body">Separate MediaMTX video path</text>
+  <text x="265" y="1254" text-anchor="middle" class="small">Relayed live to an authorised viewer</text>
+
+  <!-- Zone 2: edge, two deliberately separate lanes -->
+  <rect x="510" y="175" width="1400" height="1360" class="zone"/>
+  <rect x="525" y="190" width="1370" height="70" class="zoneHead"/>
+  <text x="548" y="235" class="zoneNum">2</text>
+  <text x="588" y="235" class="zoneTitle">EDGE INTELLIGENCE — TWO DISTINCT MODEL PATHS</text>
+  <line x1="1200" y1="278" x2="1200" y2="1366" class="divider"/>
+
+  <text x="855" y="298" text-anchor="middle" class="label green">PRODUCTION ALERT WORKER</text>
+  <text x="855" y="327" text-anchor="middle" class="small">The current configured operational path</text>
+  <rect x="550" y="350" width="610" height="105" class="cardCyan"/>
+  <text x="855" y="389" text-anchor="middle" class="label">1 · DECODE + SAMPLE</text>
+  <text x="855" y="427" text-anchor="middle" class="body">FFmpeg/PyAV · video timestamps (PTS)</text>
+  <path d="M855 455 V472" class="lineViolet"/>
+  <rect x="550" y="482" width="610" height="112" class="cardViolet"/>
+  <text x="855" y="522" text-anchor="middle" class="label">2 · DETECT + TRACK VEHICLES</text>
+  <text x="855" y="562" text-anchor="middle" class="body">YOLOv8n · ByteTrack</text>
+  <path d="M855 594 V611" class="lineViolet"/>
+  <rect x="550" y="621" width="610" height="112" class="cardViolet"/>
+  <text x="855" y="661" text-anchor="middle" class="label">3 · LOCALISE + CROP PLATES</text>
+  <text x="855" y="701" text-anchor="middle" class="body">YOLOv9-Tiny-512 · native pixel crop</text>
+  <path d="M855 733 V750" class="lineViolet"/>
+  <rect x="550" y="760" width="610" height="135" class="cardViolet"/>
+  <text x="855" y="801" text-anchor="middle" class="label">4 · OCR + MULTI-FRAME FUSION</text>
+  <text x="855" y="841" text-anchor="middle" class="body">FastALPR CCT-S v2 · per-track evidence</text>
+  <text x="855" y="875" text-anchor="middle" class="small">Rule-based string fusion, not a temporal neural net</text>
+  <path d="M855 895 V912" class="lineViolet"/>
+  <rect x="550" y="922" width="610" height="120" class="cardAmber"/>
+  <text x="855" y="964" text-anchor="middle" class="label amber">5 · ACCEPTANCE GATE</text>
+  <text x="855" y="1004" text-anchor="middle" class="body">PASS means rules accepted a candidate</text>
+  <text x="855" y="1030" text-anchor="middle" class="small">It is not proof the plate is correct</text>
+  <path d="M735 1042 V1060 H690" class="lineGreen"/>
+  <path d="M975 1042 V1060 H1015" class="lineAmber"/>
+  <rect x="550" y="1073" width="285" height="120" class="cardGreen"/>
+  <text x="692" y="1114" text-anchor="middle" class="label green">PASS</text>
+  <text x="692" y="1151" text-anchor="middle" class="small">Mask + keyed ID</text>
+  <text x="692" y="1178" text-anchor="middle" class="small">SQLite outbox</text>
+  <rect x="875" y="1073" width="285" height="120" class="cardRed"/>
+  <text x="1017" y="1114" text-anchor="middle" class="label" fill="#fca5a5">ABSTAIN</text>
+  <text x="1017" y="1151" text-anchor="middle" class="small">No production event</text>
+  <text x="1017" y="1178" text-anchor="middle" class="small">Local diagnostic only</text>
+  <rect x="550" y="1221" width="610" height="112" class="card"/>
+  <text x="855" y="1263" text-anchor="middle" class="label">DELIVERY SCOPE</text>
+  <text x="855" y="1301" text-anchor="middle" class="body">Only gate-accepted, masked metadata</text>
+  <text x="855" y="1328" text-anchor="middle" class="small">No genuine crops or raw frames in event payload</text>
+
+  <text x="1550" y="298" text-anchor="middle" class="label violet">OPT-IN ENGINEERING CONSOLE</text>
+  <text x="1550" y="327" text-anchor="middle" class="small">Explicitly started on selected feed; separate from production</text>
+  <rect x="1230" y="350" width="640" height="126" class="cardViolet"/>
+  <text x="1550" y="393" text-anchor="middle" class="label">VEHICLE DETECTION + TRACKING</text>
+  <text x="1550" y="435" text-anchor="middle" class="body">General YOLO26s · ByteTrack</text>
+  <path d="M1550 476 V493" class="lineViolet"/>
+  <rect x="1230" y="503" width="640" height="126" class="cardViolet"/>
+  <text x="1550" y="546" text-anchor="middle" class="label">PLATE DETECTOR + OCR</text>
+  <text x="1550" y="588" text-anchor="middle" class="body">YOLOv9-Tiny · adapted Awiros CTC</text>
+  <path d="M1550 629 V646" class="lineViolet"/>
+  <rect x="1230" y="656" width="640" height="126" class="cardViolet"/>
+  <text x="1550" y="699" text-anchor="middle" class="label">CHECKED ECC ALIGNMENT + RECONSTRUCTION</text>
+  <text x="1550" y="741" text-anchor="middle" class="body">Conditional on enough crops · native grid · no extra votes</text>
+  <path d="M1550 782 V799" class="lineViolet"/>
+  <rect x="1230" y="809" width="640" height="155" class="card"/>
+  <text x="1550" y="852" text-anchor="middle" class="label">MODEL DEBUG OUTPUT</text>
+  <text x="1550" y="892" text-anchor="middle" class="body">Native crops · frame OCR · ranked hypotheses</text>
+  <text x="1550" y="929" text-anchor="middle" class="small">Scores are not calibrated probabilities</text>
+  <rect x="1230" y="986" width="640" height="168" class="cardAmber"/>
+  <text x="1550" y="1030" text-anchor="middle" class="label amber">DIAGNOSTIC BOUNDARY</text>
+  <text x="1550" y="1071" text-anchor="middle" class="body">Evidence stays in bounded local memory</text>
+  <text x="1550" y="1108" text-anchor="middle" class="small">An optional separate delivery mode may send only</text>
+  <text x="1550" y="1135" text-anchor="middle" class="small">accepted masked IDs, labelled unverified</text>
+  <rect x="1230" y="1176" width="640" height="157" class="cardRed"/>
+  <text x="1550" y="1220" text-anchor="middle" class="label" fill="#fca5a5">NOT A VERIFIED PLATE READING</text>
+  <text x="1550" y="1262" text-anchor="middle" class="body">A top candidate remains a hypothesis</text>
+  <text x="1550" y="1300" text-anchor="middle" class="small">No real-time accuracy claim is established</text>
+
+  <!-- Zone 3: central services -->
+  <rect x="1930" y="175" width="560" height="1360" class="zone"/>
+  <rect x="1945" y="190" width="530" height="70" class="zoneHead"/>
+  <text x="1968" y="235" class="zoneNum">3</text>
+  <text x="2008" y="235" class="zoneTitle">CENTRAL SERVICES</text>
+  <rect x="1970" y="300" width="480" height="126" class="cardGreen"/>
+  <text x="2210" y="344" text-anchor="middle" class="label green">FASTAPI EVENT INGEST</text>
+  <text x="2210" y="386" text-anchor="middle" class="body">Versioned metadata API</text>
+  <path d="M2210 426 V443" class="lineGreen"/>
+  <rect x="1970" y="453" width="480" height="112" class="card"/>
+  <text x="2210" y="495" text-anchor="middle" class="label">IDEMPOTENCY + DEDUP</text>
+  <text x="2210" y="535" text-anchor="middle" class="body">Retries do not create duplicate events</text>
+  <path d="M2210 565 V582" class="lineGreen"/>
+  <rect x="1970" y="592" width="480" height="157" class="cardCyan"/>
+  <text x="2210" y="634" text-anchor="middle" class="label">POSTGRESQL DATA STORE</text>
+  <text x="2210" y="675" text-anchor="middle" class="body">PostGIS extension is enabled</text>
+  <text x="2210" y="704" text-anchor="middle" class="small">Map uses latitude/longitude fields</text>
+  <text x="2210" y="729" text-anchor="middle" class="small">Spatial queries not validated</text>
+  <path d="M2210 749 V766" class="lineGreen"/>
+  <rect x="1970" y="776" width="480" height="153" class="cardAmber"/>
+  <text x="2210" y="819" text-anchor="middle" class="label amber">WATCHLIST MATCHING</text>
+  <text x="2210" y="860" text-anchor="middle" class="body">Synthetic demo HMAC entry only</text>
+  <text x="2210" y="899" text-anchor="middle" class="small">No state vehicle registry is connected</text>
+  <path d="M2210 929 V946" class="lineGreen"/>
+  <rect x="1970" y="956" width="230" height="112" class="cardGreen"/>
+  <text x="2085" y="999" text-anchor="middle" class="label green">MATCH</text>
+  <text x="2085" y="1039" text-anchor="middle" class="small">Create labelled alert</text>
+  <rect x="2220" y="956" width="230" height="112" class="cardCyan"/>
+  <text x="2335" y="999" text-anchor="middle" class="label">NO MATCH</text>
+  <text x="2335" y="1039" text-anchor="middle" class="small">Store event</text>
+  <path d="M2085 1068 V1085" class="lineGreen"/>
+  <rect x="1970" y="1095" width="480" height="124" class="cardGreen"/>
+  <text x="2210" y="1139" text-anchor="middle" class="label green">WEBSOCKET ALERT</text>
+  <text x="2210" y="1180" text-anchor="middle" class="body">Synthetic events stay labelled</text>
+  <rect x="1970" y="1240" width="480" height="93" class="card"/>
+  <text x="2210" y="1278" text-anchor="middle" class="label">EVENT PAYLOAD</text>
+  <text x="2210" y="1310" text-anchor="middle" class="small">Masked plate · keyed ID · UTC · camera/model metadata</text>
+
+  <!-- Zone 4: human review -->
+  <rect x="2510" y="175" width="650" height="1360" class="zone"/>
+  <rect x="2525" y="190" width="620" height="70" class="zoneHead"/>
+  <text x="2548" y="235" class="zoneNum">4</text>
+  <text x="2588" y="235" class="zoneTitle">OPERATOR REVIEW</text>
+  <rect x="2550" y="300" width="570" height="133" class="cardRose"/>
+  <text x="2835" y="344" text-anchor="middle" class="label rose">COMMAND DASHBOARD</text>
+  <text x="2835" y="386" text-anchor="middle" class="body">Camera status · map · alert queue</text>
+  <path d="M2835 433 V450" class="lineViolet"/>
+  <rect x="2550" y="460" width="570" height="142" class="card"/>
+  <text x="2835" y="503" text-anchor="middle" class="label">REVIEW CONTEXT</text>
+  <text x="2835" y="545" text-anchor="middle" class="body">Masked candidate + time + camera</text>
+  <text x="2835" y="582" text-anchor="middle" class="small">No stored genuine crop or footage</text>
+  <path d="M2835 602 V619" class="lineViolet"/>
+  <rect x="2550" y="629" width="570" height="152" class="cardRose"/>
+  <text x="2835" y="672" text-anchor="middle" class="label rose">OPERATOR ACTIONS</text>
+  <text x="2835" y="714" text-anchor="middle" class="body">Acknowledge · investigate · resolve</text>
+  <text x="2835" y="753" text-anchor="middle" class="small">False-positive marking is audited</text>
+  <rect x="2550" y="808" width="570" height="170" class="card"/>
+  <text x="2835" y="852" text-anchor="middle" class="label">INVESTIGATION TOOLS</text>
+  <text x="2835" y="894" text-anchor="middle" class="body">Route lookup · hourly and incident reports</text>
+  <text x="2835" y="934" text-anchor="middle" class="small">Coordinates are approximate where marked</text>
+  <rect x="2550" y="1004" width="570" height="178" class="cardAmber"/>
+  <text x="2835" y="1048" text-anchor="middle" class="label amber">ON-DEMAND LIVE PREVIEW</text>
+  <text x="2835" y="1090" text-anchor="middle" class="body">Separate authorised media relay</text>
+  <text x="2835" y="1129" text-anchor="middle" class="small">Live video may reach the viewer; it is not</text>
+  <text x="2835" y="1156" text-anchor="middle" class="small">part of event ingestion and is not recorded</text>
+  <rect x="2550" y="1208" width="570" height="125" class="cardRed"/>
+  <text x="2835" y="1251" text-anchor="middle" class="label" fill="#fca5a5">HUMAN-IN-THE-LOOP</text>
+  <text x="2835" y="1293" text-anchor="middle" class="body">Model acceptance is not identity verification</text>
+
+  <!-- Cross-zone flows -->
+  <path d="M460 377 H548" class="lineCyan"/>
+  <path d="M1160 1270 V1195 H1905 V363 H1965" class="lineGreen"/>
+  <path d="M1870 1250 H1905 V382 H1965" class="lineAmber"/>
+  <path d="M2450 1157 H2540" class="lineGreen"/>
+  <path d="M460 1378 H2518" class="lineAmber"/>
+  <rect x="1000" y="1344" width="1080" height="58" rx="18" fill="#171f2a" stroke="#f5b942" stroke-width="2"/>
+  <text x="1540" y="1382" text-anchor="middle" class="small amber">SEPARATE VIDEO PATH · authorised on-demand preview only · no recording</text>
+
+  <!-- Bottom truth and scope notes -->
+  <rect x="40" y="1585" width="1000" height="205" class="cardRed"/>
+  <text x="75" y="1634" class="label" fill="#fca5a5">RECOGNITION STATUS</text>
+  <text x="75" y="1678" class="body">Live tests cited in the project records produced zero accepted IDs.</text>
+  <text x="75" y="1719" class="body">That does not measure accuracy; correctness remains unestablished.</text>
+  <text x="75" y="1758" class="small">Model scores are not calibrated probabilities. A candidate is a hypothesis.</text>
+
+  <rect x="1060" y="1585" width="1045" height="205" class="cardAmber"/>
+  <text x="1095" y="1634" class="label amber">DEMO AND DATA LIMITS</text>
+  <text x="1095" y="1678" class="body">The demo watchlist and injected alerts are synthetic and visibly labelled.</text>
+  <text x="1095" y="1719" class="body">No official state vehicle registry is connected to this prototype.</text>
+  <text x="1095" y="1758" class="small">Only CAM17 and CAM01 are selected for AI processing.</text>
+
+  <rect x="2125" y="1585" width="1035" height="205" class="cardCyan"/>
+  <text x="2160" y="1634" class="label">SCALE CLAIM</text>
+  <text x="2160" y="1678" class="body">Regional architecture is a future deployment direction.</text>
+  <text x="2160" y="1719" class="body">The 80,000-camera figure is not tested capacity.</text>
+  <text x="2160" y="1758" class="small">Validate accuracy, reliability, privacy and load before deployment claims.</text>
+
+  <text x="1600" y="1835" text-anchor="middle" class="status">PROCESS AT THE EDGE · SEND MINIMISED EVENTS · KEEP HUMAN REVIEW · NEVER PRESENT A MODEL GUESS AS VERIFIED FACT</text>
+</svg>

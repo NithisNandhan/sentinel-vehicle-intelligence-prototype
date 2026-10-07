@@ -1,0 +1,31 @@
+WEBVTT
+
+00:00:00.000 --> 00:00:09.720
+Sentinel Vehicle Intelligence is a prototype that connects regional camera analysis with a central operator workflow.
+
+00:00:09.500 --> 00:00:19.220
+The goal is to turn selected live feeds into reviewable vehicle events, while keeping uncertain recognition separate from confirmed facts.
+
+00:00:19.000 --> 00:00:28.720
+An edge worker reads selected streams, tracks vehicles, and submits privacy-limited events to a central API and command dashboard.
+
+00:00:28.500 --> 00:00:38.220
+For each tracked vehicle, the system gathers plate crops from multiple frames. OCR alternatives are fused over time; blur is not magically restored.
+
+00:00:38.000 --> 00:00:47.720
+Operators can see camera health, search authorised cameras, open preview-only feeds, review alerts, reconstruct routes, and prepare reports.
+
+00:00:47.500 --> 00:00:57.220
+The highlighted alert is synthetic demo data. It shows watchlist matching, acknowledgement, audit history, and resolution—not a real plate recognition.
+
+00:00:57.000 --> 00:01:06.720
+A separate engineering console reveals detection boxes, original pixel crops, OCR suggestions, candidate status, and processing timings for debugging.
+
+00:01:06.500 --> 00:01:16.220
+Images and full plate text stay out of persistent records. The local outbox retries metadata after a central outage and deduplicates events.
+
+00:01:16.000 --> 00:01:25.720
+Live tests show vehicle detections and occasional plate crops, but we have not verified a correct live plate read against ground truth.
+
+00:01:25.500 --> 00:01:35.220
+Next steps are labelled Indian-plate evaluation, better camera and image-quality coverage, and measured accuracy before any production claim.

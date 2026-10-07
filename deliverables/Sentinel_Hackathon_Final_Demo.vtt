@@ -1,0 +1,73 @@
+WEBVTT
+
+00:00:00.000 --> 00:00:11.250
+A guided tour of the operator command centre and the engineering console behind its vehicle and number-plate workflow.
+
+00:00:11.500 --> 00:00:22.750
+This local prototype demonstrates two selected camera feeds and one shared analysis session. The 80,000-camera figure is an architectural target, not measured capacity.
+
+00:00:23.000 --> 00:00:34.250
+The command centre combines connection health, camera status, a map and the alert queue. The information shown is local prototype data, not a statewide production service.
+
+00:00:34.500 --> 00:00:45.750
+Search the authorised catalogue by camera ID, name or place. A preview is on-demand and does not add that camera to the AI workload.
+
+00:00:46.000 --> 00:00:57.250
+Operators can open a temporary live preview when feed access permits. Preview sessions are bounded, are not recordings and do not change the selected analysis camera.
+
+00:00:57.500 --> 00:01:08.750
+The camera list shows source, health and last-seen time. “Offline” or “degraded” is a useful operational signal—not evidence about vehicle recognition.
+
+00:01:09.000 --> 00:01:20.250
+Each watchlist item is visibly marked live or simulated. The selected example is synthetic demonstration data, not a real plate read from CCTV.
+
+00:01:20.500 --> 00:01:31.750
+From the alert detail, an operator can acknowledge it, mark a false positive, open a preview or create an incident report. Decisions are recorded for review.
+
+00:01:32.000 --> 00:01:43.250
+Route search orders available sightings by time to support an investigation. It only works when matching metadata exists; it does not establish identity by itself.
+
+00:01:43.500 --> 00:01:54.750
+Incident and periodic reports summarize camera, time and operator actions. They are supporting records—not independent confirmation that OCR was correct.
+
+00:01:55.000 --> 00:02:06.250
+At the edge, a worker analyses selected feeds and queues metadata durably. The central API deduplicates events, stores operational records and pushes updates to the dashboard.
+
+00:02:06.500 --> 00:02:17.750
+The decoder follows stream presentation timestamps. The analysis stage samples selected frames and tracks vehicles; it does not claim to run heavy inference on every frame.
+
+00:02:18.000 --> 00:02:29.250
+The current production baseline combines YOLOv8n vehicle detection, ByteTrack, a YOLOv9-tiny plate detector, FastALPR CCT-S-v2 OCR and per-track temporal evidence.
+
+00:02:29.500 --> 00:02:40.750
+The plate detector proposes a region and the OCR reads the native crop before display annotations. Lossless cropping avoids extra compression; it cannot restore pixels the camera never captured.
+
+00:02:41.000 --> 00:02:52.250
+Each crop produces character or sequence alternatives with model scores. Scores help rank hypotheses; they are not calibrated probabilities that a registration is correct.
+
+00:02:52.500 --> 00:03:03.750
+Evidence is grouped by tracked vehicle and video time. Duplicate frames and processed copies do not count as new votes; scene cuts and broken tracks clear stale evidence.
+
+00:03:04.000 --> 00:03:15.250
+A candidate may remain partial, uncertain or unreadable. Even a model-accepted result is unverified until checked against independent ground truth.
+
+00:03:15.500 --> 00:03:26.750
+The engineering console exposes the selected profile, frame counts, vehicle boxes, native crops, per-frame OCR evidence, candidate ranking and timing—without claiming access to hidden model thoughts.
+
+00:03:27.000 --> 00:03:38.250
+The separate engineering viewer uses a YOLO26s vehicle profile, ByteTrack, YOLOv9-tiny plate proposals and an adapted Awiros CTC reader. It is not the unchanged production worker.
+
+00:03:38.500 --> 00:03:49.750
+The diagnostic path can align distinct crops on a native-pixel grid and inspect reconstructed OCR suggestions. Those suggestions are checked against original-frame evidence; no super-resolution claim is made.
+
+00:03:50.000 --> 00:04:01.250
+On one permitted Indian development passage across 21 controlled quality conditions, adapted Awiros accepted 11 correctly, made no wrong accepts and abstained 10 times. This is not a general accuracy rate.
+
+00:04:01.500 --> 00:04:12.750
+A documented 90-second CAM17 check decoded 251 frames, analysed 20 and found 7 plate crops—but accepted zero identifiers. These counts do not measure recall or correctness.
+
+00:04:13.000 --> 00:04:24.250
+Genuine frames and plaintext plates are not stored in the central records. Metadata is buffered for retries; synthetic events are labelled; face recognition and recording are out of scope.
+
+00:04:24.500 --> 00:04:35.750
+Next: restore dependable feed availability, collect permitted labelled Indian-plate examples, measure missed vehicles and exact-string errors separately, and expand only after the evidence supports it.

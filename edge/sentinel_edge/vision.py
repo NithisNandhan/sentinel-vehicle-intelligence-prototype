@@ -65,6 +65,46 @@ def track_consistent(previous, current, previous_class=None, current_class=None)
     return 0.4 <= area_ratio <= 2.5 and 0.5 <= aspect_ratio <= 2 and displacement <= 0.75 * math.hypot(pw, ph)
 
 
+def _box_iou(first, second):
+    left, top = max(first[0],second[0]), max(first[1],second[1])
+    right, bottom = min(first[2],second[2]), min(first[3],second[3])
+    intersection = max(0,right-left)*max(0,bottom-top)
+    area_a = max(0,first[2]-first[0])*max(0,first[3]-first[1])
+    area_b = max(0,second[2]-second[0])*max(0,second[3]-second[1])
+    union = area_a+area_b-intersection
+    return intersection/union if union else 0.
+
+
+def associate_vehicle_tracks(detections, previous, frame_index, next_detection_id,
+                             *, minimum_iou=.2, max_gap=2):
+    """Keep detector boxes even without ByteTrack IDs; fallback IDs are local, not proof of identity."""
+    resolved, reserved = {}, set()
+    untracked = []
+    for index,(native_id,box,vehicle_class) in enumerate(detections):
+        if native_id is None:
+            untracked.append((index,box,vehicle_class))
+            continue
+        track_id = str(native_id)
+        resolved[index] = (track_id,box,vehicle_class)
+        reserved.add(track_id)
+    for index,box,vehicle_class in untracked:
+        matches = [(_box_iou(box,old_box),track_id)
+            for track_id,(old_box,old_class,old_frame) in previous.items()
+            if track_id not in reserved and old_class == vehicle_class and frame_index-old_frame <= max_gap]
+        score,track_id = max(matches,default=(0.,None))
+        if track_id is None or score < minimum_iou:
+            next_detection_id += 1
+            track_id = f'det-{next_detection_id}'
+        resolved[index] = (track_id,box,vehicle_class)
+        reserved.add(track_id)
+    current = {track_id:(box,vehicle_class,frame_index)
+               for track_id,box,vehicle_class in resolved.values()}
+    retained = {track_id:state for track_id,state in previous.items()
+                if track_id not in reserved and frame_index-state[2] <= max_gap}
+    retained.update(current)
+    return [resolved[index] for index in sorted(resolved)],retained,next_detection_id
+
+
 class VisionPipeline:
     """One instance per camera, so ByteTrack state never crosses camera feeds."""
 
@@ -101,9 +141,12 @@ class VisionPipeline:
         self.ocr_min_confidence = ocr_min_confidence
         self.dedup_seconds = dedup_seconds
         self.tracks: dict[str, _Track] = {}
+        self.previous_vehicle_boxes = {}
+        self.vehicle_frame_index = 0
+        self.next_detection_id = 0
         self.last_plate_seen: dict[str, float] = {}
         self.metrics: dict[str, int | float] = {}
-        self.max_tracks = 128
+        self.max_tracks = 512
         self.model_version = "yolov8n+fastalpr-cct-s-v2+temporal-v2" if multi_frame else "yolov8n+fastalpr-legacy"
         self.hybrid = None
         if hybrid_resources is not None:
@@ -120,6 +163,9 @@ class VisionPipeline:
 
     def reset(self) -> None:
         self.tracks.clear()
+        getattr(self,'previous_vehicle_boxes',{}).clear()
+        self.vehicle_frame_index = 0
+        self.next_detection_id = 0
         if getattr(self, 'hybrid', None) is not None:
             self.hybrid.clear()
         predictor = getattr(self.model, "predictor", None)
@@ -137,28 +183,38 @@ class VisionPipeline:
                                   classes=self.VEHICLE_CLASSES, verbose=False, conf=0.25)[0]
         boxes = result.boxes
         self._count("inference_frames")
-        if boxes is None or boxes.id is None:
+        if boxes is None:
+            self.vehicle_frame_index = getattr(self,'vehicle_frame_index',0)+1
+            _,self.previous_vehicle_boxes,self.next_detection_id = associate_vehicle_tracks(
+                [],getattr(self,'previous_vehicle_boxes',{}),self.vehicle_frame_index,
+                getattr(self,'next_detection_id',0))
             return []
-        observations: list[PlateObservation] = []
+        height,width = image.shape[:2]
+        detections = []
         for box in boxes:
-            if box.id is None:
-                continue
-            track_id = str(int(box.id.item()))
+            raw_id = getattr(box,'id',None)
+            track_id = str(int(raw_id.item())) if raw_id is not None else None
+            x1,y1,x2,y2 = [int(value) for value in box.xyxy[0].tolist()]
+            current_box = (max(0,x1),max(0,y1),min(width,x2),min(height,y2))
+            current_class = int(box.cls.item()) if getattr(box,'cls',None) is not None else None
+            detections.append((track_id,current_box,current_class))
+        self.vehicle_frame_index = getattr(self,'vehicle_frame_index',0)+1
+        vehicle_tracks,self.previous_vehicle_boxes,self.next_detection_id = associate_vehicle_tracks(
+            detections,getattr(self,'previous_vehicle_boxes',{}),self.vehicle_frame_index,
+            getattr(self,'next_detection_id',0))
+        observations: list[PlateObservation] = []
+        for track_id,current_box,current_class in vehicle_tracks:
             self._count("vehicle_boxes")
             if track_id not in self.tracks:
                 self._count("vehicle_tracks")
-                if len(self.tracks) >= getattr(self, "max_tracks", 128):
+                if len(self.tracks) >= getattr(self, "max_tracks", 512):
                     oldest = min(self.tracks, key=lambda key: self.tracks[key].last_seen)
                     del self.tracks[oldest]
             state = self.tracks.setdefault(track_id, _Track())
             state.last_seen = now
             temporal = getattr(self, "multi_frame", False)
             timestamp_ms = pts_ms if pts_ms is not None else round(now * 1000)
-            x1, y1, x2, y2 = [int(value) for value in box.xyxy[0].tolist()]
-            height, width = image.shape[:2]
-            x1, y1, x2, y2 = max(0, x1), max(0, y1), min(width, x2), min(height, y2)
-            current_class = int(box.cls.item()) if getattr(box, "cls", None) is not None else None
-            current_box = (x1, y1, x2, y2)
+            x1,y1,x2,y2 = current_box
             gap = timestamp_ms - state.last_bbox_pts if state.last_bbox_pts is not None else 0
             if temporal and not state.emitted and (
                     gap > 2000 or gap < 0 or not track_consistent(state.vehicle_bbox, current_box,

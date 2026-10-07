@@ -11,11 +11,12 @@ class LiveViewerTests(unittest.TestCase):
         from sentinel_edge.live_detection_viewer import viewer_page
         page = viewer_page('local-test-token','general<script>')
         self.assertIn('ByteTrack vehicle IDs',page)
-        self.assertIn('independent OCR evidence for each searched vehicle',page)
+        self.assertIn('searches every eligible tracked vehicle crop',page)
+        self.assertIn('independent OCR histories',page)
         self.assertIn('general&lt;script&gt;',page)
         self.assertNotIn('general<script>',page)
         self.assertNotIn('at most one plate passed',page)
-        self.assertIn('conservative box overlap',viewer_page('local-test-token'))
+        self.assertIn('no-profile mode',viewer_page('local-test-token'))
 
     def test_only_approved_pair_and_expiring_session(self):
         clock = [10.]
@@ -39,7 +40,7 @@ class LiveViewerTests(unittest.TestCase):
         state.authorise(['cam01'])
         self.assertIsNone(state.camera_id)
 
-    def test_all_vehicle_boxes_displayed_but_roi_budget_rotates(self):
+    def test_every_detected_vehicle_is_searched_and_budget_override_still_rotates(self):
         import numpy as np
         image = np.zeros((100, 400, 3), dtype=np.uint8)
         coords = [[i*50, 0, i*50+40, 90] for i in range(6)]
@@ -51,10 +52,11 @@ class LiveViewerTests(unittest.TestCase):
         from sentinel_edge.live_detection_viewer import roi_schedule
         vehicles, _ = detect_regions(image, model, detector, roi_offset=3)
         self.assertEqual(len(vehicles), 6)
-        self.assertEqual(len(calls), 4)  # one full frame + three vehicle regions
-        self.assertEqual(roi_schedule(6, 0), [0, 1, 2])
-        self.assertEqual(roi_schedule(6, 3), [3, 4, 5])
-        self.assertEqual(roi_schedule(2, 3), [1, 0])
+        self.assertEqual(len(calls), 7)  # one full frame + all six vehicle regions
+        self.assertEqual(roi_schedule(6, 0), [0, 1, 2, 3, 4, 5])
+        self.assertEqual(roi_schedule(6, 0, 3), [0, 1, 2])
+        self.assertEqual(roi_schedule(6, 3, 3), [3, 4, 5])
+        self.assertEqual(roi_schedule(2, 3, 3), [1, 0])
 
     def test_probe_summary_never_contains_images_or_plate_text(self):
         from sentinel_edge.live_detection_viewer import safe_metrics

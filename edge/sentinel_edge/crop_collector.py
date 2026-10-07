@@ -21,13 +21,14 @@ class CollectedFrame(VideoFrame):
 
 
 class CropCollector(SampledFrames):
-    def __init__(self, frames, stop, vehicle, detector, *, roi_budget=3,
+    def __init__(self, frames, stop, vehicle, detector, *, roi_budget=None,
                  adaptive_sampling=False, full_image_fallback=False, **kwargs):
         super().__init__(frames,stop,**kwargs)
-        if not 1 <= roi_budget <= 8:
+        if roi_budget is not None and not 1 <= roi_budget <= 8:
             raise ValueError('Invalid collector ROI budget')
         self.vehicle, self.detector, self.roi_budget = vehicle,detector,roi_budget
         self.collected_crops = self.input_dropped = 0
+        self.roi_searches = self.roi_unsearched_tracks = 0
         self.adaptive_sampling, self.full_image_fallback = adaptive_sampling,full_image_fallback
         self.full_image_calls = self.full_image_crops = 0
 
@@ -81,7 +82,10 @@ class CropCollector(SampledFrames):
                     if self.adaptive_sampling and eligible:
                         active_until_pts = frame.pts_ms + 750
                     proposals = {}
-                    for index in roi_schedule(len(eligible),offset,self.roi_budget):
+                    selected_rois = roi_schedule(len(eligible),offset,self.roi_budget)
+                    self.roi_searches += len(selected_rois)
+                    self.roi_unsearched_tracks += len(eligible)-len(selected_rois)
+                    for index in selected_rois:
                         track,box = eligible[index]
                         region = crop_box(frame.image,box)
                         tick = time.monotonic()
@@ -118,7 +122,7 @@ class CropCollector(SampledFrames):
                                     calls=1,fallback=False,source='full_image')
                                 self.collected_crops += 1
                                 self.full_image_crops += 1
-                    offset += self.roi_budget
+                    offset += len(selected_rois) if self.roi_budget is None else self.roi_budget
                     packet = CollectedFrame(frame.image,frame.pts_ms,frame.discontinuity,
                         tracks,proposals,vehicle_ms,(time.monotonic()-started)*1000,frame.captured_at)
                     size = self.size(packet)

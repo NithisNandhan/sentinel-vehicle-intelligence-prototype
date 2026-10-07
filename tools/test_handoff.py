@@ -1,0 +1,103 @@
+"""Run with python -m unittest discover -s tools -p test_handoff.py."""
+
+import contextlib
+import io
+import json
+import os
+import sqlite3
+import tarfile
+import tempfile
+import unittest
+from pathlib import Path
+
+import handoff_archives as archives
+import handoff_events as events
+
+
+class HandoffTests(unittest.TestCase):
+    def setUp(self):
+        self.temp = tempfile.TemporaryDirectory()
+        self.root = Path(self.temp.name)
+        self.source = self.root / 'source'
+        self.source.mkdir()
+        self.output = self.root / 'assets'
+
+    def tearDown(self):
+        self.temp.cleanup()
+
+    def export(self):
+        with contextlib.redirect_stdout(io.StringIO()):
+            return archives.export('test', [(self.source, '')], self.output, part_mib=1)
+
+    def test_multipart_roundtrip_preserves_checkpoint(self):
+        content = os.urandom(2 * 1024 * 1024 + 100)
+        (self.source / 'model.pt').write_bytes(content)
+        (self.source / '.env').write_text('PASSWORD=not-to-export')
+        manifest = self.export()
+        self.assertGreater(len(manifest['parts']), 1)
+        destination = self.root / 'restored'
+        with contextlib.redirect_stdout(io.StringIO()):
+            archives.restore(self.output / 'test.manifest.json', destination)
+        self.assertEqual((destination / 'model.pt').read_bytes(), content)
+        self.assertFalse((destination / '.env').exists())
+
+    def test_corrupted_archive_is_not_extracted(self):
+        (self.source / 'file.txt').write_text('important')
+        manifest = self.export()
+        part = self.output / manifest['parts'][0]['name']
+        part.write_bytes(b'corrupt')
+        destination = self.root / 'restored'
+        with self.assertRaisesRegex(ValueError, 'integrity mismatch'):
+            archives.restore(self.output / 'test.manifest.json', destination)
+        self.assertFalse(destination.exists())
+
+    def test_nonempty_destination_is_preserved(self):
+        (self.source / 'file.txt').write_text('new')
+        self.export()
+        destination = self.root / 'restored'
+        destination.mkdir()
+        (destination / 'file.txt').write_text('existing')
+        with self.assertRaisesRegex(ValueError, 'must be empty'):
+            archives.restore(self.output / 'test.manifest.json', destination)
+        self.assertEqual((destination / 'file.txt').read_text(), 'existing')
+
+    def test_archive_cannot_escape_destination(self):
+        self.output.mkdir()
+        part = self.output / 'test.tar.gz.part001'
+        with tarfile.open(part, 'w:gz') as archive:
+            member = tarfile.TarInfo('../escaped.txt')
+            member.size = 4
+            archive.addfile(member, io.BytesIO(b'evil'))
+        manifest = {'format': 'sentinel-multipart-tar-gzip-v1', 'name': 'test',
+                    'files': 1, 'parts': [{'name': part.name, 'bytes': part.stat().st_size,
+                                          'sha256': archives.digest_file(part)}]}
+        path = self.output / 'test.manifest.json'
+        path.write_text(json.dumps(manifest))
+        with self.assertRaises(tarfile.FilterError):
+            archives.restore(path, self.root / 'restored')
+        self.assertFalse((self.root / 'escaped.txt').exists())
+
+    def test_existing_export_is_preserved(self):
+        (self.source / 'file.txt').write_text('test')
+        self.export()
+        with self.assertRaisesRegex(ValueError, 'Existing archive preserved'):
+            self.export()
+
+    def test_sqlite_backup_preserves_source_and_queue(self):
+        path = self.source / 'outbox.sqlite3'
+        secret_url = 'rtsp://email%40example.com:password@camera/stream/cam01'
+        with sqlite3.connect(path) as db:
+            db.execute('CREATE TABLE outbox (event_id TEXT PRIMARY KEY,payload TEXT)')
+            db.execute('INSERT INTO outbox VALUES (?,?)', ('one', secret_url))
+        with contextlib.redirect_stdout(io.StringIO()):
+            events.export_outboxes(self.output, [str(self.source) + '=edge'])
+        with sqlite3.connect(path) as db:
+            self.assertEqual(db.execute('SELECT payload FROM outbox').fetchone()[0], secret_url)
+        with sqlite3.connect(self.output / 'edge-outbox.sqlite3') as db:
+            self.assertEqual(db.execute('SELECT payload FROM outbox').fetchone()[0], '[source URL removed]')
+        records = json.loads((self.output / 'outboxes.json').read_text())
+        self.assertEqual(records[0]['queued_events'], 1)
+
+
+if __name__ == '__main__':
+    unittest.main()

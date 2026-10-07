@@ -13,6 +13,8 @@ from .plate_quality import crop_quality
 from .privacy import mask_plate
 from .vision import track_consistent
 
+MAX_TRACK_HISTORIES = 512
+
 
 @dataclass(repr=False)
 class History:
@@ -28,8 +30,8 @@ class History:
 
 
 class TrackedOCR:
-    def __init__(self, ocr, detector, *, roi_budget=3, gap_ms=2500, threshold=.85, debug=False, on_accepted=None, reconstruction=False):
-        if not 1 <= roi_budget <= 8 or not 150 <= gap_ms <= 5000 or not 0 < threshold <= 1:
+    def __init__(self, ocr, detector, *, roi_budget=None, gap_ms=2500, threshold=.85, debug=False, on_accepted=None, reconstruction=False):
+        if (roi_budget is not None and not 1 <= roi_budget <= 8) or not 150 <= gap_ms <= 5000 or not 0 < threshold <= 1:
             raise ValueError('Invalid diagnostic tracking bounds')
         self.ocr, self.detector = ocr, detector
         self.roi_budget, self.gap_ms, self.threshold = roi_budget, gap_ms, threshold
@@ -70,9 +72,13 @@ class TrackedOCR:
             return {}
         from .recognition_debug import describe_track
         histories = sorted(self.histories.items(), key=lambda item: item[1].seen_pts, reverse=True)
-        return {'tracks': [describe_track(key, state, self.crop_bank.get(key), self.threshold)
-                           for key, state in histories[:16]], 'stage_ms': dict(self.stage_ms),
-                'roi_budget': self.roi_budget, 'crop_bytes': self.crop_bank.bytes_used,
+        evidence_ids = {key for key, _ in histories[:16]}
+        return {'tracks': [describe_track(key, state,
+                    self.crop_bank.get(key) if key in evidence_ids else [], self.threshold)
+                           for key, state in histories], 'stage_ms': dict(self.stage_ms),
+                'roi_budget': self.roi_budget if self.roi_budget is not None else 'all eligible tracks',
+                'track_history_capacity': MAX_TRACK_HISTORIES,
+                'crop_bytes': self.crop_bank.bytes_used,
                 'score_notice': 'Uncalibrated character scores; not probabilities of correct registration'}
 
     def process(self, image, tracks, pts_ms, *, posterior_cache=None, plate_cache=None):
@@ -113,7 +119,7 @@ class TrackedOCR:
                 self.metrics['consistency_resets'] += 1
             state = self.histories.get(track.track_id)
             if state is None:
-                if len(self.histories) >= 128:
+                if len(self.histories) >= MAX_TRACK_HISTORIES:
                     oldest = min(self.histories,key=lambda key:self.histories[key].seen_pts)
                     del self.histories[oldest]
                     if self.crop_bank is not None:
@@ -125,9 +131,14 @@ class TrackedOCR:
                 self.metrics['vehicle_track_segments'] += 1
             state.box,state.vehicle_class,state.seen_pts = box,track.vehicle_class,pts_ms
             eligible.append((track,state))
+        self.metrics['eligible_vehicle_tracks'] += len(eligible)
         displays = []
         selection = (roi_schedule(len(eligible),self.offset,self.roi_budget) if plate_cache is None else
-                     [i for i,(track,_) in enumerate(eligible) if track.track_id in plate_cache][:self.roi_budget])
+                     [i for i,(track,_) in enumerate(eligible) if track.track_id in plate_cache])
+        if self.roi_budget is not None:
+            selection = selection[:self.roi_budget]
+        self.metrics['plate_roi_searches'] += len(selection)
+        self.metrics['plate_roi_unsearched_tracks'] += len(eligible)-len(selection)
         for index in selection:
             track,state = eligible[index]
             region = crop_box(image,state.box)
@@ -226,6 +237,6 @@ class TrackedOCR:
             displays.append({'box':global_box,'crop':crop,'observations':count,'ocr_status':status,
                 'masked_plate':mask_plate(candidates[0].plate) if candidates else None,
                 'candidate_count':len(candidates),'track_id':track.track_id})
-        self.offset += self.roi_budget
+        self.offset += len(selection) if self.roi_budget is None else self.roi_budget
         self.last_sample = displays[-1] if displays else None
         return displays
