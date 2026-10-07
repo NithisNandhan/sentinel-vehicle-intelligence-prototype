@@ -28,7 +28,8 @@ def main():
               'docker_version': command('docker', 'version', '--format', '{{.Server.Version}}'),
               'local_image_ids': images, 'observed_edge_packages': freeze,
               'rebuild_note': 'Images are rebuilt, not distributed. The package list is observed, not a new tested lockfile.',
-              'tests': {'edge': {'passed': 287, 'skipped': 1}, 'frontend': {'passed': 15},
+              'tests': {'edge': {'passed': 287, 'skipped': 1}, 'backend': {'passed': 53},
+                        'frontend': {'passed': 15, 'production_build': 'passed'},
                         'handoff': {'passed': 10}, 'central_snapshot_restore': 'verified same table counts'},
               'exclusions': ['credentials', 'original HMAC secrets', 'camera source URLs',
                              'assistant local state', 'unverified dats_probe data', 'raw live footage']}

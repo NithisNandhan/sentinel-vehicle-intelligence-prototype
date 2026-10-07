@@ -173,7 +173,9 @@ change to the acceptance threshold.
 ## Verification and publication tools
 
 Before this handoff: edge regression suite 287 passed, 1 optional test skipped;
-handoff tests cover multipart restoration, corruption, non-overwrite, safe
+central API 53 passed; frontend 15 passed and production build succeeded;
+handoff tool tests 10 passed. The handoff tests cover multipart restoration,
+byte-identical resumption, corruption, non-overwrite, safe
 extraction and SQLite snapshot redaction. See release metadata for asset hashes.
 
 The publishing tools never print GitHub credentials, publish only to the existing
