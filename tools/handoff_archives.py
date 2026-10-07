@@ -30,13 +30,15 @@ def digest_file(path):
 
 
 class PartWriter(io.RawIOBase):
-    def __init__(self, directory, name, limit):
+    def __init__(self, directory, name, limit, resume=False):
         super().__init__()
         self.directory, self.name, self.limit = directory, name, limit
         self.current = None
         self.parts = []
         self.size = 0
         self.digest = None
+        self.resume = resume
+        self.existing_bytes = 0
 
     def writable(self):
         return True
@@ -55,10 +57,19 @@ class PartWriter(io.RawIOBase):
         while buffer:
             if self.current is None:
                 self.path = self.directory / f'{self.name}.tar.gz.part{len(self.parts) + 1:03d}'
-                self.current = self.path.open('xb')
+                if self.resume and self.path.exists():
+                    self.existing_bytes = self.path.stat().st_size
+                    self.current = self.path.open('r+b', buffering=1024 * 1024)
+                else:
+                    self.existing_bytes = 0
+                    self.current = self.path.open('xb', buffering=1024 * 1024)
                 self.size, self.digest = 0, hashlib.sha256()
             piece = buffer[:self.limit - self.size]
-            self.current.write(piece)
+            compare_bytes = min(len(piece), max(0, self.existing_bytes - self.size))
+            if compare_bytes and self.current.read(compare_bytes) != bytes(piece[:compare_bytes]):
+                raise ValueError('Resume source differs from the existing archive; existing prefix preserved')
+            if compare_bytes < len(piece):
+                self.current.write(piece[compare_bytes:])
             self.digest.update(piece)
             self.size += len(piece)
             buffer = buffer[len(piece):]
@@ -104,19 +115,27 @@ class PartReader(io.RawIOBase):
         super().close()
 
 
-def export(name, sources, output, part_mib=256, exclude=()):
+def export(name, sources, output, part_mib=256, exclude=(), resume=False):
     output = Path(output)
     output.mkdir(parents=True, exist_ok=True)
     manifest_path = output / f'{name}.manifest.json'
-    if manifest_path.exists() or list(output.glob(f'{name}.tar.gz.part*')):
+    if manifest_path.exists() or (list(output.glob(f'{name}.tar.gz.part*')) and not resume):
         raise ValueError(f'Existing archive preserved: {name}')
     sources = [(Path(root).resolve(), prefix.strip('/')) for root, prefix in sources]
     excluded = [Path(p).resolve() for p in exclude]
     checkpoints, omitted = [], []
     files, bytes_total, last_report = 0, 0, time.monotonic()
-    writer = PartWriter(output, name, part_mib * 1024 * 1024)
+    first = output / f'{name}.tar.gz.part001'
+    mtime = None
+    if resume and first.exists():
+        with first.open('rb') as stream:
+            header = stream.read(10)
+        if header[:2] != b'\x1f\x8b':
+            raise ValueError('Resume requires an existing gzip archive prefix')
+        mtime = int.from_bytes(header[4:8], 'little')
+    writer = PartWriter(output, name, part_mib * 1024 * 1024, resume)
     try:
-        with gzip.GzipFile(fileobj=writer, mode='wb', compresslevel=1) as compressed, \
+        with gzip.GzipFile(fileobj=writer, mode='wb', compresslevel=1, mtime=mtime) as compressed, \
                 tarfile.open(fileobj=compressed, mode='w|') as archive:
             for root, prefix in sources:
                 if not root.is_dir():
@@ -192,13 +211,14 @@ def main():
     create.add_argument('--exclude', action='append', default=[])
     create.add_argument('--output', required=True)
     create.add_argument('--part-mib', type=int, default=256)
+    create.add_argument('--resume', action='store_true')
     extract = commands.add_parser('restore')
     extract.add_argument('--manifest', required=True)
     extract.add_argument('--destination', required=True)
     args = parser.parse_args()
     if args.command == 'export':
         export(args.name, [source.rsplit('=', 1) for source in args.source],
-               args.output, args.part_mib, args.exclude)
+               args.output, args.part_mib, args.exclude, args.resume)
     else:
         restore(args.manifest, args.destination)
 

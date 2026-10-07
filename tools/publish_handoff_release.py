@@ -153,6 +153,9 @@ def main():
             'tag_name': args.tag, 'target_commitish': args.target,
             'name': 'Complete teammate handoff — 7 October 2026', 'draft': True,
             'body': Path(args.notes).read_text(encoding='utf-8')})
+    elif release['draft']:
+        release = github.request('PATCH', f'/releases/{release["id"]}', {
+            'target_commitish': args.target, 'body': Path(args.notes).read_text(encoding='utf-8')})
     uploaded = {}
     page = 1
     while True:

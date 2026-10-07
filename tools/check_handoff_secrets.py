@@ -23,12 +23,17 @@ def local_secrets(root):
     return result
 
 
-def check(root, paths):
+def check(root, paths, text_only=False):
     secrets = local_secrets(root)
     failed, total = [], 0
     for path in paths:
         path = Path(path)
         if not path.is_file():
+            continue
+        if text_only and path.suffix.lower() not in {
+                '.json', '.jsonl', '.txt', '.md', '.html', '.csv', '.yaml', '.yml',
+                '.toml', '.ini', '.py', '.ps1', '.cjs', '.js', '.ts', '.tsx',
+                '.xml', '.log', '.vtt', '.sql', '.docx', '.pptx', '.xlsx'}:
             continue
         blobs = []
         if path.suffix in {'.docx', '.pptx', '.xlsx'}:
@@ -50,6 +55,7 @@ if __name__ == '__main__':
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--root', default='.')
     parser.add_argument('--extra', action='append', default=[])
+    parser.add_argument('--text-only', action='store_true')
     args = parser.parse_args()
     root = Path(args.root).resolve()
     tracked = subprocess.check_output(['git', '-c', f'safe.directory={root.as_posix()}',
@@ -58,4 +64,4 @@ if __name__ == '__main__':
     for extra in args.extra:
         extra = root / extra
         paths.extend(extra.rglob('*') if extra.is_dir() else [extra])
-    check(root, paths)
+    check(root, paths, args.text_only)

@@ -8,10 +8,12 @@ import sqlite3
 import tarfile
 import tempfile
 import unittest
+from unittest.mock import Mock, patch
 from pathlib import Path
 
 import handoff_archives as archives
 import handoff_events as events
+import publish_handoff_release as publisher
 
 
 class HandoffTests(unittest.TestCase):
@@ -83,6 +85,17 @@ class HandoffTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, 'Existing archive preserved'):
             self.export()
 
+    def test_resume_reproduces_existing_parts_and_completes_partial_tail(self):
+        (self.source / 'model.pt').write_bytes(os.urandom(2 * 1024 * 1024 + 100))
+        original = self.export()
+        manifest_path = self.output / 'test.manifest.json'
+        manifest_path.unlink()
+        last = self.output / original['parts'][-1]['name']
+        last.write_bytes(last.read_bytes()[:-100])
+        with contextlib.redirect_stdout(io.StringIO()):
+            resumed = archives.export('test', [(self.source, '')], self.output, 1, resume=True)
+        self.assertEqual(resumed['parts'], original['parts'])
+
     def test_sqlite_backup_preserves_source_and_queue(self):
         path = self.source / 'outbox.sqlite3'
         secret_url = 'rtsp://email%40example.com:password@camera/stream/cam01'
@@ -97,6 +110,32 @@ class HandoffTests(unittest.TestCase):
             self.assertEqual(db.execute('SELECT payload FROM outbox').fetchone()[0], '[source URL removed]')
         records = json.loads((self.output / 'outboxes.json').read_text())
         self.assertEqual(records[0]['queued_events'], 1)
+
+    def test_draft_release_is_found_when_tag_endpoint_returns_not_found(self):
+        github = Mock()
+        draft = {'id': 123, 'tag_name': 'handoff-test', 'draft': True}
+        github.request.side_effect = [None, [draft]]
+        self.assertEqual(publisher.find_release(github, 'handoff-test'), draft)
+
+    def test_empty_delete_response_is_supported(self):
+        response = Mock(status=204)
+        response.__enter__ = Mock(return_value=response)
+        response.__exit__ = Mock(return_value=False)
+        with patch.object(publisher.urllib.request, 'urlopen', return_value=response):
+            self.assertEqual(publisher.GitHub('test-token', 'owner/repo').request('DELETE', '/test'), {})
+
+    def test_outbox_restore_refuses_overwrite(self):
+        source = self.source / 'queue.sqlite3'
+        with sqlite3.connect(source) as db:
+            db.execute('CREATE TABLE outbox (event_id TEXT,payload TEXT)')
+            db.execute('INSERT INTO outbox VALUES (?,?)', ('one', '{}'))
+        destination = self.root / 'restored.sqlite3'
+        with contextlib.redirect_stdout(io.StringIO()):
+            events.restore_outbox(source, destination)
+        with self.assertRaisesRegex(ValueError, 'Existing outbox preserved'):
+            events.restore_outbox(source, destination)
+        with sqlite3.connect(destination) as db:
+            self.assertEqual(db.execute('SELECT COUNT(*) FROM outbox').fetchone()[0], 1)
 
 
 if __name__ == '__main__':
