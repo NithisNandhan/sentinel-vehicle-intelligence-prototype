@@ -127,19 +127,22 @@ class HandoffTests(unittest.TestCase):
         with patch.object(publisher.urllib.request, 'urlopen', return_value=response):
             self.assertEqual(publisher.GitHub('test-token', 'owner/repo').request('DELETE', '/test'), {})
 
-    def test_recovery_only_deletes_eligible_zero_byte_starter(self):
+    def test_recovery_only_deletes_eligible_starter_without_digest(self):
         github = Mock()
         uploaded = {
-            'failed.part001': {'id': 1, 'state': 'starter', 'size': 0, 'digest': None},
+            'failed.part001': {'id': 1, 'state': 'starter', 'size': 268435456, 'digest': None},
             'valid.part001': {'id': 2, 'state': 'uploaded', 'size': 100, 'digest': 'sha256:ok'},
             'other.part001': {'id': 3, 'state': 'starter', 'size': 0, 'digest': None},
-            'nonempty.part001': {'id': 4, 'state': 'starter', 'size': 100, 'digest': None},
+            'nonempty.part001': {'id': 4, 'state': 'uploaded', 'size': 100, 'digest': None},
+            'digested.part001': {'id': 5, 'state': 'starter', 'size': 100, 'digest': 'sha256:ok'},
         }
         with contextlib.redirect_stdout(io.StringIO()):
             publisher.recover_starter_assets(github, {'draft': True}, uploaded,
-                                            {'failed.part001', 'valid.part001', 'nonempty.part001'})
+                                            {'failed.part001', 'valid.part001', 'nonempty.part001',
+                                             'digested.part001'})
         github.request.assert_called_once_with('DELETE', '/releases/assets/1')
-        self.assertEqual(set(uploaded), {'valid.part001', 'other.part001', 'nonempty.part001'})
+        self.assertEqual(set(uploaded), {'valid.part001', 'other.part001', 'nonempty.part001',
+                                        'digested.part001'})
 
     def test_recovery_refuses_published_release(self):
         with self.assertRaisesRegex(ValueError, 'unpublished draft'):

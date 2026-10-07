@@ -57,15 +57,19 @@ def find_release(github, tag):
 
 
 def recover_starter_assets(github, release, uploaded, eligible_names):
-    """Remove only zero-byte failed uploads, never a completed release asset."""
+    """Remove abandoned starter uploads, never completed release assets.
+
+    Must be called by the sole uploader before starting its upload pool. GitHub
+    reports the declared Content-Length even for an abandoned transfer.
+    """
     if not release.get('draft'):
         raise ValueError('Failed upload recovery requires an unpublished draft')
     for name, asset in list(uploaded.items()):
         if (name in eligible_names and asset.get('state') == 'starter'
-                and asset.get('size') == 0 and not asset.get('digest')):
+                and not asset.get('digest')):
             github.request('DELETE', f'/releases/assets/{asset["id"]}')
             del uploaded[name]
-            print(f'Removed zero-byte failed upload: {name}', flush=True)
+            print(f'Removed abandoned starter upload: {name}', flush=True)
 
 
 class GitHub:
@@ -125,7 +129,7 @@ def main():
     parser.add_argument('--stage-completed', action='store_true',
                         help='Upload only closed completed parts to a draft while other exports run.')
     parser.add_argument('--recover-starter-assets', action='store_true',
-                        help='Retry zero-byte failed uploads belonging to this unpublished handoff.')
+                        help='Retry abandoned starter uploads; run only one uploader for this draft.')
     parser.add_argument('--reset-unfinished-draft-parts', action='store_true',
                         help='Remove only failed incomplete archive uploads from this draft, then exit.')
     args = parser.parse_args()

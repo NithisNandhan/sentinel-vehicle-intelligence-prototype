@@ -187,7 +187,7 @@ Files/media from genuine Sentinel feeds were not retained and cannot be supplied
 
 `tools/finish_handoff_upload.py` resumes the existing private draft, skips
 checksum-verified assets, and retries transport failures up to five times.
-It removes only zero-byte `starter` uploads for eligible local assets in that
+It removes only abandoned, digest-free `starter` uploads for eligible local assets in that
 unpublished draft; completed assets are never overwritten. It stops on integrity
 errors. All six bundle manifests must exist before it can publish.
 
