@@ -115,7 +115,8 @@ class PartReader(io.RawIOBase):
         super().close()
 
 
-def export(name, sources, output, part_mib=256, exclude=(), resume=False):
+def export(name, sources, output, part_mib=256, exclude=(), resume=False,
+           stream_buffer=1024 * 1024):
     output = Path(output)
     output.mkdir(parents=True, exist_ok=True)
     manifest_path = output / f'{name}.manifest.json'
@@ -136,7 +137,8 @@ def export(name, sources, output, part_mib=256, exclude=(), resume=False):
     writer = PartWriter(output, name, part_mib * 1024 * 1024, resume)
     try:
         with gzip.GzipFile(fileobj=writer, mode='wb', compresslevel=1, mtime=mtime) as compressed, \
-                tarfile.open(fileobj=compressed, mode='w|') as archive:
+                tarfile.open(fileobj=compressed, mode='w|', bufsize=stream_buffer,
+                             copybufsize=stream_buffer) as archive:
             for root, prefix in sources:
                 if not root.is_dir():
                     raise ValueError(f'Source directory missing: {root}')
@@ -148,7 +150,7 @@ def export(name, sources, output, part_mib=256, exclude=(), resume=False):
                         path = directory / filename
                         if filename in OMIT or filename.endswith(('.pyc', '.partial', '-wal', '-shm')):
                             continue
-                        if any(path.resolve().is_relative_to(e) for e in excluded):
+                        if any(path.is_relative_to(e) for e in excluded):
                             continue
                         relative = path.relative_to(root).as_posix()
                         target = f'{prefix}/{relative}' if prefix else relative
@@ -157,9 +159,10 @@ def export(name, sources, output, part_mib=256, exclude=(), resume=False):
                             continue
                         archive.add(path, arcname=target, recursive=False)
                         files += 1
-                        bytes_total += path.stat().st_size
+                        size = path.stat().st_size
+                        bytes_total += size
                         if path.suffix in {'.safetensors', '.pt', '.onnx', '.pdparams'}:
-                            checkpoints.append({'path': target, 'bytes': path.stat().st_size,
+                            checkpoints.append({'path': target, 'bytes': size,
                                                 'sha256': digest_file(path)})
                         if time.monotonic() - last_report > 25:
                             print(f'{name}: {files:,} files, {bytes_total:,} input bytes', flush=True)

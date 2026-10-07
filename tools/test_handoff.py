@@ -87,7 +87,9 @@ class HandoffTests(unittest.TestCase):
 
     def test_resume_reproduces_existing_parts_and_completes_partial_tail(self):
         (self.source / 'model.pt').write_bytes(os.urandom(2 * 1024 * 1024 + 100))
-        original = self.export()
+        with contextlib.redirect_stdout(io.StringIO()):
+            original = archives.export('test', [(self.source, '')], self.output, 1,
+                                       stream_buffer=10240)
         manifest_path = self.output / 'test.manifest.json'
         manifest_path.unlink()
         last = self.output / original['parts'][-1]['name']

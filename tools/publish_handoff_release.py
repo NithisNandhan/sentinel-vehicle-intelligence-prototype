@@ -130,7 +130,11 @@ def main():
         manifest = json.loads(manifest_path.read_text(encoding='utf-8'))
         for entry in manifest['parts']:
             expected.add(entry['name'])
-            path = manifest_path.parent / entry['name']
+            candidates = [directory / entry['name'] for directory in directories
+                          if (directory / entry['name']).is_file()]
+            if len(candidates) != 1:
+                raise ValueError(f'Missing or duplicate archive part: {entry["name"]}')
+            path = candidates[0]
             if path.stat().st_size != entry['bytes']:
                 raise ValueError(f'Incomplete archive part: {path.name}')
     actual = {p.name for directory in directories for p in directory.glob('*.part*')}
