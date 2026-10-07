@@ -39,6 +39,23 @@ def sha256(path):
     return digest.hexdigest()
 
 
+def find_release(github, tag):
+    release = github.request('GET', '/releases/tags/' + urllib.parse.quote(tag, safe=''))
+    if release is not None:
+        return release
+    page = 1
+    while True:
+        batch = github.request('GET', f'/releases?per_page=100&page={page}')
+        matches = [item for item in batch if item['tag_name'] == tag]
+        if len(matches) > 1:
+            raise ValueError('Multiple matching releases; review before publication')
+        if matches:
+            return matches[0]
+        if len(batch) < 100:
+            return None
+        page += 1
+
+
 class GitHub:
     def __init__(self, token, repository):
         self.token, self.repository = token, repository
@@ -53,6 +70,8 @@ class GitHub:
         request = urllib.request.Request(self.root + path, data=data, headers=headers, method=method)
         try:
             with urllib.request.urlopen(request, timeout=60) as response:
+                if response.status == 204:
+                    return {}
                 return json.load(response)
         except urllib.error.HTTPError as exc:
             if exc.code == 404:
@@ -83,7 +102,7 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--repository', default='NithisNandhan/sentinel-vehicle-intelligence-prototype')
     parser.add_argument('--root', default='.')
-    parser.add_argument('--assets', required=True)
+    parser.add_argument('--assets', required=True, action='append')
     parser.add_argument('--tag', required=True)
     parser.add_argument('--target', required=True)
     parser.add_argument('--notes', required=True)
@@ -91,8 +110,11 @@ def main():
     parser.add_argument('--workers', type=int, default=3)
     parser.add_argument('--stage-completed', action='store_true',
                         help='Upload only closed completed parts to a draft while other exports run.')
+    parser.add_argument('--reset-unfinished-draft-parts', action='store_true',
+                        help='Remove only failed incomplete archive uploads from this draft, then exit.')
     args = parser.parse_args()
-    root, assets = Path(args.root).resolve(), Path(args.assets).resolve()
+    root = Path(args.root).resolve()
+    directories = [Path(path).resolve() for path in args.assets]
     github = GitHub(git_token(root), args.repository)
     repository = github.request('GET', '')
     if not repository or not repository.get('private'):
@@ -102,19 +124,30 @@ def main():
         raise ValueError('Target commit must already be pushed and match the requested SHA')
     # All archive manifests must exist before any partial archive can be uploaded.
     expected = set()
-    for manifest_path in assets.glob('*.manifest.json'):
+    for manifest_path in (p for directory in directories for p in directory.glob('*.manifest.json')):
         manifest = json.loads(manifest_path.read_text(encoding='utf-8'))
         for entry in manifest['parts']:
             expected.add(entry['name'])
-            path = assets / entry['name']
+            path = manifest_path.parent / entry['name']
             if path.stat().st_size != entry['bytes']:
                 raise ValueError(f'Incomplete archive part: {path.name}')
-    actual = {p.name for p in assets.glob('*.part*')}
+    actual = {p.name for directory in directories for p in directory.glob('*.part*')}
     if args.stage_completed and args.publish:
         raise ValueError('Incomplete staging cannot publish a release')
     if actual != expected and not args.stage_completed:
         raise ValueError('Archive inventory is incomplete; unfinished parts cannot be published')
-    release = github.request('GET', '/releases/tags/' + urllib.parse.quote(args.tag, safe=''))
+    release = find_release(github, args.tag)
+    if args.reset_unfinished_draft_parts:
+        if not release or not release['draft'] or args.publish:
+            raise ValueError('Recovery is restricted to the unpublished handoff draft')
+        complete = {p.name.removesuffix('.manifest.json')
+                    for directory in directories for p in directory.glob('*.manifest.json')}
+        for asset in github.request('GET', f'/releases/{release["id"]}/assets?per_page=100'):
+            name = asset['name']
+            if '.tar.gz.part' in name and name.split('.tar.gz.part', 1)[0] not in complete:
+                github.request('DELETE', f'/releases/assets/{asset["id"]}')
+                print(f'Removed incomplete draft asset: {name}', flush=True)
+        return
     if release is None:
         release = github.request('POST', '/releases', {
             'tag_name': args.tag, 'target_commitish': args.target,
@@ -129,7 +162,10 @@ def main():
         if len(batch) < 100:
             break
         page += 1
-    files = sorted(p for p in assets.iterdir() if p.is_file() and not p.name.endswith('.partial'))
+    files = sorted((p for directory in directories for p in directory.iterdir()
+                    if p.is_file() and not p.name.endswith('.partial')), key=lambda p: p.name)
+    if len({path.name for path in files}) != len(files):
+        raise ValueError('Duplicate asset names across staging directories')
     if args.stage_completed:
         # A successor part exists only after PartWriter closes its predecessor.
         # Never upload the final part of an archive lacking a complete manifest.
