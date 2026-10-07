@@ -169,6 +169,24 @@ class HandoffTests(unittest.TestCase):
         with sqlite3.connect(destination) as db:
             self.assertEqual(db.execute('SELECT COUNT(*) FROM outbox').fetchone()[0], 1)
 
+    def test_finalized_wal_snapshot_uses_immutable_read(self):
+        source = self.source / 'wal-snapshot.sqlite3'
+        db = sqlite3.connect(source)
+        try:
+            db.execute('PRAGMA journal_mode=WAL')
+            db.execute('CREATE TABLE outbox (event_id TEXT,payload TEXT)')
+            db.execute('INSERT INTO outbox VALUES (?,?)', ('one', '{}'))
+            db.commit()
+        finally:
+            db.close()
+        destination = self.root / 'restored-wal.sqlite3'
+        with patch.object(events.sqlite3, 'connect', wraps=sqlite3.connect) as connect:
+            with contextlib.redirect_stdout(io.StringIO()):
+                events.restore_outbox(source, destination)
+            self.assertIn('mode=ro&immutable=1', connect.call_args_list[0].args[0])
+        with sqlite3.connect(destination) as restored:
+            self.assertEqual(restored.execute('SELECT COUNT(*) FROM outbox').fetchone()[0], 1)
+
 
 if __name__ == '__main__':
     unittest.main()

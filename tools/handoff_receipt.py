@@ -30,7 +30,7 @@ def main():
               'rebuild_note': 'Images are rebuilt, not distributed. The package list is observed, not a new tested lockfile.',
               'tests': {'edge': {'passed': 287, 'skipped': 1}, 'backend': {'passed': 53},
                         'frontend': {'passed': 15, 'production_build': 'passed'},
-                        'handoff': {'passed': 13}, 'central_snapshot_restore': 'verified same table counts'},
+                        'handoff': {'passed': 14}, 'central_snapshot_restore': 'verified same table counts'},
               'exclusions': ['credentials', 'original HMAC secrets', 'camera source URLs',
                              'assistant local state', 'unverified dats_probe data', 'raw live footage']}
     path = Path(args.output)

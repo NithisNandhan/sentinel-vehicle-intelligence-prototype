@@ -144,7 +144,10 @@ def restore_outbox(snapshot, destination):
     if destination.exists():
         raise ValueError('Existing outbox preserved; restore only into a fresh destination')
     destination.parent.mkdir(parents=True, exist_ok=True)
-    with sqlite3.connect(f'file:{snapshot.as_posix()}?mode=ro', uri=True) as source:
+    # These are finalized SQLite backup snapshots, not active databases. WAL
+    # mode may persist in the header even though all pages are in this file.
+    # Immutable reads avoid creating WAL/SHM files on read-only Docker mounts.
+    with sqlite3.connect(f'file:{snapshot.as_posix()}?mode=ro&immutable=1', uri=True) as source:
         if source.execute('PRAGMA integrity_check').fetchone()[0] != 'ok':
             raise ValueError('SQLite snapshot failed its integrity check')
         with sqlite3.connect(destination) as target:
