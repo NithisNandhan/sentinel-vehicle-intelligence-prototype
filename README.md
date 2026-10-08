@@ -11,6 +11,11 @@ assets in the private [handoff release](https://github.com/NithisNandhan/sentine
 are included. The next development direction is permitted downloaded CCTV
 footage, not Sentinel live access; that adapter remains to be implemented.
 
+The [project status and completion report](output/pdf/Sentinel_Project_Status_and_Next_Steps.pdf)
+records completed features, model experiments, measured results, limitations and
+the prioritised remaining work as of 8 October 2026. An
+[editable version](docs/PROJECT_STATUS_AND_NEXT_STEPS.md) is also available.
+
 ## Two working interfaces
 
 Use `scripts/start-dual-interfaces.ps1` for the operator dashboard at
