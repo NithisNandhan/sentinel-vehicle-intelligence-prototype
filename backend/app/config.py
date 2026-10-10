@@ -11,6 +11,9 @@ class Settings(BaseSettings):
     demo_mode: bool = False
     catalogue_gateway_url: str = ""
     recognition_gateway_url: str = ""
+    # Off by default. When on, the dashboard may show the analysed frame and full
+    # unverified readings for permitted RECORDED footage only, never a live camera.
+    dashboard_recorded_evidence: bool = False
     cors_origins: str = "http://localhost:5173,http://127.0.0.1:5173,http://localhost:3000"
 
     model_config = SettingsConfigDict(env_file=".env", extra="ignore")

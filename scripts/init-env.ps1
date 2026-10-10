@@ -23,6 +23,8 @@ $settings = $settings.Replace('GENERATE_DB_PASSWORD', (New-SecretHex 24))
 $settings = $settings.Replace('GENERATE_EDGE_API_KEY', (New-SecretHex 32))
 $settings = $settings.Replace('GENERATE_OPERATOR_API_KEY', (New-SecretHex 32))
 $settings = $settings.Replace('GENERATE_HMAC_KEY', (New-SecretHex 32))
-Set-Content -LiteralPath $target -Value $settings -Encoding utf8NoBOM
+# Docker Compose must not see a byte-order mark before the first key. Windows
+# PowerShell 5.1 has no utf8NoBOM encoding name, so write the bytes directly.
+[System.IO.File]::WriteAllText($target, $settings, (New-Object System.Text.UTF8Encoding($false)))
 Write-Output 'Created .env with random local keys. Add Sentinel credentials there only when using online mode.'
 

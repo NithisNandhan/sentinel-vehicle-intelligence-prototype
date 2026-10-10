@@ -157,7 +157,7 @@ class Response(io.BytesIO):
 @pytest.mark.parametrize("content,content_type", [
     (b"<html>SECRET</html>", "text/html"), (b"not json SECRET", "application/json"),
     (b"[]", "application/json"), (b"x" * 1_048_577, "application/json"),
-])
+], ids=["html", "malformed", "non-object", "oversize"])  # Windows cannot hold a 1 MiB test ID
 def test_html_malformed_and_oversize_unavailable(client, monkeypatch, content, content_type):
     class Opener:
         def open(self, *args, **kwargs):
@@ -206,7 +206,10 @@ def test_unconfigured_gateway(client, monkeypatch):
 
 
 @pytest.mark.parametrize("value", [{"status": []}, {"status": "live", "recognition_state": {}},
-                                   {"status": "SECRET"}])
+                                   {"status": "SECRET"},
+                                   {"status": "processing"},  # A camera is never 'processing'.
+                                   {"status": "completed", "source_mode": "live"},
+                                   {"status": "live", "source_mode": "recorded"}])
 def test_invalid_upstream_status(client, monkeypatch, value):
     monkeypatch.setattr(recognition, "request_edge", lambda *args: value)
     response = client.get("/v1/recognition/status", headers=OPERATOR)

@@ -51,8 +51,11 @@ class EngineeringPageTests(unittest.TestCase):
         self.assertIn("latestSnapshot=null;selectedTrack=null", page)
         self.assertIn("clearEvidence('Evidence unavailable')", page)
         self.assertIn("clearEvidence('Shared camera changed')", page)
-        self.assertIn("age>5", page)
-        self.assertIn("Date.now()-lastGoodEvidence+latestSnapshot.frame_age_seconds*1000>5000", page)
+        # The limit is five seconds for a camera; only a recording may state a longer one.
+        self.assertIn("age>staleLimit(snapshot)", page)
+        self.assertIn("Date.now()-lastGoodEvidence+latestSnapshot.frame_age_seconds*1000>staleLimit(latestSnapshot)*1000", page)
+        self.assertIn("snapshot.stale_after_seconds<=600?snapshot.stale_after_seconds:5;", page)
+        self.assertIn("clearEvidence('New analysis run')", page)
         self.assertIn("epoch!==generation||key!==operatorKey", page)
         self.assertIn("document.visibilityState!=='visible'", page)
 
@@ -162,9 +165,67 @@ assert.ok($('frame').src);render({...structuredClone(fixture),frame_age_seconds:
 '''
         completed = subprocess.run(
             [shutil.which('node'), '--input-type=module'], input=environment + script + checks,
-            text=True, capture_output=True, timeout=15,
+            text=True, capture_output=True, timeout=15, encoding='utf-8',
         )
         self.assertEqual(completed.returncode, 0, completed.stderr)
+        recorded_checks = r'''
+await flush();$('operator-key').value='test-operator-key';await $('unlock-form').listeners.submit({preventDefault:()=>{}});await flush();
+// A camera never borrows the recorded limit, states or controls.
+assert.equal(staleLimit(fixture),5);assert.equal(staleLimit({...fixture,stale_after_seconds:30}),5);
+assert.equal($('playback-controls').hidden,true);
+render({...structuredClone(fixture),status:'processing'});assert.equal(latestSnapshot,null,'A camera is never shown as processing');
+const rec={...structuredClone(fixture),status:'processing',camera_id:'rec-0123456789ab',source_mode:'recorded',session_id:'s-1',recording_name:'<b>Junction A</b>',video_position_ms:65400,video_duration_ms:600000,pacing:'unpaced',time_basis:'processing_time',stale_after_seconds:30,frame_age_seconds:12,models:{ocr_device:'cpu',ocr_checkpoint_sha256:'c2ba896d994b174071c95ace0f5ffc8a61cec3fc6eecce8f0bc5feb7dec4456d'}};
+render(structuredClone(rec));
+assert.ok($('frame').src,'Twelve-second-old recorded evidence is still current on a slow CPU');
+assert.equal(staleLimit(rec),30);assert.equal(staleLimit({...rec,stale_after_seconds:99999}),5);
+assert.equal($('session-state').textContent,'RECORDED · <b>Junction A</b> · processing');assert.equal($('session-state').children.length,0,'Recording name must be text, never markup');
+assert.ok($('source-mode').textContent.includes('not a live camera'));assert.ok($('source-mode').textContent.includes('real time unknown'));
+assert.equal($('video-position').textContent,'1:05 / 10:00 · unpaced');assert.equal($('session-id').textContent,'s-1');
+assert.equal($('inference').textContent,'CPU · c2ba896d994b…');
+assert.ok($('message').textContent.startsWith('Recorded footage, not a live camera'));assert.equal($('connection-label').textContent,'Recorded inspection');
+assert.equal($('playback-controls').hidden,false);assert.equal($('playback-toggle').textContent,'Pause playback');assert.equal($('playback-toggle').disabled,false);
+$('playback-toggle').listeners.click();await flush();
+assert.deepEqual(JSON.parse(requests.filter(request=>request.path==='/control').at(-1).body),{action:'pause'});
+render({...structuredClone(rec),status:'paused',frame_age_seconds:0});assert.ok($('frame').src,'A paused recording keeps its current position visible');
+assert.equal($('playback-toggle').textContent,'Resume playback');assert.equal($('connection-label').textContent,'Recording paused');
+$('playback-toggle').listeners.click();await flush();
+assert.deepEqual(JSON.parse(requests.filter(request=>request.path==='/control').at(-1).body),{action:'resume'});
+render({...structuredClone(rec),status:'completed',frame_age_seconds:0});assert.ok($('frame').src);assert.equal($('connection-label').textContent,'Recording finished');assert.equal($('playback-toggle').disabled,true);
+// A new run from either interface clears everything from the old one before showing anything new.
+render({...structuredClone(rec),session_id:'s-2',status:'connecting',frame:undefined});assert.equal(latestSnapshot,null);assert.equal($('frame').src,undefined);assert.equal($('evidence-grid').children.length,0);
+render({...structuredClone(rec),session_id:'s-2'});assert.ok($('frame').src);
+const before=requests.filter(request=>request.path==='/control').length;
+$('seek-seconds').value='';$('playback-seek').listeners.click();await flush();$('seek-seconds').value='-4';$('playback-seek').listeners.click();await flush();
+assert.equal(requests.filter(request=>request.path==='/control').length,before,'An invalid seek is never sent');
+$('seek-seconds').value='12.5';$('playback-seek').listeners.click();
+assert.equal(latestSnapshot,null,'Seeking clears the old run immediately');await flush();
+assert.deepEqual(JSON.parse(requests.filter(request=>request.path==='/control').at(-1).body),{action:'seek',position_ms:12500});
+render({...structuredClone(rec),session_id:'s-3'});$('playback-restart').listeners.click();await flush();
+assert.deepEqual(JSON.parse(requests.filter(request=>request.path==='/control').at(-1).body),{action:'restart'});
+render({...structuredClone(rec),session_id:'s-4',frame_age_seconds:31});assert.equal(latestSnapshot,null,'Recorded evidence past its own limit is cleared');
+render({status:'unavailable',camera_id:'rec-0123456789ab',source_mode:'recorded',session_id:'s-4',failure_code:'ChangedRecording'});
+assert.equal($('message').textContent,'Analysis stopped (ChangedRecording). No evidence is displayed.');
+render({status:'unavailable',camera_id:'rec-0123456789ab',source_mode:'recorded',session_id:'s-4',failure_code:'<img src=x>'});
+assert.ok(!$('message').textContent.includes('<img'));
+assert.ok(requests.filter(request=>request.path==='/control').every(request=>request.headers['X-Operator-Key']==='test-operator-key'&&request.headers['X-Viewer-Token']));
+'''
+        listing = environment.replace("{available:true,cameras:[{id:'cam17',name:'Test authorised camera'}]}",
+            "{available:false,cameras:[],recordings:[{id:'rec-0123456789ab',name:'Junction A',duration_ms:600000}],recordings_rejected:[{file:'no-receipt.mp4',reason:'UnpermittedRecording'}]}")
+        self.assertNotEqual(listing, environment)
+        listing_checks = r'''
+await flush();$('operator-key').value='test-operator-key';await $('unlock-form').listeners.submit({preventDefault:()=>{}});await flush();await catalogue();await flush();
+const options=$('camera-select').children;assert.equal(options.length,1);assert.equal(options[0].value,'rec-0123456789ab');
+assert.equal(options[0].textContent,'RECORDED · Junction A · 10:00');
+assert.ok($('catalogue-status').textContent.includes('1 permitted recording(s)'));
+assert.ok($('catalogue-status').textContent.includes('no-receipt.mp4 (UnpermittedRecording)'));
+assert.equal($('open-camera').disabled,false,'A recording is selectable even with no camera catalogue');
+'''
+        for label, setup, body in (('recorded', environment, recorded_checks), ('listing', listing, listing_checks)):
+            completed = subprocess.run(
+                [shutil.which('node'), '--input-type=module'], input=setup + script + body,
+                text=True, capture_output=True, timeout=15, encoding='utf-8',
+            )
+            self.assertEqual(completed.returncode, 0, label + ': ' + completed.stderr)
 
 
 if __name__ == '__main__':

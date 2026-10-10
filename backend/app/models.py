@@ -40,6 +40,9 @@ class Sighting(Base):
     confidence: Mapped[float] = mapped_column(Float)
     source_mode: Mapped[str] = mapped_column(String(16))
     model_version: Mapped[str | None] = mapped_column(String(100), nullable=True)
+    session_id: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    time_basis: Mapped[str | None] = mapped_column(String(24), nullable=True)
+    processed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now)
     alert: Mapped["Alert | None"] = relationship(back_populates="sighting", uselist=False)
 

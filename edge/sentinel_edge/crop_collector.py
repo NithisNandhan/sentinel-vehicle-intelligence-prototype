@@ -7,7 +7,7 @@ from dataclasses import dataclass, field
 import time
 
 from .live_detection_viewer import clipped_box, crop_box, roi_schedule
-from .sampled_frames import SampledFrames
+from .sampled_frames import FrameTooLarge, SampledFrames
 from .stream import VideoFrame
 
 
@@ -49,7 +49,8 @@ class CropCollector(SampledFrames):
             # Decode samples at the fastest permitted cadence; inference stays
             # at the idle cadence unless a recent sample contained a vehicle.
             with SampledFrames(self.frames,self.stop,interval_ms=250 if self.adaptive_sampling else self.interval_ms,
-                    max_frames=self.max_frames,max_bytes=self.max_bytes,max_age_ms=self.max_age_ms) as tap:
+                    max_frames=self.max_frames,max_bytes=self.max_bytes,max_age_ms=self.max_age_ms,
+                    block=self.block) as tap:
                 while not self.stop.is_set():
                     item = tap.take(sequence)
                     self.decoded, self.input_dropped = tap.decoded,tap.dropped_samples
@@ -127,17 +128,25 @@ class CropCollector(SampledFrames):
                         tracks,proposals,vehicle_ms,(time.monotonic()-started)*1000,frame.captured_at)
                     size = self.size(packet)
                     with self.condition:
-                        if packet.discontinuity:
-                            while self.queue:
+                        if self.block:
+                            # A recording waits for the OCR owner; nothing queued
+                            # is discarded and the packet carries its own cut flag.
+                            if size > self.max_bytes:
+                                raise FrameTooLarge('Collected frame exceeds the memory bound')
+                            if not self._wait_for_room(size):
+                                break
+                        else:
+                            if packet.discontinuity:
+                                while self.queue:
+                                    self._drop()
+                                self.pending_cut = True
+                            if size > self.max_bytes:
+                                self.dropped_samples += 1
+                                continue
+                            while self.queue and (len(self.queue)>=self.max_frames
+                                    or self.bytes_used+size>self.max_bytes
+                                    or packet.pts_ms-self.queue[0][1].pts_ms>self.max_age_ms):
                                 self._drop()
-                            self.pending_cut = True
-                        if size > self.max_bytes:
-                            self.dropped_samples += 1
-                            continue
-                        while self.queue and (len(self.queue)>=self.max_frames
-                                or self.bytes_used+size>self.max_bytes
-                                or packet.pts_ms-self.queue[0][1].pts_ms>self.max_age_ms):
-                            self._drop()
                         self.sequence += 1
                         self.sampled += 1
                         self.queue.append((self.sequence,packet))
@@ -159,4 +168,5 @@ class CropCollector(SampledFrames):
             if result is not None:
                 actual = sum(item['crop'].nbytes for item in result[1].plate_cache.values() if item['crop'] is not None)
                 self.bytes_used -= actual
+                self.condition.notify_all()
             return result

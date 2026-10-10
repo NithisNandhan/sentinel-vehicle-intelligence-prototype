@@ -38,6 +38,8 @@ class VehicleTrack:
     track_id: str
     box: tuple[int, int, int, int]
     vehicle_class: int
+    # The detector's score for this box. Display only; not a plate-reading confidence.
+    confidence: float | None = None
 
 
 class VehicleTracker:
@@ -76,16 +78,20 @@ class VehicleTracker:
             imgsz=640, classes=classes, device='cpu', conf=.25, iou=.45,
             verbose=False, save=False)[0]
         detections = []
+        scores = {}
         for item in (result.boxes if result.boxes is not None else ()):
             cls = int(item.cls.item())
             coarse = BMD_TO_COCO[cls] if self.name == 'bmd' else cls
             coords = tuple(int(v) for v in item.xyxy[0].cpu().tolist())
+            score = getattr(item,'conf',None)
+            if score is not None:
+                scores[coords] = float(score.item())
             identity = getattr(item,'id',None)
             detections.append((str(int(identity.item())) if identity is not None else None,
                                coords,coarse))
         tracks,self.previous_tracks,self.next_detection_id = associate_vehicle_tracks(
             detections,self.previous_tracks,self.frame_index,self.next_detection_id)
-        return [VehicleTrack(track_id,coords,coarse) for track_id,coords,coarse in tracks]
+        return [VehicleTrack(track_id,coords,coarse,scores.get(coords)) for track_id,coords,coarse in tracks]
 
 
 class PlateDetector:

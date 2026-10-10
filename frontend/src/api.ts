@@ -1,4 +1,6 @@
-export type SourceMode = 'live' | 'synthetic' | string;
+export type SourceMode = 'live' | 'synthetic' | 'recorded' | string;
+/** Whether a recorded event's time is the recording's own clock or only when it was processed. */
+export type TimeBasis = 'source_clock' | 'processing_time';
 export type AlertStatus = 'new' | 'acknowledged' | 'resolved' | 'false_positive' | string;
 
 export interface Camera {
@@ -38,14 +40,25 @@ export interface PreviewSession {
   preview_url: string;
 }
 
-export type RecognitionState = 'reading' | 'uncertain' | 'model_accepted' | 'unreadable' | 'paused' | 'unavailable';
+export type RecognitionState = 'reading' | 'uncertain' | 'model_accepted' | 'unreadable' | 'paused' | 'unavailable' | 'completed';
 
 /** Operator-safe metadata only. Crops, full hypotheses and source URLs stay in the local console. */
 export interface RecognitionStatus {
   schema_version: '1.0';
-  status: 'paused' | 'connecting' | 'live' | 'unavailable';
+  /** `processing` and `completed` occur only for a recording; `live` only for a camera. */
+  status: 'paused' | 'connecting' | 'live' | 'unavailable' | 'processing' | 'completed';
+  /** A camera ID, or a recording ID when source_mode is `recorded`. */
   camera_id: string | null;
-  source_mode: 'live';
+  source_mode: 'live' | 'recorded';
+  session_id?: string | null;
+  recording_name?: string | null;
+  video_position_ms?: number | null;
+  video_duration_ms?: number | null;
+  time_basis?: TimeBasis | null;
+  pacing?: 'paced' | 'unpaced' | null;
+  stale_after_seconds?: number;
+  inference_device?: 'cpu' | 'gpu' | null;
+  failure_code?: string;
   frame_age_seconds?: number | null;
   resolution?: [number, number] | null;
   vehicle_boxes?: number;
@@ -62,6 +75,18 @@ export interface RecognitionStatus {
     recognition_state: RecognitionState;
     candidate_count: number;
   }[];
+  /** Every vehicle seen in this run, newest first. Masked text only; no image ever reaches this page. */
+  vehicles_seen?: {
+    track_id: string;
+    vehicle_class: string;
+    confidence: number | null;
+    first_ms: number | null;
+    last_ms: number | null;
+    observations: number;
+    state: RecognitionState;
+    masked_plate: string | null;
+    watchlist: 'possible_match' | 'no_match' | null;
+  }[];
   delivery?: { enabled: boolean; outbox_depth: number };
 }
 
@@ -70,6 +95,12 @@ export interface RecognitionCameras {
   scope?: 'configured_relays' | 'authorised_catalogue' | 'unavailable';
   cameras: { id: string; name: string }[];
 }
+
+export interface RecognitionRecordings {
+  recordings: { id: string; name: string; duration_ms: number | null; time_basis: TimeBasis }[];
+}
+
+export type PlaybackAction = 'pause' | 'resume' | 'restart' | 'seek';
 
 export interface Alert {
   id: string;
@@ -81,6 +112,10 @@ export interface Alert {
   severity: string;
   status: AlertStatus;
   source_mode: SourceMode;
+  stream_pts_ms?: number | null;
+  session_id?: string | null;
+  time_basis?: TimeBasis | null;
+  processed_at?: string | null;
   confidence?: number | null;
   created_at?: string | null;
   acknowledged_at?: string | null;
@@ -96,6 +131,9 @@ export interface Sighting {
   observed_at: string;
   masked_plate: string;
   source_mode?: SourceMode;
+  stream_pts_ms?: number | null;
+  session_id?: string | null;
+  time_basis?: TimeBasis | null;
   latitude?: number | null;
   longitude?: number | null;
 }
@@ -131,8 +169,13 @@ export type IncidentReport = Record<string, unknown>;
 const API_BASE = (import.meta.env.VITE_API_BASE_URL || '').replace(/\/$/, '');
 const OPERATOR_KEY_NAME = 'sentinel.operatorKey';
 
+// Opt-in local convenience (compose.autounlock.yaml): the dev server may be
+// given the operator key so this machine's dashboard opens unlocked. It is
+// never set by default and is ignored in a production build.
+const LOCAL_OPERATOR_KEY = import.meta.env.DEV ? String(import.meta.env.VITE_LOCAL_OPERATOR_KEY || '').trim() : '';
+
 export function getOperatorKey(): string {
-  return sessionStorage.getItem(OPERATOR_KEY_NAME) || '';
+  return sessionStorage.getItem(OPERATOR_KEY_NAME) || LOCAL_OPERATOR_KEY;
 }
 
 export function setOperatorKey(value: string): void {
@@ -187,6 +230,36 @@ export function getRecognitionStatus(): Promise<RecognitionStatus> {
 
 export function getRecognitionCameras(): Promise<RecognitionCameras> {
   return request<RecognitionCameras>('/v1/recognition/cameras', { cache: 'no-store' }, true);
+}
+
+/** Opt-in view for permitted recordings only: the analysed frame and full, unverified readings. */
+export interface RecognitionEvidence {
+  source_mode: 'recorded';
+  session_id: string | null;
+  video_position_ms: number | null;
+  frame: string | null;
+  vehicles: {
+    track_id: string; vehicle_class: string; confidence: number | null;
+    first_ms: number | null; last_ms: number | null; observations: number;
+    state: RecognitionState; reading: string | null; thumb: string | null;
+    watchlist: 'possible_match' | 'no_match' | null;
+  }[];
+}
+
+/** Resolves to null when the view is switched off or no recording is being analysed. */
+export async function getRecognitionEvidence(): Promise<RecognitionEvidence | null> {
+  try { return await request<RecognitionEvidence>('/v1/recognition/evidence', { cache: 'no-store' }, true); }
+  catch { return null; }
+}
+
+export function getRecognitionRecordings(): Promise<RecognitionRecordings> {
+  return request<RecognitionRecordings>('/v1/recognition/recordings', { cache: 'no-store' }, true);
+}
+
+/** Playback control for the selected recording. `positionMs` is required for seek only. */
+export function controlRecognition(action: PlaybackAction, positionMs?: number): Promise<RecognitionStatus> {
+  const body = action === 'seek' ? { action, position_ms: Math.max(0, Math.round(positionMs ?? 0)) } : { action };
+  return request<RecognitionStatus>('/v1/recognition/control', { method: 'POST', body: JSON.stringify(body) }, true);
 }
 
 export function setRecognitionSession(cameraId: string | null): Promise<RecognitionStatus> {

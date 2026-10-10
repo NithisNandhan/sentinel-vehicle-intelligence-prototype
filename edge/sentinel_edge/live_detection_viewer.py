@@ -24,6 +24,12 @@ from collections import deque
 from .privacy import mask_plate
 
 
+LIVE_STALE_SECONDS = 5
+# A recording is analysed as fast as this machine allows, which on a CPU can be
+# several seconds per sample. Its evidence is the current position, not a feed.
+RECORDED_STALE_SECONDS = 30
+
+
 class LiveState:
     def __init__(self, clock=time.monotonic):
         self.clock = clock
@@ -33,24 +39,87 @@ class LiveState:
         self.last_heartbeat = 0.
         self.value = {'status': 'paused', 'camera_id': None}
         self.allowed_ids = {'cam01', 'cam02'}
+        # Permitted local recordings, selectable alongside cameras but always
+        # labelled `recorded`. Playback state belongs to the one shared session.
+        self.recordings = {}
+        self.paused = threading.Event()
+        self.start_ms = 0
+        self.session_id = None
+
+    def _selectable(self, camera_id):
+        return camera_id in self.allowed_ids or camera_id in self.recordings
 
     def authorise(self, camera_ids):
         with self.lock:
             self.allowed_ids = set(camera_ids)
-            if self.camera_id and self.camera_id not in self.allowed_ids:
+            if self.camera_id and not self._selectable(self.camera_id):
                 self.select(None)
+
+    def authorise_recordings(self, recordings):
+        with self.lock:
+            self.recordings = dict(recordings)
+            if self.camera_id and not self._selectable(self.camera_id):
+                self.select(None)
+
+    def _begin(self, camera_id, start_ms=0):
+        """Start a new capture generation; the old one stops and its evidence goes."""
+        self.capture_stop.set()
+        self.capture_stop = threading.Event()
+        self.camera_id = camera_id
+        self.start_ms = start_ms
+        self.paused.clear()
+        self.session_id = None
+        if camera_id in self.recordings:
+            from .recorded_source import new_session_id
+            self.session_id = new_session_id()
+        self.value = {'status': 'connecting' if camera_id else 'paused', 'camera_id': camera_id}
 
     def select(self, camera_id):
         with self.lock:
-            if camera_id is not None and camera_id not in self.allowed_ids:
+            if camera_id is not None and not self._selectable(camera_id):
                 raise ValueError('Select a live camera from the authorised catalogue')
             self.last_heartbeat = self.clock()
             if camera_id == self.camera_id:
                 return
-            self.capture_stop.set()
-            self.capture_stop = threading.Event()
-            self.camera_id = camera_id
-            self.value = {'status': 'connecting' if camera_id else 'paused', 'camera_id': camera_id}
+            self._begin(camera_id)
+
+    def control(self, action, position_ms=None):
+        """Playback control for the selected recording only; cameras have none."""
+        with self.lock:
+            recording = self.recordings.get(self.camera_id)
+            if recording is None:
+                raise ValueError('Playback controls need a selected recording')
+            if action in ('pause', 'resume', 'restart'):
+                if position_ms is not None:
+                    raise ValueError('Only seek takes a position')
+            elif action == 'seek':
+                if (isinstance(position_ms, bool) or not isinstance(position_ms, int) or position_ms < 0
+                        or (recording.duration_ms is not None and position_ms > recording.duration_ms)):
+                    raise ValueError('Seek position is outside the recording')
+            else:
+                raise ValueError('Unknown playback action')
+            self.last_heartbeat = self.clock()
+            if action == 'pause':
+                if self.value.get('status') != 'completed':
+                    self.paused.set()
+            elif action == 'resume':
+                self.paused.clear()
+            else:
+                # Restart and seek are new runs: tracking, temporal evidence and
+                # reconstruction restart clean under a new session ID.
+                self._begin(self.camera_id, position_ms if action == 'seek' else 0)
+
+    def complete(self, capture_stop):
+        """Mark end of file for the generation that reached it, keeping its last evidence."""
+        with self.lock:
+            if capture_stop is self.capture_stop and self.camera_id in self.recordings:
+                self.paused.clear()
+                self.value = dict(self.value, status='completed', camera_id=self.camera_id)
+
+    def run_parameters(self):
+        with self.lock:
+            return (self.camera_id, self.capture_stop, self.recordings.get(self.camera_id),
+                    self.session_id, self.start_ms)
 
     def expire(self):
         with self.lock:
@@ -72,16 +141,29 @@ class LiveState:
     def snapshot(self, *, engineering=False):
         with self.lock:
             result = dict(self.value)
+            recording = self.recordings.get(self.camera_id)
+            limit = RECORDED_STALE_SECONDS if recording else LIVE_STALE_SECONDS
             if not engineering:
                 result.pop('debug', None)
+            # A held recording has not moved on: its last frame is still the
+            # current position. Idle expiry, not age, clears it.
+            held = recording is not None and (self.paused.is_set() or result.get('status') == 'completed')
             if result.get('published_at'):
-                result['frame_age_seconds'] = round(self.clock() - result['published_at'], 1)
-                if result['frame_age_seconds'] > 5:
+                result['frame_age_seconds'] = 0. if held else round(self.clock() - result['published_at'], 1)
+                if result['frame_age_seconds'] > limit:
                     # Do not transmit old sensitive evidence even if a caller
                     # bypasses the browser's own freshness checks.
                     result.pop('frame',None); result.pop('crop',None); result.pop('debug',None)
                     if result.get('status') == 'live':
                         result['status'] = 'unavailable'
+            result['source_mode'] = 'recorded' if recording else 'live'
+            result['stale_after_seconds'] = limit
+            if recording:
+                result.update(session_id=self.session_id, recording_name=recording.name,
+                              video_duration_ms=recording.duration_ms,
+                              time_basis=recording.public()['time_basis'])
+                if self.paused.is_set() and result.get('status') in ('processing', 'connecting'):
+                    result['status'] = 'paused'
             return result
 
     def operator_snapshot(self):
@@ -197,12 +279,16 @@ def viewer_frames(config, camera, stop):
     raise TimeoutError('No live frames received; no media retained')
 
 
-def load_models(config, cache, checkpoint, *, detector_profile=None, training_root=None):
+def load_models(config, cache, checkpoint, *, detector_profile=None, training_root=None, device='gpu'):
     # Paddle's isolated CUDA 12 libraries must initialize before importing
     # Torch/YOLO (the production image bundles a different CUDA/cuDNN version).
     import numpy as np
     from .awiros_experiment import AwirosExperiment
-    reader = AwirosExperiment(cache, device='gpu', checkpoint=checkpoint)
+    # The OCR device is an explicit choice. A GPU request on a machine without
+    # one fails visibly in AwirosExperiment; it is never downgraded to CPU.
+    if device not in ('cpu', 'gpu'):
+        raise ValueError('Explicit CPU/GPU device required')
+    reader = AwirosExperiment(cache, device=device, checkpoint=checkpoint)
     reader.probabilities(np.zeros((32, 120, 3), dtype=np.uint8))
     if detector_profile is not None:
         from .experimental_detectors import PROFILES, PlateDetector, VehicleTracker
@@ -214,6 +300,39 @@ def load_models(config, cache, checkpoint, *, detector_profile=None, training_ro
     from ultralytics import YOLO
     from .ocr_selection_benchmark import PlateDetectorExperiment
     return reader, PlateDetectorExperiment(), YOLO(str(config.model_cache_dir/'yolov8n.pt'))
+
+
+def dashboard_view(snapshot, width=1280, rows=30):
+    """Analysed frame (shrunk for transport) and vehicles seen, for a recording only."""
+    import cv2
+    import numpy as np
+    if snapshot.get('source_mode') != 'recorded':
+        return None
+    frame = snapshot.get('frame')
+    if frame:
+        image = cv2.imdecode(np.frombuffer(base64.b64decode(frame), np.uint8), cv2.IMREAD_COLOR)
+        if image is not None and image.shape[1] > width:
+            image = cv2.resize(image, (width, round(image.shape[0]*width/image.shape[1])), interpolation=cv2.INTER_AREA)
+        ok, data = cv2.imencode('.jpg', image, [cv2.IMWRITE_JPEG_QUALITY, 78]) if image is not None else (False, None)
+        frame = base64.b64encode(data).decode('ascii') if ok else None
+    return {'source_mode': 'recorded', 'session_id': snapshot.get('session_id'), 'status': snapshot.get('status'),
+            'video_position_ms': snapshot.get('video_position_ms'), 'frame': frame or None,
+            'vehicles': snapshot.get('debug', {}).get('passed', [])[:rows]}
+
+
+def model_identity(reader, detector_profile=None):
+    """What actually loaded, for diagnostics. Names and hashes only, no paths."""
+    from .experimental_detectors import HASHES, PROFILES
+    vehicle, plate = PROFILES.get(detector_profile, ('yolov8n', 'fast-alpr'))
+    adaptation = getattr(reader, 'adaptation', None) or {}
+    return {'ocr_model': 'awiros-ctc-adapted' if adaptation else 'awiros-ctc-parent',
+            'ocr_checkpoint_sha256': adaptation.get('weights_sha256'),
+            'ocr_device': getattr(reader, 'device', None),
+            'detector_profile': detector_profile or 'legacy',
+            'vehicle_model': vehicle, 'vehicle_model_sha256': HASHES.get(vehicle),
+            'plate_model': plate, 'plate_model_sha256': HASHES.get(plate),
+            # Both detector adapters are pinned to CPU execution in this session.
+            'detector_device': 'cpu'}
 
 
 def observe(config, camera, model, detector, vehicle_model, state, stop, duration_seconds=None):
@@ -378,8 +497,21 @@ def configured_relay_cameras(config):
 
 def serve(config, cache, checkpoint, port=7780, lifetime=1800, bind_host='127.0.0.1',
           detector_profile=None, training_root=None, operator_key=None, deliver=False,
-          configured_relays=False, plate_recovery=False):
+          configured_relays=False, plate_recovery=False, device='gpu',
+          recordings_dir=None, live_catalogue=True, paced=True, dashboard_evidence=False):
+    if device not in ('cpu', 'gpu'):
+        raise ValueError('Explicit CPU/GPU device required')
+    if recordings_dir is not None and not detector_profile:
+        raise ValueError('Recorded analysis needs a tracked detector profile')
     state, shutdown = LiveState(), threading.Event()
+    identity = {}
+    library = None
+    recordings_view = {'recordings': [], 'rejected': []}
+    if recordings_dir is not None:
+        from .recorded_source import RecordingLibrary
+        library = RecordingLibrary(recordings_dir)
+    if not live_catalogue:
+        state.authorise(())  # Recordings only: no camera is selectable.
     token = secrets.token_urlsafe(32)
     operator_key = operator_key if operator_key is not None else os.getenv('OPERATOR_API_KEY', '')
     # Tests with no live configuration retain the legacy masked-only page.
@@ -442,21 +574,38 @@ def serve(config, cache, checkpoint, port=7780, lifetime=1800, bind_host='127.0.
             elif self.path == '/snapshot':
                 self.reply(200, json.dumps(state.snapshot()).encode())
             elif self.path == '/engineering' and privileged:
-                self.reply(200, json.dumps(state.snapshot(engineering=True)).encode())
+                snapshot = state.snapshot(engineering=True)
+                snapshot['models'] = dict(identity)
+                self.reply(200, json.dumps(snapshot).encode())
+            elif self.path == '/internal/evidence':
+                # Opt-in, and for permitted recordings only: the analysed frame and
+                # full unverified readings for the operator dashboard. A live
+                # camera's imagery and plate text never leave this process.
+                body = dashboard_view(state.snapshot(engineering=True)) if dashboard_evidence else None
+                if body is None:
+                    self.reply(404, b'{}')
+                else:
+                    self.reply(200, json.dumps(body).encode())
             elif self.path == '/internal/status':
                 snapshot = state.operator_snapshot()
                 snapshot['model_profile'] = detector_profile or 'legacy'
+                snapshot['inference_device'] = identity.get('ocr_device')
                 snapshot['delivery'] = {'enabled': delivery is not None, 'outbox_depth': delivery.depth() if delivery else 0}
                 self.reply(200, json.dumps(snapshot).encode())
             elif self.path in ('/cameras', '/internal/cameras'):
-                self.reply(200, json.dumps(catalogue).encode())
+                body = dict(catalogue, recordings=recordings_view['recordings'])
+                if self.path == '/cameras' and privileged:
+                    # File names and a reason code help fix a missing receipt.
+                    body['recordings_rejected'] = recordings_view['rejected']
+                self.reply(200, json.dumps(body).encode())
             else:
                 self.reply(404, b'{}')
 
         def do_POST(self):
             if not self.allowed(True):
                 return
-            if self.path not in ('/session', '/heartbeat', '/internal/session', '/internal/heartbeat'):
+            if self.path not in ('/session', '/heartbeat', '/internal/session', '/internal/heartbeat',
+                                 '/control', '/internal/control'):
                 self.reply(404, b'{}'); return
             try:
                 self.connection.settimeout(5)
@@ -464,6 +613,23 @@ def serve(config, cache, checkpoint, port=7780, lifetime=1800, bind_host='127.0.
                 if not 0 < length <= 256:
                     raise ValueError()
                 data = json.loads(self.rfile.read(length))
+                if self.path.endswith('/control'):
+                    if (not isinstance(data, dict) or not {'action'} <= set(data) <= {'action', 'position_ms'}
+                            or not isinstance(data['action'], str)):
+                        raise ValueError()
+                    try:
+                        state.control(data['action'], data.get('position_ms'))
+                    except ValueError:
+                        self.reply(409, b'{"error":"Playback control rejected"}'); return
+                    if self.path.startswith('/internal/'):
+                        snapshot = state.operator_snapshot()
+                        snapshot['model_profile'] = detector_profile or 'legacy'
+                        snapshot['inference_device'] = identity.get('ocr_device')
+                        snapshot['delivery'] = {'enabled': delivery is not None, 'outbox_depth': delivery.depth() if delivery else 0}
+                        self.reply(200, json.dumps(snapshot).encode())
+                    else:
+                        self.reply(200, b'{"ok":true}')
+                    return
                 if not isinstance(data, dict) or set(data) != {'camera_id'}:
                     raise ValueError()
                 if not (data['camera_id'] is None or isinstance(data['camera_id'], str)):
@@ -478,18 +644,29 @@ def serve(config, cache, checkpoint, port=7780, lifetime=1800, bind_host='127.0.
                 if self.path.startswith('/internal/'):
                     snapshot = state.operator_snapshot()
                     snapshot['model_profile'] = detector_profile or 'legacy'
+                    snapshot['inference_device'] = identity.get('ocr_device')
                     snapshot['delivery'] = {'enabled': delivery is not None, 'outbox_depth': delivery.depth() if delivery else 0}
                     self.reply(200, json.dumps(snapshot).encode())
                 else:
                     self.reply(200, b'{"ok":true}')
             except (ValueError, TypeError, KeyError):
-                self.reply(400, b'{"error":"Select an authorised live catalogue ID or null"}')
+                self.reply(400, b'{"error":"Select an authorised source ID or null, or a valid playback action"}')
 
     def work():
         nonlocal catalogue
         model = detector = vehicle = cameras = None
+        next_scan = next_discovery = 0.
+        if not live_catalogue:
+            cameras = {}
         while not shutdown.is_set():
-            if cameras is None and config is not None:
+            if library is not None and time.monotonic() >= next_scan:
+                # Rescan so a newly registered file appears without a restart.
+                next_scan = time.monotonic()+15
+                found, rejected = library.scan()
+                state.authorise_recordings(found)
+                recordings_view['recordings'] = [item.public() for item in found.values()]
+                recordings_view['rejected'] = rejected
+            if cameras is None and config is not None and time.monotonic() >= next_discovery:
                 try:
                     from .diagnostic_gateway import discover
                     cameras = {c.camera_id: c for c in discover(config) if c.live}
@@ -503,28 +680,39 @@ def serve(config, cache, checkpoint, port=7780, lifetime=1800, bind_host='127.0.
                     # Only opt-in use of the already approved/configured local
                     # pair. This is not a cached or fabricated full catalogue.
                     if configured_relays:
-                        cameras = configured_relay_cameras(config)
+                        cameras = configured_relay_cameras(config) or None
                     if cameras:
                         state.authorise(cameras)
                         catalogue = {'available': True, 'scope': 'configured_relays',
                                      'cameras': [{'id': c.camera_id, 'name': c.name} for c in cameras.values()]}
                     else:
-                        with state.lock:
-                            selected, stop = state.camera_id, state.capture_stop
-                        if selected:
-                            state.publish({'camera_id': selected, 'status': 'unavailable'}, stop)
-                        shutdown.wait(15); continue
-            with state.lock:
-                selected, stop = state.camera_id, state.capture_stop
+                        # Retry later without holding up a selected recording.
+                        next_discovery = time.monotonic()+15
+            selected, stop, recording, session_id, start_ms = state.run_parameters()
             if not selected:
                 shutdown.wait(.25); continue
+            if recording is None and (cameras is None or selected not in cameras):
+                state.publish({'camera_id': selected, 'status': 'unavailable'}, stop)
+                shutdown.wait(1); continue
             try:
                 if model is None:
                     import av
                     av.logging.set_level(av.logging.PANIC)
                     model, detector, vehicle = load_models(config, cache, checkpoint,
-                        detector_profile=detector_profile, training_root=training_root)
-                if detector_profile:
+                        detector_profile=detector_profile, training_root=training_root, device=device)
+                    identity.update(model_identity(model, detector_profile))
+                if recording is not None:
+                    from .recorded_source import RecordedRun
+                    from .tracked_live_viewer import observe_tracked
+                    run = RecordedRun(recording, session_id, start_ms, paced, state.paused)
+                    observe_tracked(config, recording, model, detector, vehicle, state, stop,
+                                    debug=True, delivery=delivery, detector_profile=detector_profile,
+                                    plate_recovery=plate_recovery, recorded=run)
+                    state.complete(stop)
+                    # Hold the finished or stopped run until the operator acts.
+                    while not stop.wait(1) and not shutdown.is_set():
+                        pass
+                elif detector_profile:
                     from .tracked_live_viewer import observe_tracked
                     observe_tracked(config, cameras[selected], model, detector, vehicle, state, stop,
                                     debug=True, delivery=delivery, detector_profile=detector_profile,
@@ -537,7 +725,13 @@ def serve(config, cache, checkpoint, port=7780, lifetime=1800, bind_host='127.0.
                 code = getattr(exc,'failure_code',type(exc).__name__)
                 state.publish({'camera_id': selected, 'status': 'unavailable',
                                'failure_code': code if isinstance(code,str) and code.isidentifier() else 'CaptureFailure'}, stop)
-                stop.wait(5)  # Redact third-party exceptions; retry, never tight-loop.
+                if recording is not None:
+                    # A bad file will not fix itself: wait for a new selection
+                    # or restart instead of re-reading it in a loop.
+                    while not stop.wait(1) and not shutdown.is_set():
+                        pass
+                else:
+                    stop.wait(5)  # Redact third-party exceptions; retry, never tight-loop.
 
     server = ThreadingHTTPServer((bind_host, port), Handler)
     server.daemon_threads = True
@@ -560,7 +754,17 @@ def serve(config, cache, checkpoint, port=7780, lifetime=1800, bind_host='127.0.
 
 if __name__ == '__main__':
     from .config import Config
-    parser = argparse.ArgumentParser()
+    parser = argparse.ArgumentParser(description='Shared engineering recognition session')
+    parser.add_argument('--recordings-dir', type=Path,
+                        help='Folder of permitted local videos, each with a .receipt.json beside it')
+    parser.add_argument('--recordings-only', action='store_true',
+                        help='Analyse recordings without any Sentinel credentials or camera catalogue')
+    parser.add_argument('--dashboard-evidence', action='store_true',
+                        default=os.getenv('SENTINEL_DASHBOARD_EVIDENCE','').lower() == 'true',
+                        help='Recorded sources only: let the operator dashboard show the analysed frame and full unverified readings')
+    parser.add_argument('--unpaced', action='store_true',
+                        default=os.getenv('SENTINEL_RECORDED_UNPACED','').lower() == 'true',
+                        help='Process recordings as fast as possible instead of at most real time; frames are never dropped either way')
     parser.add_argument('--cache', type=Path, required=True)
     parser.add_argument('--checkpoint', type=Path, required=True)
     parser.add_argument('--container-bind', action='store_true', help='Use only with a Docker loopback-only port publication')
@@ -569,10 +773,17 @@ if __name__ == '__main__':
     parser.add_argument('--deliver', action='store_true', help='Durably deliver strictly model-accepted sightings, never candidates or imagery')
     parser.add_argument('--plate-recovery', action='store_true', help='Opt-in native full-image fallback and 250 ms sampling near tracked vehicles')
     parser.add_argument('--lifetime', type=int, default=1800)
+    parser.add_argument('--device', choices=('cpu','gpu'), default=os.getenv('SENTINEL_OCR_DEVICE','gpu'),
+                        help='OCR device. Explicit; a GPU request never falls back to CPU')
     parser.add_argument('--configured-relays', action='store_true', help='When discovery fails, use only the previously approved CAM01/CAM02 local relays; not full catalogue access')
     args = parser.parse_args()
-    serve(Config.from_env(live=True), args.cache, args.checkpoint,
+    if args.recordings_only and args.recordings_dir is None:
+        parser.error('--recordings-only needs --recordings-dir')
+    if args.recordings_dir is not None and args.detector_profile is None:
+        args.detector_profile = 'general'
+    serve(Config.from_env(live=not args.recordings_only), args.cache, args.checkpoint,
+          recordings_dir=args.recordings_dir, live_catalogue=not args.recordings_only, paced=not args.unpaced,
           bind_host='0.0.0.0' if args.container_bind else '127.0.0.1',
           detector_profile=args.detector_profile, training_root=args.training_root, deliver=args.deliver,
           lifetime=max(60,min(28800,args.lifetime)), configured_relays=args.configured_relays,
-          plate_recovery=args.plate_recovery)
+          plate_recovery=args.plate_recovery, device=args.device, dashboard_evidence=args.dashboard_evidence)

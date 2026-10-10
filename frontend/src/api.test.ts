@@ -1,7 +1,8 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { cameraPreview, formatTime, getAlerts, getHourlyReports, injectDemo,
   searchCatalogue, setOperatorKey, startCataloguePreview, getRecognitionStatus,
-  getRecognitionCameras, setRecognitionSession, heartbeatRecognition } from './api';
+  getRecognitionCameras, setRecognitionSession, heartbeatRecognition,
+  getRecognitionRecordings, controlRecognition } from './api';
 
 const values = new Map<string, string>();
 
@@ -121,6 +122,41 @@ describe('shared recognition API', () => {
       '{"camera_id":"cam17"}', '{"camera_id":"cam17"}', '{"camera_id":null}',
     ]);
     for (const call of fetcher.mock.calls) expect((call[1] as RequestInit).method).toBe('POST');
+  });
+  it('lists recordings and sends only validated playback controls with the operator key', async () => {
+    setOperatorKey('test-operator-key');
+    const fetcher = vi.fn().mockResolvedValue({ ok: true, status: 200, json: async () => ({
+      recordings: [{ id: 'rec-0123456789ab', name: 'Junction A', duration_ms: 6000, time_basis: 'processing_time' }],
+    }) });
+    vi.stubGlobal('fetch', fetcher);
+    expect((await getRecognitionRecordings()).recordings[0].id).toBe('rec-0123456789ab');
+    await controlRecognition('pause');
+    await controlRecognition('resume');
+    await controlRecognition('restart', 9999);   // a position is ignored unless seeking
+    await controlRecognition('seek', 4000.6);
+    await controlRecognition('seek', -50);
+    expect(fetcher.mock.calls.map(call => call[0])).toEqual([
+      '/v1/recognition/recordings', '/v1/recognition/control', '/v1/recognition/control',
+      '/v1/recognition/control', '/v1/recognition/control', '/v1/recognition/control',
+    ]);
+    expect(fetcher.mock.calls.slice(1).map(call => (call[1] as RequestInit).body)).toEqual([
+      '{"action":"pause"}', '{"action":"resume"}', '{"action":"restart"}',
+      '{"action":"seek","position_ms":4001}', '{"action":"seek","position_ms":0}',
+    ]);
+    for (const call of fetcher.mock.calls) {
+      expect(((call[1] as RequestInit).headers as Headers).get('X-Operator-Key')).toBe('test-operator-key');
+    }
+  });
+  it('keeps the recorded label and traceability fields on alerts', async () => {
+    setOperatorKey('test-operator-key');
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue({ ok: true, status: 200, json: async () => [{
+      id: 9, sighting_id: 3, camera_id: 'rec-0123456789ab', observed_at: '2026-10-10T16:30:00Z',
+      masked_plate: 'AP******34', reason: 'Synthetic watchlist demonstration', severity: 'high', status: 'new',
+      source_mode: 'recorded', stream_pts_ms: 4500, session_id: 's-1', time_basis: 'processing_time',
+    }] }));
+    const [alert] = await getAlerts();
+    expect([alert.source_mode, alert.stream_pts_ms, alert.session_id, alert.time_basis])
+      .toEqual(['recorded', 4500, 's-1', 'processing_time']);
   });
 });
 

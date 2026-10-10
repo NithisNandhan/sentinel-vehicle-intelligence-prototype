@@ -16,6 +16,17 @@ records completed features, model experiments, measured results, limitations and
 the prioritised remaining work as of 8 October 2026. An
 [editable version](docs/PROJECT_STATUS_AND_NEXT_STEPS.md) is also available.
 
+## Recorded footage (added 10 October 2026)
+
+The shared session can now analyse a permitted local video file on CPU, with
+no Sentinel credentials: `scripts/start-recorded-analysis.ps1`. Footage is
+labelled `recorded` in every interface, event and report, never `live`. See
+[recorded footage](docs/RECORDED_VIDEO.md) for receipts, controls, labels and
+measurement, and [BUILD_INSTRUCTIONS.md](BUILD_INSTRUCTIONS.md) with
+[task-reports/](task-reports/) for what is built, tested and still unproven.
+**No recognition accuracy has been measured on recorded footage yet**; the
+code is covered by tests that use a mocked recogniser.
+
 ## Two working interfaces
 
 Use `scripts/start-dual-interfaces.ps1` for the operator dashboard at
