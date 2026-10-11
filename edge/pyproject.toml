@@ -11,6 +11,9 @@ dependencies = []
 
 [project.optional-dependencies]
 live = ["av>=12,<17", "numpy>=1.26,<3", "opencv-python-headless>=4.9,<5", "ultralytics>=8.2,<9", "fast-alpr>=0.2,<2", "onnxruntime-gpu>=1.18,<2"]
+# Same runtime without CUDA wheels, for the recorded-video session on a CPU-only
+# machine. Install CPU Torch from the PyTorch CPU index first (see edge/Dockerfile).
+live-cpu = ["av>=12,<17", "numpy>=1.26,<3", "opencv-python-headless>=4.9,<5", "ultralytics>=8.2,<9", "fast-alpr>=0.2,<2", "onnxruntime>=1.18,<2"]
 test = ["pytest>=8,<10", "numpy>=1.26,<3", "opencv-python-headless>=4.9,<5", "PyYAML>=6,<7", "Pillow>=10,<13", "av>=12,<17"]
 
 [tool.setuptools.packages.find]

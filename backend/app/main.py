@@ -97,6 +97,10 @@ def alert_dict(alert: Alert) -> dict:
         severity=alert.severity,
         status=alert.status,
         source_mode=sighting.source_mode,
+        stream_pts_ms=sighting.stream_pts_ms,
+        session_id=sighting.session_id,
+        time_basis=sighting.time_basis,
+        processed_at=as_utc(sighting.processed_at) if sighting.processed_at else None,
         created_at=as_utc(alert.created_at),
         updated_at=as_utc(alert.updated_at),
         audit=[AuditOut(id=entry.id, from_status=entry.from_status, to_status=entry.to_status,
@@ -158,6 +162,9 @@ def ingest_sighting(session: Session, payload: SightingIn) -> tuple[Sighting, Al
             confidence=payload.confidence,
             source_mode=payload.source_mode,
             model_version=payload.model_version,
+            session_id=payload.session_id,
+            time_basis=payload.time_basis,
+            processed_at=payload.processed_at,
         )
         session.add(sighting)
         session.flush()
@@ -336,6 +343,10 @@ def search_route(payload: RouteSearch, session: Session = Depends(get_db)) -> di
                 "masked_plate": sighting.masked_plate,
                 "confidence": sighting.confidence,
                 "source_mode": sighting.source_mode,
+                "stream_pts_ms": sighting.stream_pts_ms,
+                "session_id": sighting.session_id,
+                "time_basis": sighting.time_basis,
+                "processed_at": as_utc(sighting.processed_at).isoformat() if sighting.processed_at else None,
                 "latitude": camera.latitude,
                 "longitude": camera.longitude,
                 "coordinates_approximate": camera.coordinates_approximate,
@@ -378,6 +389,10 @@ def incident_report(alert_id: int, format: str = "json", session: Session = Depe
     data["edge_id"] = alert.sighting.edge_id
     data["model_version"] = alert.sighting.model_version
     data["synthetic_notice"] = "SYNTHETIC DEMONSTRATION EVENT" if alert.sighting.source_mode == "synthetic" else None
+    data["recorded_notice"] = None
+    if alert.sighting.source_mode == "recorded":
+        data["recorded_notice"] = "RECORDED FOOTAGE · NOT A LIVE CAMERA" + (
+            " · TIME SHOWN IS PROCESSING TIME" if alert.sighting.time_basis == "processing_time" else "")
     if format == "html":
         rows = "".join(f"<tr><th>{escape(str(key))}</th><td>{escape(str(value))}</td></tr>" for key, value in data.items() if key != "audit")
         actions = "".join(f"<li>{escape(entry['changed_at'])}: {escape(entry['from_status'])} → {escape(entry['to_status'])} ({escape(entry['actor'])})</li>" for entry in data["audit"])

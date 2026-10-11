@@ -230,3 +230,97 @@ def test_websocket_operator_subprotocol(client):
     with client.websocket_connect("/v1/ws/alerts", subprotocols=["sentinel-operator", "test-operator-key"]) as websocket:
         assert websocket.accepted_subprotocol == "sentinel-operator"
 
+
+def recorded_sighting(**overrides):
+    data = sighting(camera_id="rec-0123456789ab")
+    data.update(source_mode="recorded", session_id="s-20261010-a1b2c3", time_basis="processing_time",
+                stream_pts_ms=4500, processed_at="2026-10-10T16:30:00Z")
+    data.update(overrides)
+    return data
+
+
+def test_recorded_sighting_keeps_its_label_through_alert_route_and_report(client):
+    data = recorded_sighting()
+    first = client.post("/v1/sightings", json=data, headers=EDGE)
+    assert first.status_code == 200, first.text
+    alert = first.json()["alert"]
+    assert alert["source_mode"] == "recorded"
+    assert alert["session_id"] == "s-20261010-a1b2c3"
+    assert alert["time_basis"] == "processing_time"
+    assert alert["stream_pts_ms"] == 4500
+    assert alert["processed_at"].startswith("2026-10-10T16:30:00")
+    assert alert["processed_at"].endswith(("+00:00", "Z"))
+    assert client.post("/v1/sightings", json=data, headers=EDGE).json()["duplicate"] is True
+    assert len(client.get("/v1/alerts", headers=OPERATOR).json()) == 1
+    cameras = {camera["id"]: camera for camera in client.get("/v1/cameras", headers=OPERATOR).json()}
+    assert cameras["rec-0123456789ab"]["source_mode"] == "recorded"
+    route = client.post("/v1/routes/search", json={"plate": "GJ01AB1234"}, headers=OPERATOR).json()["sightings"]
+    assert [(row["source_mode"], row["session_id"], row["stream_pts_ms"]) for row in route] == [
+        ("recorded", "s-20261010-a1b2c3", 4500)]
+    report = client.get(f"/v1/reports/incidents/{alert['id']}", headers=OPERATOR).json()
+    assert report["source_mode"] == "recorded"
+    assert report["synthetic_notice"] is None
+    assert "RECORDED FOOTAGE" in report["recorded_notice"] and "PROCESSING TIME" in report["recorded_notice"]
+    assert "RECORDED FOOTAGE" in client.get(f"/v1/reports/incidents/{alert['id']}?format=html", headers=OPERATOR).text
+
+
+def test_recorded_sighting_from_a_new_session_is_a_separate_traceable_event(client):
+    first = client.post("/v1/sightings", json=recorded_sighting(), headers=EDGE).json()
+    replay = client.post("/v1/sightings", json=recorded_sighting(session_id="s-20261010-ffff00"), headers=EDGE).json()
+    assert replay["duplicate"] is False and replay["sighting_id"] != first["sighting_id"]
+    with SessionLocal() as session:
+        assert sorted(session.scalars(select(Sighting.session_id)).all()) == ["s-20261010-a1b2c3", "s-20261010-ffff00"]
+
+
+@pytest.mark.parametrize("missing", ["session_id", "time_basis", "stream_pts_ms", "processed_at"])
+def test_recorded_sighting_without_traceability_is_rejected(client, missing):
+    data = recorded_sighting()
+    data[missing] = None
+    assert client.post("/v1/sightings", json=data, headers=EDGE).status_code == 422
+
+
+@pytest.mark.parametrize("field,value", [("time_basis", "arrival_time"), ("session_id", "has space"),
+                                         ("processed_at", "2026-10-10T22:00:00+05:30"),
+                                         ("source_mode", "downloaded")])
+def test_recorded_fields_are_strictly_validated(client, field, value):
+    assert client.post("/v1/sightings", json=recorded_sighting(**{field: value}), headers=EDGE).status_code == 422
+
+
+def test_existing_payloads_remain_valid_without_recorded_fields(client):
+    response = client.post("/v1/sightings", json=sighting(), headers=EDGE)
+    assert response.status_code == 200
+    alert = response.json()["alert"]
+    assert alert["session_id"] is None and alert["time_basis"] is None
+    assert client.get(f"/v1/reports/incidents/{alert['id']}", headers=OPERATOR).json()["recorded_notice"] is None
+
+
+def test_migration_adds_recorded_columns_to_an_existing_0001_database(tmp_path):
+    import sqlite3
+    import subprocess
+    import sys
+    from pathlib import Path
+    database = tmp_path / "old.db"
+    connection = sqlite3.connect(database)
+    try:
+        connection.execute("CREATE TABLE sightings (id INTEGER PRIMARY KEY, event_id VARCHAR(36), source_mode VARCHAR(16))")
+        connection.execute("INSERT INTO sightings (event_id, source_mode) VALUES ('kept', 'live')")
+        connection.execute("CREATE TABLE alembic_version (version_num VARCHAR(32) NOT NULL)")
+        connection.execute("INSERT INTO alembic_version VALUES ('0001_initial')")
+        connection.commit()
+    finally:
+        connection.close()
+    environment = dict(os.environ, DATABASE_URL=f"sqlite:///{database.as_posix()}")
+    for _ in range(2):  # Upgrading twice must be harmless.
+        result = subprocess.run([sys.executable, "-m", "alembic", "upgrade", "head"],
+                                cwd=Path(__file__).resolve().parents[1], env=environment,
+                                capture_output=True, text=True)
+        assert result.returncode == 0, result.stderr
+    connection = sqlite3.connect(database)
+    try:
+        assert {"session_id", "time_basis", "processed_at"} <= {
+            row[1] for row in connection.execute("PRAGMA table_info(sightings)")}
+        assert connection.execute("SELECT event_id, session_id FROM sightings").fetchall() == [("kept", None)]
+        assert connection.execute("SELECT version_num FROM alembic_version").fetchall() == [("0002_recorded_sightings",)]
+    finally:
+        connection.close()
+

@@ -16,6 +16,7 @@ import MapPanel from './MapPanel';
 import LivePlayer from './LivePlayer';
 import CatalogueSearch from './CatalogueSearch';
 import RecognitionPanel from './RecognitionPanel';
+import { formatVideoTime, sourceDescription, sourceLabel } from './recognition';
 
 type Page = 'overview' | 'alerts' | 'cameras' | 'routes' | 'reports';
 type Connection = 'connected' | 'reconnecting' | 'locked';
@@ -93,7 +94,7 @@ function StatCard({ icon: Icon, label, value, note, tone }: {
 
 function SourceTag({ mode }: { mode?: string | null }) {
   return <span className={`source-tag ${(mode || 'live').toLowerCase()}`}>
-    {mode === 'synthetic' ? 'SIMULATED' : 'LIVE SOURCE'}
+    {sourceLabel(mode)}
   </span>;
 }
 
@@ -122,7 +123,8 @@ function AlertDetail({ alert, camera, busy, onStatus, onReport, onPreview }: {
     <div className="detail-head"><div><span className="eyebrow">ALERT DETAIL</span><h3>{alert.masked_plate || 'Masked plate'}</h3></div><SourceTag mode={alert.source_mode} /></div>
     <div className={`alert-callout ${alert.status === 'new' ? 'unreviewed' : ''}`}><TriangleAlert size={19} /><div><strong>{alert.reason || 'Watchlist match'}</strong><span>{titleCase(alertSeverity(alert))} priority · {titleCase(alert.status)}</span></div></div>
     <dl className="detail-grid"><div><dt>Camera</dt><dd>{camera?.name || alert.camera_id}</dd></div><div><dt>Observed</dt><dd>{formatTime(alert.observed_at)}</dd></div>
-      <div><dt>Source</dt><dd>{alert.source_mode === 'synthetic' ? 'Simulated event' : 'Live camera'}</dd></div><div><dt>Sighting #</dt><dd className="mono short-id">{alert.sighting_id || '—'}</dd></div></dl>
+      <div><dt>Source</dt><dd>{sourceDescription(alert.source_mode)}</dd></div><div><dt>Sighting #</dt><dd className="mono short-id">{alert.sighting_id || '—'}</dd></div>
+      {alert.source_mode === 'recorded' && <><div><dt>Video time</dt><dd>{formatVideoTime(alert.stream_pts_ms)}</dd></div><div><dt>Analysis run</dt><dd className="mono short-id">{alert.session_id || '—'}</dd></div></>}</dl>
     <div className="detail-actions">
       {alert.status === 'new' && <button disabled={busy} className="button primary" onClick={() => onStatus('acknowledged')}><Check size={16} /> Acknowledge</button>}
       {alert.status === 'acknowledged' && <button disabled={busy} className="button" onClick={() => onStatus('resolved')}><CheckCircle2 size={16} /> Resolve</button>}
@@ -132,6 +134,7 @@ function AlertDetail({ alert, camera, busy, onStatus, onReport, onPreview }: {
     </div>
     {!!alert.audit?.length && <div className="audit-trail"><strong>Decision history</strong>{alert.audit.map(entry => <div key={entry.id}><span>{titleCase(entry.to_status)} by {entry.actor || 'operator'}</span><small>{formatTime(entry.changed_at)}</small></div>)}</div>}
     {alert.source_mode === 'live' && <p className="privacy-note"><ShieldCheck size={15} /> Genuine camera imagery and full plate text are not retained.</p>}
+    {alert.source_mode === 'recorded' && <p className="privacy-note"><ShieldCheck size={15} /> From recorded footage, not a live camera. {alert.time_basis === 'source_clock' ? 'The time shown is the recording\u2019s own stated time.' : 'The recording\u2019s real time is unknown; the time shown is when it was analysed.'} No image or full plate text is stored centrally.</p>}
   </div>;
 }
 
@@ -172,7 +175,7 @@ function RouteView({ cameras, onError }: { cameras: Camera[]; onError: (message:
       <form className="search-form" onSubmit={submit}><label htmlFor="plate-query">Plate number</label><div className="search-line"><input id="plate-query" value={plate} onChange={event => setPlate(event.target.value)} autoComplete="off" spellCheck={false} placeholder="Enter full plate number" /><button className="button primary" disabled={busy || !plate.trim()}><Search size={16} />{busy ? 'Searching…' : 'Search'}</button></div></form>
       <div className="route-results-head"><strong>Sightings</strong><span>{searched ? `${results.length} found` : 'Awaiting search'}</span></div>
       {!searched ? <div className="empty-state compact"><Route size={27} /><span>Search for a plate to see its route.</span></div> : !results.length ? <div className="empty-state compact"><Search size={27} /><strong>No sightings found</strong><span>Check the plate or try a different one.</span></div> :
-        <ol className="route-timeline">{results.map((sighting, index) => <li key={sighting.id || sighting.event_id || `${sighting.camera_id}-${index}`}><span className="timeline-index">{index + 1}</span><div><strong>{sighting.camera_name || cameras.find(camera => camera.id === sighting.camera_id)?.name || sighting.camera_id}</strong><span>{formatTime(sighting.observed_at)} · {sighting.masked_plate}</span><SourceTag mode={sighting.source_mode} /></div></li>)}</ol>}
+        <ol className="route-timeline">{results.map((sighting, index) => <li key={sighting.id || sighting.event_id || `${sighting.camera_id}-${index}`}><span className="timeline-index">{index + 1}</span><div><strong>{sighting.camera_name || cameras.find(camera => camera.id === sighting.camera_id)?.name || sighting.camera_id}</strong><span>{formatTime(sighting.observed_at)} · {sighting.masked_plate}{sighting.source_mode === 'recorded' ? ` · video ${formatVideoTime(sighting.stream_pts_ms)}` : ''}</span><SourceTag mode={sighting.source_mode} /></div></li>)}</ol>}
     </div>
     <div className="panel route-map-panel"><div className="panel-heading"><div><span className="eyebrow">GEOGRAPHIC VIEW</span><h2>Camera sequence</h2></div></div><MapPanel cameras={cameras} route={results} /></div>
   </div>;
@@ -197,7 +200,7 @@ function printableValue(value: unknown): string {
 function IncidentModal({ report, onClose }: { report: IncidentReport; onClose: () => void }) {
   return <div className="modal-backdrop" onMouseDown={event => { if (event.target === event.currentTarget) onClose(); }}><section className="modal incident-modal" role="dialog" aria-modal="true" aria-label="Incident report">
     <div className="modal-header"><div><span className="eyebrow">SENTINEL COMMAND CENTRE</span><h2>Incident report</h2></div><button className="icon-button print-hide" onClick={onClose} aria-label="Close"><X size={19} /></button></div>
-    <div className="report-banner">{report.source_mode === 'synthetic' ? 'SIMULATED EVENT · DEMONSTRATION ONLY' : 'LIVE SOURCE METADATA · NO STORED CAMERA IMAGE'}</div>
+    <div className="report-banner">{report.source_mode === 'synthetic' ? 'SIMULATED EVENT · DEMONSTRATION ONLY' : report.source_mode === 'recorded' ? 'RECORDED FOOTAGE · NOT A LIVE CAMERA · NO STORED IMAGE' : 'LIVE SOURCE METADATA · NO STORED CAMERA IMAGE'}</div>
     <div className="report-fields">{Object.entries(report).filter(([key]) => key !== 'evidence_url' && key !== 'image_url').map(([key, value]) => <div key={key}><span>{titleCase(key)}</span><strong>{printableValue(value)}</strong></div>)}</div>
     <div className="modal-footer print-hide"><button className="button" onClick={onClose}>Close</button><button className="button primary" onClick={() => window.print()}><Printer size={16} /> Print report</button></div>
   </section></div>;
@@ -225,6 +228,13 @@ export default function App() {
   const selectedAlert = alerts.find(alert => alert.id === selectedAlertId) || orderedAlerts[0];
   const selectedCamera = cameras.find(camera => camera.id === selectedCameraId) || cameras[0];
   const online = cameras.filter(camera => camera.source_mode === 'live' && ['online', 'healthy', 'connected'].includes(camera.status.toLowerCase())).length;
+  // The map counts every source that is actually on it. Simulated cameras are
+  // counted as online when they are, and always labelled as simulated.
+  const mapped = cameras.filter(camera => typeof camera.latitude === 'number' && typeof camera.longitude === 'number');
+  const mappedOnline = mapped.filter(camera => ['online', 'healthy', 'connected'].includes(camera.status.toLowerCase()));
+  const coverage = { mapped: mapped.length, online: mappedOnline.length,
+    simulated: mappedOnline.filter(camera => camera.source_mode === 'synthetic').length,
+    live: mappedOnline.filter(camera => camera.source_mode === 'live').length };
   const degraded = cameras.filter(camera => camera.source_mode === 'live' && ['degraded', 'reconnecting'].includes(camera.status.toLowerCase())).length;
   const activeAlerts = alerts.filter(isActionable).length;
   const syntheticAlerts = alerts.filter(alert => alert.source_mode === 'synthetic').length;
@@ -312,7 +322,7 @@ export default function App() {
         {operatorKey && page === 'overview' && <>
           <CatalogueSearch />
           <div className="stats-grid"><StatCard icon={CameraIcon} label="Active cameras" value={online} note={`${cameras.length} monitored feeds`} tone="teal" /><StatCard icon={BellRing} label="Open alerts" value={activeAlerts} note="Awaiting operator action" tone="amber" /><StatCard icon={Activity} label="Degraded feeds" value={degraded} note="Reconnecting or reduced health" tone="blue" /><StatCard icon={ShieldCheck} label="Demo events" value={syntheticAlerts} note="Clearly labelled as simulated" /></div>
-          <div className="overview-grid"><section className="panel map-panel"><div className="panel-heading"><div><span className="eyebrow">LIVE NETWORK</span><h2>Camera coverage</h2></div><span className="subtle-label"><span className="status-dot" /> {online} online</span></div><MapPanel cameras={cameras} selectedCameraId={selectedCameraId} onSelectCamera={showCamera} /><div className="map-legend"><span><i className="legend-dot online" />Online</span><span><i className="legend-dot degraded" />Degraded</span><span><i className="legend-dot offline" />Offline</span><span><i className="legend-dot unscheduled" />Unscheduled</span></div></section>
+          <div className="overview-grid"><section className="panel map-panel"><div className="panel-heading"><div><span className="eyebrow">CAMERA NETWORK</span><h2>Camera coverage</h2></div><span className="subtle-label"><span className="status-dot" /> {coverage.online} of {coverage.mapped} online{coverage.simulated ? ` · ${coverage.simulated} simulated` : ''}{coverage.live ? ` · ${coverage.live} live` : ''}</span></div><MapPanel cameras={cameras} selectedCameraId={selectedCameraId} onSelectCamera={showCamera} /><div className="map-legend"><span><i className="legend-dot online" />Online</span><span><i className="legend-dot degraded" />Degraded</span><span><i className="legend-dot offline" />Offline</span><span><i className="legend-dot unscheduled" />Unscheduled</span></div></section>
             <section className="panel recent-alerts"><div className="panel-heading"><div><span className="eyebrow">WATCHLIST EVENTS</span><h2>Recent alerts</h2></div><button className="text-link" onClick={() => setPage('alerts')}>View queue <ArrowRight size={16} /></button></div><AlertList alerts={orderedAlerts} selectedId={selectedAlert?.id} onSelect={id => { setSelectedAlertId(id); setPage('alerts'); }} limit={5} /></section></div>
           <section className="panel health-panel"><div className="panel-heading"><div><span className="eyebrow">SYSTEM HEALTH</span><h2>Camera status</h2></div><button className="text-link" onClick={() => setPage('cameras')}>All cameras <ArrowRight size={16} /></button></div><CameraTable cameras={cameras.slice(0, 6)} onPreview={setPreviewCamera} onSelect={camera => showCamera(camera.id)} /></section>
         </>}

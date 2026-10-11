@@ -2,10 +2,14 @@ from datetime import datetime
 from typing import Literal
 from uuid import UUID
 
-from pydantic import BaseModel, ConfigDict, Field, field_validator
+from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
 
-SourceMode = Literal["live", "synthetic"]
+# "recorded" is permitted downloaded footage replayed locally; never label it "live".
+SourceMode = Literal["live", "synthetic", "recorded"]
+# Whether observed_at comes from the recording's own stated clock or is only
+# the time the file was processed. Unknown recording times are never invented.
+TimeBasis = Literal["source_clock", "processing_time"]
 CameraStatus = Literal["ONLINE", "DEGRADED", "OFFLINE", "UNSCHEDULED"]
 
 
@@ -30,8 +34,25 @@ class SightingIn(BaseModel):
     confidence: float = Field(ge=0, le=1)
     source_mode: SourceMode
     model_version: str | None = Field(default=None, max_length=100)
+    session_id: str | None = Field(default=None, pattern=r"^[A-Za-z0-9_.:-]{1,64}$")
+    time_basis: TimeBasis | None = None
+    # When the edge analysed the frame. Kept separately because observed_at
+    # may instead be the recording's own stated clock.
+    processed_at: datetime | None = None
 
     _validate_utc = field_validator("observed_at")(utc_datetime)
+
+    @field_validator("processed_at")
+    @classmethod
+    def processed_at_is_utc(cls, value: datetime | None) -> datetime | None:
+        return value if value is None else utc_datetime(value)
+
+    @model_validator(mode="after")
+    def recorded_events_are_traceable(self):
+        if self.source_mode == "recorded" and (self.session_id is None or self.time_basis is None
+                                               or self.stream_pts_ms is None or self.processed_at is None):
+            raise ValueError("recorded sightings need session_id, time_basis, stream_pts_ms and processed_at")
+        return self
 
 
 class HealthIn(BaseModel):
@@ -134,6 +155,10 @@ class AlertOut(BaseModel):
     severity: str
     status: str
     source_mode: SourceMode
+    stream_pts_ms: int | None = None
+    session_id: str | None = None
+    time_basis: TimeBasis | None = None
+    processed_at: datetime | None = None
     created_at: datetime
     updated_at: datetime
     audit: list[AuditOut] = []

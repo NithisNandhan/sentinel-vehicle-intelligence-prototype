@@ -26,6 +26,7 @@ services:
       DEMO_MODE: ${DEMO_MODE:-true}
       CATALOGUE_GATEWAY_URL: http://catalogue-gateway:8765
       RECOGNITION_GATEWAY_URL: http://host.docker.internal:7780
+      DASHBOARD_RECORDED_EVIDENCE: ${DASHBOARD_RECORDED_EVIDENCE:-false}
       CORS_ORIGINS: http://localhost:5173,http://127.0.0.1:5173
     ports:
       - 127.0.0.1:8000:8000
@@ -197,6 +198,62 @@ services:
               capabilities: [gpu]
     restart: unless-stopped
 
+  # Shared engineering session for permitted recorded footage, on CPU. It needs
+  # no Sentinel credentials and no NVIDIA runtime. Put videos and their
+  # receipts in ./data/recordings (see docs/RECORDED_VIDEO.md).
+  recorded-analysis:
+    build:
+      context: .
+      dockerfile: edge/Dockerfile
+      target: live-cpu
+    profiles: [recorded]
+    working_dir: /workspace/edge
+    command: ["python", "/workspace/tools/run_ocr_research.py", "-m", "sentinel_edge.live_detection_viewer",
+              "--cache", "/models/experiments/awiros",
+              "--checkpoint", "/models/experiments/awiros/adaptations/indian-corpus-encoder.safetensors",
+              "--container-bind", "--device", "cpu", "--detector-profile", "${RECORDED_DETECTOR_PROFILE:-general}",
+              "--recordings-dir", "/recordings", "--recordings-only", "--deliver", "--lifetime", "28800"]
+    environment:
+      CENTRAL_API_URL: http://api:8000
+      EDGE_API_KEY: ${EDGE_API_KEY:?Run scripts/init-env.ps1 first}
+      OPERATOR_API_KEY: ${OPERATOR_API_KEY:?Run scripts/init-env.ps1 first}
+      WATCHLIST_HMAC_KEY: ${WATCHLIST_HMAC_KEY:?Run scripts/init-env.ps1 first}
+      EDGE_ID: region-demo-1
+      EDGE_DB_PATH: /data/shared-recognition.sqlite3
+      MODEL_CACHE_DIR: /models
+      YOLO_CONFIG_DIR: /tmp/sentinel-yolo
+      SENTINEL_OCR_DEVICE: cpu
+      SENTINEL_CPU_THREADS: ${SENTINEL_CPU_THREADS:-4}
+      SENTINEL_RECORDED_UNPACED: ${SENTINEL_RECORDED_UNPACED:-false}
+      # Opt-in: show the analysed frame and full unverified readings of a
+      # permitted recording in the operator dashboard. Never applies to cameras.
+      SENTINEL_DASHBOARD_EVIDENCE: ${DASHBOARD_RECORDED_EVIDENCE:-false}
+    volumes:
+      - ./edge:/workspace/edge:ro
+      - ./tools:/workspace/tools:ro
+      - ./data/recordings:/recordings:ro
+      - model_cache:/models:ro
+      # Paddle creates ~/.cache/paddle on import, so ~/.cache itself must be
+      # writable. Mount only the two weight folders, each read-only.
+      - type: volume
+        source: alpr_cache
+        target: /root/.cache/open-image-models
+        read_only: true
+        volume:
+          subpath: open-image-models
+      - type: volume
+        source: alpr_cache
+        target: /root/.cache/fast-plate-ocr
+        read_only: true
+        volume:
+          subpath: fast-plate-ocr
+      - shared_recognition:/data
+    ports:
+      - 127.0.0.1:7780:7780
+    depends_on:
+      - api
+    restart: unless-stopped
+
   demo-simulator:
     build:
       context: .
@@ -222,4 +279,10 @@ volumes:
   demo_edge_data:
   model_cache:
   alpr_cache:
+  # Same queue volume the live engineering launcher and the handoff restore use.
+  # External so `docker compose down -v` can never delete undelivered events.
+  # scripts/start-recorded-analysis.ps1 creates it if it does not exist.
+  shared_recognition:
+    name: sentinel_shared_recognition
+    external: true
 
