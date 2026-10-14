@@ -1,0 +1,52 @@
+{
+  "schema_version": "1.0",
+  "labeller": "Claude (AI assistant), transcribed from native-resolution crops on 11 October 2026. NOT an independent human reviewer.",
+  "labelled_on": "2026-10-11",
+  "notes": "Development pilot only. Not exhaustive: the clip shows dozens of two-wheelers whose plates are hidden or edge-on, and they are not listed. Only passages where a plate faces the camera are labelled. Vehicle boxes are omitted because they were not measured precisely; plate boxes were measured on the stated frame.",
+  "recordings": [
+    {
+      "recording_id": "rec-89709cdda521",
+      "sha256": "89709cdda521d9be36078ce4430e7eb322ce8323780fd23a9f28c989f1ac508a",
+      "split": "development",
+      "passages": [
+        {
+          "passage_id": "p01-scooter",
+          "vehicle_id": "hyd-scooter-white",
+          "start_ms": 3500,
+          "end_ms": 8500,
+          "readable": true,
+          "plate": "MH49BE5557",
+          "boxes": [{"position_ms": 5000, "vehicle": null, "plate": [1215, 1755, 1370, 1910]}]
+        },
+        {
+          "passage_id": "p02-auto",
+          "vehicle_id": "hyd-auto-yellow-rear",
+          "start_ms": 32000,
+          "end_ms": 36500,
+          "readable": true,
+          "plate": "TS38T2812",
+          "boxes": [{"position_ms": 35000, "vehicle": null, "plate": [688, 1695, 868, 1872]}]
+        },
+        {
+          "passage_id": "p03-car",
+          "vehicle_id": "hyd-car-white-front",
+          "start_ms": 43500,
+          "end_ms": 46500,
+          "readable": true,
+          "plate": "TS07FS8429",
+          "boxes": [{"position_ms": 45000, "vehicle": null, "plate": [3268, 1126, 3459, 1230]}]
+        },
+        {
+          "passage_id": "p04-auto-front",
+          "vehicle_id": "hyd-auto-yellow-front",
+          "start_ms": 46500,
+          "end_ms": 49000,
+          "readable": false,
+          "plate": null,
+          "plate_visible": true
+        }
+      ]
+    }
+  ]
+}
+

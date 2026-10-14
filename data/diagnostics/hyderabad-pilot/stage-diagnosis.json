@@ -1,0 +1,114 @@
+{
+  "notice": "Single-frame diagnosis with the unchanged models; not the multi-frame acceptance path, not an accuracy measurement. Colours in the frame images: green = every vehicle box, orange = vehicle boxes holding the labelled plate, magenta = labelled plate, yellow = plate box the detector found.",
+  "summary": {
+    "cases": 3,
+    "vehicle_detected": 3,
+    "plate_found_in_vehicle": 3,
+    "plate_box_matches_label": 3,
+    "ocr_exact_on_detector_crop": 1,
+    "ocr_exact_on_labelled_crop": 1,
+    "ocr_exact_rows_read_separately": 0
+  },
+  "cases": [
+    {
+      "passage_id": "p01-scooter",
+      "position_ms": 5005,
+      "truth": "MH49BE5557",
+      "labelled_plate_size_px": [
+        155,
+        155
+      ],
+      "vehicle": {
+        "boxes_in_frame": 6,
+        "boxes_holding_the_plate": 2,
+        "detected": true,
+        "classes": [
+          "motorcycle 0.503",
+          "motorcycle 0.634"
+        ]
+      },
+      "plate": {
+        "found_in_vehicle_box": true,
+        "iou_with_label": 0.851,
+        "matches_label": true,
+        "found_in_whole_frame_iou": null
+      },
+      "ocr": {
+        "on_detector_crop": "AP98557",
+        "on_labelled_crop": "AP96S557",
+        "on_labelled_crop_rows_separately": "MH49E81AL555531",
+        "exact_on_detector_crop": false,
+        "exact_on_labelled_crop": false,
+        "exact_rows_separately": false,
+        "character_errors_on_labelled_crop": 6,
+        "character_errors_rows_separately": 8
+      }
+    },
+    {
+      "passage_id": "p02-auto",
+      "position_ms": 35002,
+      "truth": "TS38T2812",
+      "labelled_plate_size_px": [
+        180,
+        177
+      ],
+      "vehicle": {
+        "boxes_in_frame": 7,
+        "boxes_holding_the_plate": 1,
+        "detected": true,
+        "classes": [
+          "truck 0.5"
+        ]
+      },
+      "plate": {
+        "found_in_vehicle_box": true,
+        "iou_with_label": 0.751,
+        "matches_label": true,
+        "found_in_whole_frame_iou": null
+      },
+      "ocr": {
+        "on_detector_crop": "TS38T812",
+        "on_labelled_crop": "TS38T812",
+        "on_labelled_crop_rows_separately": "38TS632UP28T211",
+        "exact_on_detector_crop": false,
+        "exact_on_labelled_crop": false,
+        "exact_rows_separately": false,
+        "character_errors_on_labelled_crop": 1,
+        "character_errors_rows_separately": 9
+      }
+    },
+    {
+      "passage_id": "p03-car",
+      "position_ms": 45012,
+      "truth": "TS07FS8429",
+      "labelled_plate_size_px": [
+        191,
+        104
+      ],
+      "vehicle": {
+        "boxes_in_frame": 8,
+        "boxes_holding_the_plate": 1,
+        "detected": true,
+        "classes": [
+          "car 0.898"
+        ]
+      },
+      "plate": {
+        "found_in_vehicle_box": true,
+        "iou_with_label": 0.81,
+        "matches_label": true,
+        "found_in_whole_frame_iou": 0.857
+      },
+      "ocr": {
+        "on_detector_crop": "TS07FS8429",
+        "on_labelled_crop": "TS07FS8429",
+        "on_labelled_crop_rows_separately": "TS07CC941N07TS8429",
+        "exact_on_detector_crop": true,
+        "exact_on_labelled_crop": true,
+        "exact_rows_separately": false,
+        "character_errors_on_labelled_crop": 0,
+        "character_errors_rows_separately": 9
+      }
+    }
+  ]
+}

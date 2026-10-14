@@ -1,0 +1,580 @@
+{
+  "recording": "Traffic in Hyderabad (4K, 2025)",
+  "interval_ms": 500,
+  "samples": 113,
+  "vehicle_boxes_detected": 579,
+  "vehicle_boxes_tracked": 285,
+  "share_of_detected_boxes_that_reach_plate_search": 0.492,
+  "median_detected_per_sample": 5,
+  "median_tracked_per_sample": 2,
+  "samples_with_vehicles_detected_but_none_tracked": 4,
+  "distinct_track_ids": 45,
+  "notice": "Boxes at least 64 by 32 pixels, the same eligibility rule as the session. Detector and tracker use the same model, classes and 0.25 threshold.",
+  "per_sample": [
+    {
+      "position_ms": 0,
+      "detected": 8,
+      "tracked": 8
+    },
+    {
+      "position_ms": 501,
+      "detected": 9,
+      "tracked": 4
+    },
+    {
+      "position_ms": 1001,
+      "detected": 9,
+      "tracked": 5
+    },
+    {
+      "position_ms": 1502,
+      "detected": 8,
+      "tracked": 6
+    },
+    {
+      "position_ms": 2002,
+      "detected": 5,
+      "tracked": 3
+    },
+    {
+      "position_ms": 2503,
+      "detected": 6,
+      "tracked": 3
+    },
+    {
+      "position_ms": 3003,
+      "detected": 6,
+      "tracked": 3
+    },
+    {
+      "position_ms": 3504,
+      "detected": 3,
+      "tracked": 1
+    },
+    {
+      "position_ms": 4004,
+      "detected": 3,
+      "tracked": 2
+    },
+    {
+      "position_ms": 4505,
+      "detected": 2,
+      "tracked": 1
+    },
+    {
+      "position_ms": 5005,
+      "detected": 6,
+      "tracked": 2
+    },
+    {
+      "position_ms": 5506,
+      "detected": 5,
+      "tracked": 4
+    },
+    {
+      "position_ms": 6006,
+      "detected": 4,
+      "tracked": 2
+    },
+    {
+      "position_ms": 6507,
+      "detected": 8,
+      "tracked": 4
+    },
+    {
+      "position_ms": 7007,
+      "detected": 8,
+      "tracked": 4
+    },
+    {
+      "position_ms": 7508,
+      "detected": 9,
+      "tracked": 7
+    },
+    {
+      "position_ms": 8008,
+      "detected": 9,
+      "tracked": 6
+    },
+    {
+      "position_ms": 8509,
+      "detected": 8,
+      "tracked": 5
+    },
+    {
+      "position_ms": 9009,
+      "detected": 11,
+      "tracked": 5
+    },
+    {
+      "position_ms": 9510,
+      "detected": 6,
+      "tracked": 4
+    },
+    {
+      "position_ms": 10010,
+      "detected": 5,
+      "tracked": 1
+    },
+    {
+      "position_ms": 10511,
+      "detected": 5,
+      "tracked": 1
+    },
+    {
+      "position_ms": 11011,
+      "detected": 7,
+      "tracked": 5
+    },
+    {
+      "position_ms": 11512,
+      "detected": 7,
+      "tracked": 5
+    },
+    {
+      "position_ms": 12012,
+      "detected": 6,
+      "tracked": 4
+    },
+    {
+      "position_ms": 12513,
+      "detected": 7,
+      "tracked": 4
+    },
+    {
+      "position_ms": 13013,
+      "detected": 4,
+      "tracked": 2
+    },
+    {
+      "position_ms": 13514,
+      "detected": 5,
+      "tracked": 3
+    },
+    {
+      "position_ms": 14014,
+      "detected": 6,
+      "tracked": 3
+    },
+    {
+      "position_ms": 14515,
+      "detected": 6,
+      "tracked": 2
+    },
+    {
+      "position_ms": 15015,
+      "detected": 6,
+      "tracked": 3
+    },
+    {
+      "position_ms": 15516,
+      "detected": 3,
+      "tracked": 2
+    },
+    {
+      "position_ms": 16016,
+      "detected": 7,
+      "tracked": 2
+    },
+    {
+      "position_ms": 16517,
+      "detected": 5,
+      "tracked": 2
+    },
+    {
+      "position_ms": 17017,
+      "detected": 5,
+      "tracked": 3
+    },
+    {
+      "position_ms": 17518,
+      "detected": 9,
+      "tracked": 5
+    },
+    {
+      "position_ms": 18018,
+      "detected": 8,
+      "tracked": 4
+    },
+    {
+      "position_ms": 18519,
+      "detected": 8,
+      "tracked": 2
+    },
+    {
+      "position_ms": 19019,
+      "detected": 6,
+      "tracked": 1
+    },
+    {
+      "position_ms": 19520,
+      "detected": 4,
+      "tracked": 4
+    },
+    {
+      "position_ms": 20020,
+      "detected": 5,
+      "tracked": 3
+    },
+    {
+      "position_ms": 20521,
+      "detected": 5,
+      "tracked": 3
+    },
+    {
+      "position_ms": 21021,
+      "detected": 5,
+      "tracked": 3
+    },
+    {
+      "position_ms": 21522,
+      "detected": 4,
+      "tracked": 1
+    },
+    {
+      "position_ms": 22022,
+      "detected": 1,
+      "tracked": 0
+    },
+    {
+      "position_ms": 22523,
+      "detected": 3,
+      "tracked": 0
+    },
+    {
+      "position_ms": 23023,
+      "detected": 1,
+      "tracked": 1
+    },
+    {
+      "position_ms": 23524,
+      "detected": 2,
+      "tracked": 1
+    },
+    {
+      "position_ms": 24024,
+      "detected": 5,
+      "tracked": 1
+    },
+    {
+      "position_ms": 24525,
+      "detected": 6,
+      "tracked": 1
+    },
+    {
+      "position_ms": 25025,
+      "detected": 4,
+      "tracked": 1
+    },
+    {
+      "position_ms": 25526,
+      "detected": 8,
+      "tracked": 2
+    },
+    {
+      "position_ms": 26026,
+      "detected": 3,
+      "tracked": 1
+    },
+    {
+      "position_ms": 26527,
+      "detected": 3,
+      "tracked": 2
+    },
+    {
+      "position_ms": 27027,
+      "detected": 5,
+      "tracked": 2
+    },
+    {
+      "position_ms": 27528,
+      "detected": 5,
+      "tracked": 3
+    },
+    {
+      "position_ms": 28028,
+      "detected": 3,
+      "tracked": 1
+    },
+    {
+      "position_ms": 28529,
+      "detected": 6,
+      "tracked": 1
+    },
+    {
+      "position_ms": 29029,
+      "detected": 7,
+      "tracked": 2
+    },
+    {
+      "position_ms": 29530,
+      "detected": 9,
+      "tracked": 5
+    },
+    {
+      "position_ms": 30030,
+      "detected": 8,
+      "tracked": 3
+    },
+    {
+      "position_ms": 30531,
+      "detected": 4,
+      "tracked": 1
+    },
+    {
+      "position_ms": 31031,
+      "detected": 3,
+      "tracked": 1
+    },
+    {
+      "position_ms": 31532,
+      "detected": 4,
+      "tracked": 1
+    },
+    {
+      "position_ms": 32032,
+      "detected": 3,
+      "tracked": 1
+    },
+    {
+      "position_ms": 32533,
+      "detected": 8,
+      "tracked": 2
+    },
+    {
+      "position_ms": 33033,
+      "detected": 7,
+      "tracked": 2
+    },
+    {
+      "position_ms": 33534,
+      "detected": 7,
+      "tracked": 3
+    },
+    {
+      "position_ms": 34034,
+      "detected": 10,
+      "tracked": 3
+    },
+    {
+      "position_ms": 34535,
+      "detected": 8,
+      "tracked": 4
+    },
+    {
+      "position_ms": 35035,
+      "detected": 6,
+      "tracked": 3
+    },
+    {
+      "position_ms": 35536,
+      "detected": 6,
+      "tracked": 4
+    },
+    {
+      "position_ms": 36036,
+      "detected": 7,
+      "tracked": 4
+    },
+    {
+      "position_ms": 36537,
+      "detected": 5,
+      "tracked": 4
+    },
+    {
+      "position_ms": 37037,
+      "detected": 3,
+      "tracked": 2
+    },
+    {
+      "position_ms": 37538,
+      "detected": 2,
+      "tracked": 0
+    },
+    {
+      "position_ms": 38038,
+      "detected": 4,
+      "tracked": 1
+    },
+    {
+      "position_ms": 38539,
+      "detected": 6,
+      "tracked": 2
+    },
+    {
+      "position_ms": 39039,
+      "detected": 8,
+      "tracked": 4
+    },
+    {
+      "position_ms": 39540,
+      "detected": 5,
+      "tracked": 4
+    },
+    {
+      "position_ms": 40040,
+      "detected": 5,
+      "tracked": 2
+    },
+    {
+      "position_ms": 40541,
+      "detected": 0,
+      "tracked": 0
+    },
+    {
+      "position_ms": 41041,
+      "detected": 3,
+      "tracked": 2
+    },
+    {
+      "position_ms": 41542,
+      "detected": 4,
+      "tracked": 2
+    },
+    {
+      "position_ms": 42042,
+      "detected": 2,
+      "tracked": 2
+    },
+    {
+      "position_ms": 42543,
+      "detected": 3,
+      "tracked": 2
+    },
+    {
+      "position_ms": 43043,
+      "detected": 6,
+      "tracked": 3
+    },
+    {
+      "position_ms": 43544,
+      "detected": 7,
+      "tracked": 3
+    },
+    {
+      "position_ms": 44044,
+      "detected": 8,
+      "tracked": 3
+    },
+    {
+      "position_ms": 44545,
+      "detected": 6,
+      "tracked": 4
+    },
+    {
+      "position_ms": 45045,
+      "detected": 8,
+      "tracked": 2
+    },
+    {
+      "position_ms": 45546,
+      "detected": 7,
+      "tracked": 3
+    },
+    {
+      "position_ms": 46046,
+      "detected": 3,
+      "tracked": 3
+    },
+    {
+      "position_ms": 46547,
+      "detected": 5,
+      "tracked": 1
+    },
+    {
+      "position_ms": 47047,
+      "detected": 4,
+      "tracked": 2
+    },
+    {
+      "position_ms": 47548,
+      "detected": 3,
+      "tracked": 1
+    },
+    {
+      "position_ms": 48048,
+      "detected": 4,
+      "tracked": 1
+    },
+    {
+      "position_ms": 48549,
+      "detected": 3,
+      "tracked": 2
+    },
+    {
+      "position_ms": 49049,
+      "detected": 4,
+      "tracked": 3
+    },
+    {
+      "position_ms": 49550,
+      "detected": 5,
+      "tracked": 3
+    },
+    {
+      "position_ms": 50050,
+      "detected": 4,
+      "tracked": 3
+    },
+    {
+      "position_ms": 50551,
+      "detected": 4,
+      "tracked": 4
+    },
+    {
+      "position_ms": 51051,
+      "detected": 3,
+      "tracked": 2
+    },
+    {
+      "position_ms": 51552,
+      "detected": 3,
+      "tracked": 0
+    },
+    {
+      "position_ms": 52052,
+      "detected": 1,
+      "tracked": 1
+    },
+    {
+      "position_ms": 52553,
+      "detected": 2,
+      "tracked": 1
+    },
+    {
+      "position_ms": 53053,
+      "detected": 2,
+      "tracked": 2
+    },
+    {
+      "position_ms": 53554,
+      "detected": 2,
+      "tracked": 1
+    },
+    {
+      "position_ms": 54054,
+      "detected": 1,
+      "tracked": 1
+    },
+    {
+      "position_ms": 54555,
+      "detected": 3,
+      "tracked": 1
+    },
+    {
+      "position_ms": 55055,
+      "detected": 4,
+      "tracked": 2
+    },
+    {
+      "position_ms": 55556,
+      "detected": 2,
+      "tracked": 1
+    },
+    {
+      "position_ms": 56056,
+      "detected": 2,
+      "tracked": 2
+    }
+  ]
+}

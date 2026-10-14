@@ -22,7 +22,18 @@ test-results/
 *.onnx
 *.engine
 models/
-data/
+# Local data stays out of Git: release assets, restored handoff files and
+# anything with credentials. The exceptions below are small, shareable results
+# from the recorded-footage work (openly licensed footage only).
+/data/*
+!/data/labels/
+!/data/evaluation/
+!/data/diagnostics/
+!/data/screenshots/
+!/data/recordings/
+/data/recordings/*
+!/data/recordings/*.receipt.json
+!/data/recordings/banashankari-circle-01.ogg
 logs/
 
 # Local assistant state and handoff scratch files.
