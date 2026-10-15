@@ -22,6 +22,13 @@ recording, SHA256 `34b977df9caade1f74f84ef6e409525ea4702c5989eec360acbbe23b32185
 runs. Each run used the same frozen model hashes, 9 vehicle-box instances,
 5 plate crops and 5 OCR calls. Counts are not unique vehicles or correct reads.
 
+Footage and research-use permission: https://qoe.agh.edu.pl/parking-database/ .
+Original: https://qoe.agh.edu.pl/wp-content/uploads/2021/02/agh_src1_hrc0.avi .
+Attribution: Leszczuk, Janowski, Romaniak, Glowacz and Mirek, *Quality assessment
+for a licence plate recognition task based on a video streamed in limited
+networking conditions*, 2011, pp. 10-18. No commercial or redistribution
+permission beyond the publisher's stated research terms is asserted.
+
 | Measurement | CPU | GPU |
 | --- | ---: | ---: |
 | Three-sample inference total | 13.592 s | 4.573 s |
