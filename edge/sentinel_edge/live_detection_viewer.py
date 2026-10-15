@@ -295,8 +295,11 @@ def load_models(config, cache, checkpoint, *, detector_profile=None, training_ro
         if detector_profile not in PROFILES:
             raise ValueError('Unknown experimental detector profile')
         vehicle, plate = PROFILES[detector_profile]
-        return (reader, PlateDetector(plate, config.model_cache_dir),
-                VehicleTracker(vehicle, config.model_cache_dir, training_root or Path('/training')))
+        # Torch preloads its matching CUDA libraries before ONNX constructs a
+        # CUDA session. Paddle's isolated runtime must still warm up first.
+        tracker = VehicleTracker(vehicle, config.model_cache_dir,
+                                 training_root or Path('/training'), device=device)
+        return reader, PlateDetector(plate, config.model_cache_dir, device=device), tracker
     from ultralytics import YOLO
     from .ocr_selection_benchmark import PlateDetectorExperiment
     return reader, PlateDetectorExperiment(), YOLO(str(config.model_cache_dir/'yolov8n.pt'))
@@ -320,19 +323,30 @@ def dashboard_view(snapshot, width=1280, rows=30):
             'vehicles': snapshot.get('debug', {}).get('passed', [])[:rows]}
 
 
-def model_identity(reader, detector_profile=None):
+def model_identity(reader, detector_profile=None, *, detector=None, vehicle_model=None):
     """What actually loaded, for diagnostics. Names and hashes only, no paths."""
     from .experimental_detectors import HASHES, PROFILES
     vehicle, plate = PROFILES.get(detector_profile, ('yolov8n', 'fast-alpr'))
     adaptation = getattr(reader, 'adaptation', None) or {}
+    # Older unprofiled diagnostics still run their detectors on CPU. For tracked
+    # profiles, report the adapters actually loaded, not the requested setting.
+    def actual_device(adapter):
+        # Unprofiled YOLO exposes a torch.device, but its legacy inference call
+        # explicitly uses CPU. Metadata must remain JSON-safe strings.
+        if not detector_profile:
+            return 'cpu'
+        value = getattr(adapter, 'device', None)
+        return value if isinstance(value, str) and value in ('cpu', 'gpu') else 'unknown'
+    plate_device = actual_device(detector)
+    vehicle_device = actual_device(vehicle_model)
     return {'ocr_model': 'awiros-ctc-adapted' if adaptation else 'awiros-ctc-parent',
             'ocr_checkpoint_sha256': adaptation.get('weights_sha256'),
             'ocr_device': getattr(reader, 'device', None),
             'detector_profile': detector_profile or 'legacy',
             'vehicle_model': vehicle, 'vehicle_model_sha256': HASHES.get(vehicle),
             'plate_model': plate, 'plate_model_sha256': HASHES.get(plate),
-            # Both detector adapters are pinned to CPU execution in this session.
-            'detector_device': 'cpu'}
+            'plate_device': plate_device, 'vehicle_device': vehicle_device,
+            'detector_device': plate_device if plate_device == vehicle_device else 'mixed'}
 
 
 def observe(config, camera, model, detector, vehicle_model, state, stop, duration_seconds=None):
@@ -700,7 +714,8 @@ def serve(config, cache, checkpoint, port=7780, lifetime=1800, bind_host='127.0.
                     av.logging.set_level(av.logging.PANIC)
                     model, detector, vehicle = load_models(config, cache, checkpoint,
                         detector_profile=detector_profile, training_root=training_root, device=device)
-                    identity.update(model_identity(model, detector_profile))
+                    identity.update(model_identity(model, detector_profile,
+                                                   detector=detector, vehicle_model=vehicle))
                 if recording is not None:
                     from .recorded_source import RecordedRun
                     from .tracked_live_viewer import observe_tracked
@@ -774,7 +789,7 @@ if __name__ == '__main__':
     parser.add_argument('--plate-recovery', action='store_true', help='Opt-in native full-image fallback and 250 ms sampling near tracked vehicles')
     parser.add_argument('--lifetime', type=int, default=1800)
     parser.add_argument('--device', choices=('cpu','gpu'), default=os.getenv('SENTINEL_OCR_DEVICE','gpu'),
-                        help='OCR device. Explicit; a GPU request never falls back to CPU')
+                        help='OCR and tracked detector device. Explicit; GPU never falls back to CPU')
     parser.add_argument('--configured-relays', action='store_true', help='When discovery fails, use only the previously approved CAM01/CAM02 local relays; not full catalogue access')
     args = parser.parse_args()
     if args.recordings_only and args.recordings_dir is None:

@@ -66,7 +66,8 @@ if __name__ == '__main__':
     except LabelError as error:
         raise SystemExit(f'Evaluation stopped: {error}')
     report.update(generated_at=datetime.now(timezone.utc).isoformat().replace('+00:00', 'Z'),
-                  commit=args.commit or None, models=model_identity(models[0], args.detector_profile),
+                  commit=args.commit or None, models=model_identity(models[0], args.detector_profile,
+                                                                  detector=models[1], vehicle_model=models[2]),
                   environment={'platform': platform.platform(), 'machine': platform.machine(),
                                'processor': platform.processor() or None, 'cpu_count': os.cpu_count(),
                                'python': platform.python_version(),

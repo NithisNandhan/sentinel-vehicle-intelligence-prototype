@@ -24,17 +24,38 @@ class CpuPathTests(unittest.TestCase):
             seen.update(device=device, checkpoint=checkpoint)
             return SimpleNamespace(probabilities=lambda image: [], device=device, adaptation=None)
         with patch('sentinel_edge.awiros_experiment.AwirosExperiment', side_effect=reader), \
-                patch('sentinel_edge.experimental_detectors.PlateDetector', return_value='plate'), \
-                patch('sentinel_edge.experimental_detectors.VehicleTracker', return_value='vehicle'):
+                patch('sentinel_edge.experimental_detectors.PlateDetector', return_value='plate') as plate, \
+                patch('sentinel_edge.experimental_detectors.VehicleTracker', return_value='vehicle') as vehicle:
             result = load_models(SimpleNamespace(model_cache_dir=Path('/models')), Path('/cache'), None,
                                  detector_profile='general', **kwargs)
+            seen['plate_device'] = plate.call_args.kwargs['device']
+            seen['vehicle_device'] = vehicle.call_args.kwargs['device']
         return seen, result
 
     def test_requested_device_reaches_the_ocr_reader(self):
         seen, result = self.load(device='cpu')
         self.assertEqual(seen['device'], 'cpu')
+        self.assertEqual((seen['plate_device'], seen['vehicle_device']), ('cpu', 'cpu'))
         self.assertEqual(result[1:], ('plate', 'vehicle'))
         self.assertEqual(self.load()[0]['device'], 'gpu')  # Existing launchers keep their default.
+        gpu, _ = self.load(device='gpu')
+        self.assertEqual((gpu['plate_device'], gpu['vehicle_device']), ('gpu', 'gpu'))
+
+    def test_identity_reports_loaded_detector_devices_not_requested_ocr_device(self):
+        reader = SimpleNamespace(device='gpu', adaptation=None)
+        identity = model_identity(reader, 'general', detector=SimpleNamespace(device='gpu'),
+                                  vehicle_model=SimpleNamespace(device='gpu'))
+        self.assertEqual(identity['detector_device'], 'gpu')
+        self.assertEqual((identity['plate_device'], identity['vehicle_device']), ('gpu', 'gpu'))
+        self.assertEqual(model_identity(reader, 'general')['detector_device'], 'unknown')
+
+    def test_unprofiled_torch_device_is_not_leaked_into_json_identity(self):
+        import json
+        reader = SimpleNamespace(device='gpu', adaptation=None)
+        result = model_identity(reader, vehicle_model=SimpleNamespace(device=object()))
+        self.assertEqual(result['vehicle_device'], 'cpu')
+        self.assertEqual(result['detector_device'], 'cpu')
+        json.dumps(result)
 
     def test_unknown_device_is_rejected_before_any_model_loads(self):
         with patch('sentinel_edge.awiros_experiment.AwirosExperiment') as reader:
@@ -44,6 +65,19 @@ class CpuPathTests(unittest.TestCase):
             reader.assert_not_called()
         with self.assertRaises(ValueError):
             serve(None, None, None, device='auto', operator_key='k')
+
+    def test_gpu_load_order_warms_paddle_then_torch_then_onnx(self):
+        order = []
+        reader = SimpleNamespace(probabilities=lambda image: order.append('ocr_warmup'))
+        with patch('sentinel_edge.awiros_experiment.AwirosExperiment', return_value=reader), \
+                patch('sentinel_edge.experimental_detectors.VehicleTracker',
+                      side_effect=lambda *a, **k: order.append('torch') or 'vehicle'), \
+                patch('sentinel_edge.experimental_detectors.PlateDetector',
+                      side_effect=lambda *a, **k: order.append('onnx') or 'plate'):
+            result = load_models(SimpleNamespace(model_cache_dir=Path('/models')), None, None,
+                                 detector_profile='general', device='gpu')
+        self.assertEqual(order, ['ocr_warmup', 'torch', 'onnx'])
+        self.assertEqual(result, (reader, 'plate', 'vehicle'))
 
     def test_a_gpu_failure_is_not_retried_on_cpu(self):
         calls = []

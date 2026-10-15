@@ -149,7 +149,7 @@ function summary(snapshot){
   text('video-position',recorded?videoTime(snapshot.video_position_ms)+' / '+videoTime(snapshot.video_duration_ms)+(snapshot.pacing?' · '+snapshot.pacing:''):'—');
   text('session-id',session||'—');
   const models=snapshot.models&&typeof snapshot.models==='object'?snapshot.models:{};
-  text('inference',typeof models.ocr_device==='string'?models.ocr_device.toUpperCase()+' · '+(typeof models.ocr_checkpoint_sha256==='string'?models.ocr_checkpoint_sha256.slice(0,12)+'…':'parent weights'):'Models not loaded yet');
+  text('inference',typeof models.ocr_device==='string'?'OCR '+models.ocr_device.toUpperCase()+' / vehicles '+String(models.vehicle_device||'unknown').toUpperCase()+' / plates '+String(models.plate_device||'unknown').toUpperCase()+' · '+(typeof models.ocr_checkpoint_sha256==='string'?models.ocr_checkpoint_sha256.slice(0,12)+'…':'parent weights'):'Models not loaded yet');
   text('decoded',safeNumber(snapshot.decoded_frames));text('analysed',safeNumber(snapshot.analysed_frames));text('vehicles',safeNumber(snapshot.vehicle_boxes));text('plates',safeNumber(snapshot.plate_crops));
   text('observations',safeNumber(snapshot.maximum_distinct_observations));text('accepted',safeNumber(snapshot.unique_model_accepted_unverified));
   text('resolution',Array.isArray(snapshot.resolution)?snapshot.resolution.map(value=>safeNumber(value)).join(' × '):'—');

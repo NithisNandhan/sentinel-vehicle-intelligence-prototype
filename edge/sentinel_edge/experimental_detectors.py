@@ -26,6 +26,20 @@ BMD_TO_COCO = {0:2, 1:2, 2:2, 3:2, 4:5, 5:7, 6:2, 7:3,
 COCO_CLASSES = (1, 2, 3, 5, 7)  # Bicycle included consistently in this experiment.
 
 
+def _execution_device(device):
+    if device not in ('cpu', 'gpu'):
+        raise ValueError('Diagnostic device must be cpu or gpu')
+    return device
+
+
+def _audit_gpu_session(session):
+    if 'CUDAExecutionProvider' not in session.get_providers():
+        raise RuntimeError('GPU requested but plate runtime fell back to CPU')
+    # ONNX Runtime otherwise retries a failed execution provider on CPU. A GPU
+    # request must fail visibly instead of continuing with misleading telemetry.
+    session.disable_fallback()
+
+
 def verified(path, expected):
     path = Path(path)
     if not path.is_file() or hashlib.sha256(path.read_bytes()).hexdigest() != expected:
@@ -43,9 +57,12 @@ class VehicleTrack:
 
 
 class VehicleTracker:
-    def __init__(self, name, cache, training_root):
-        from ultralytics import YOLO
+    def __init__(self, name, cache, training_root, *, device='cpu'):
+        self.device = _execution_device(device)
         import torch
+        if self.device == 'gpu' and not torch.cuda.is_available():
+            raise RuntimeError('GPU requested but vehicle CUDA runtime is unavailable')
+        from ultralytics import YOLO
         torch.set_num_threads(2)
         if name not in ('yolov8n', 'yolo26s', 'bmd'):
             raise ValueError('Unknown diagnostic vehicle model')
@@ -53,6 +70,8 @@ class VehicleTracker:
                 else Path(cache)/('yolov8n.pt' if name == 'yolov8n' else 'experiments/detectors/yolo26s.pt'))
         self.name = name
         self.model = YOLO(str(verified(path, HASHES[name])))
+        if self.device == 'gpu':
+            self.model.to('cuda:0')
         expected = set(range(13)) if name == 'bmd' else set(range(80))
         if set(self.model.names) != expected:
             raise ValueError('Vehicle taxonomy changed; refuse incompatible class filtering')
@@ -75,7 +94,7 @@ class VehicleTracker:
             self.next_detection_id = 0
         classes = list(BMD_TO_COCO) if self.name == 'bmd' else list(COCO_CLASSES)
         result = self.model.track(image, persist=True, tracker='bytetrack.yaml',
-            imgsz=640, classes=classes, device='cpu', conf=.25, iou=.45,
+            imgsz=640, classes=classes, device=0 if getattr(self, 'device', 'cpu') == 'gpu' else 'cpu', conf=.25, iou=.45,
             verbose=False, save=False)[0]
         detections = []
         scores = {}
@@ -95,13 +114,32 @@ class VehicleTracker:
 
 
 class PlateDetector:
-    def __init__(self, name, cache):
+    def __init__(self, name, cache, *, device='cpu'):
+        self.device = _execution_device(device)
         import onnxruntime as ort
+        if self.device == 'gpu' and 'CUDAExecutionProvider' not in ort.get_available_providers():
+            raise RuntimeError('GPU requested but plate CUDA provider is unavailable')
         root = Path(cache)/'experiments/detectors'
         self.name = name
         if name == 'parent':
             verified(root/'yolo-v9-t-512-license-plates-end2end.onnx', HASHES[name])
-            self.model = PlateModel('yolov9t512', root, 'cpu')
+            self.model = PlateModel('yolov9t512', root, 'cuda' if self.device == 'gpu' else 'cpu')
+            self.providers = self.model.providers
+            if self.device == 'gpu':
+                # PlateModel audits the wrapped detector's actual session at
+                # construction; disable its execution-time fallback as well.
+                wrapper = self.model.model
+                sessions = [value for value in vars(wrapper).values()
+                            if isinstance(value, ort.InferenceSession)]
+                if not sessions:
+                    for value in vars(wrapper).values():
+                        if hasattr(value, '__dict__'):
+                            sessions.extend(session for session in vars(value).values()
+                                            if isinstance(session, ort.InferenceSession))
+                if not sessions:
+                    raise RuntimeError('Unable to audit GPU plate detector sessions')
+                for session in sessions:
+                    _audit_gpu_session(session)
             self.session = None
         elif name == 'adapted':
             path = verified(root/'yolov9t512-indian-adapted.onnx', HASHES[name])
@@ -111,7 +149,12 @@ class PlateDetector:
             options = ort.SessionOptions()
             options.intra_op_num_threads = 2
             options.inter_op_num_threads = 1
-            self.session = ort.InferenceSession(str(path), options, providers=['CPUExecutionProvider'])
+            providers = (['CUDAExecutionProvider', 'CPUExecutionProvider']
+                         if self.device == 'gpu' else ['CPUExecutionProvider'])
+            self.session = ort.InferenceSession(str(path), options, providers=providers)
+            self.providers = self.session.get_providers()
+            if self.device == 'gpu':
+                _audit_gpu_session(self.session)
             spec = self.session.get_inputs()[0]
             if spec.shape != [1,3,512,512] or self.session.get_outputs()[0].shape != [1,5,5376]:
                 raise ValueError('Runtime plate export shape mismatch')

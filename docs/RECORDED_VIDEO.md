@@ -58,6 +58,30 @@ Both show the same single session. Opening a page or a preview never starts
 analysis. The API is rebuilt with the service on purpose: an API from before
 this change would reject recorded events.
 
+### Optional NVIDIA GPU mode
+
+The dashboards remain browser applications. This option accelerates the shared
+YOLO vehicle detector, ONNX plate detector and Paddle OCR service behind them.
+It does not change model weights, frame sampling, plate thresholds or privacy.
+
+```powershell
+# Reuse the existing GPU-enabled live image and restored model volumes:
+.\scripts\start-recorded-analysis.ps1 -Device gpu -SkipBuild
+# On a GPU machine without the image, omit -SkipBuild to build it first.
+# Return to the CPU-only workflow (also supported on the teammate's machine):
+.\scripts\start-recorded-analysis.ps1 -Device cpu -SkipBuild
+```
+
+GPU mode layers `compose.recorded-gpu.yaml` over the default file and reserves
+one NVIDIA GPU. Before replacing the running session, the launch preflight warms
+the real OCR model, vehicle tracker and plate detector on in-memory blank inputs,
+including actual CUDA inference and ONNX provider validation. Model startup also
+rejects a missing GPU/provider rather than silently falling back. The console
+model identity reports loaded OCR and detector devices. Restarting the service
+ends the previous analysis; select the recording again to begin a new run.
+Reported speedups must come from measurements on the same footage and settings;
+GPU availability alone proves neither throughput nor recognition accuracy.
+
 ## Controls and what they mean
 
 | Control | Effect |
@@ -212,6 +236,8 @@ Things to know when reading it:
 - One recording at a time; this is the same single shared session as live mode.
 - A file with any frame lacking a timestamp is refused. Remux it first if needed.
 - Frames larger than the 48 MiB decode bound are refused (8K video).
-- CPU speed has not been measured yet. Expect slower than real time.
+- Small-sample CPU/GPU inference timings are recorded in
+  [RECORDED_GPU_VALIDATION.md](RECORDED_GPU_VALIDATION.md); they do not establish
+  full-video throughput. CPU processing can be slower than real time.
 - The central API must be the rebuilt one. The edge retries a rejected event
   indefinitely, so an old API would block the delivery queue.

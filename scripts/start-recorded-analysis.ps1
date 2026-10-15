@@ -1,4 +1,6 @@
 param(
+    [ValidateSet('cpu', 'gpu')]
+    [string]$Device = 'cpu',
     # indian_adapted needs the detector-training volume and is not offered here.
     [ValidateSet('legacy', 'general', 'plate_adapted')]
     [string]$DetectorProfile = 'general',
@@ -46,12 +48,24 @@ try {
     $env:SENTINEL_RECORDED_UNPACED = if ($Unpaced) { 'true' } else { 'false' }
     $buildArgs = @('--build')
     if ($SkipBuild) { $buildArgs = @() }
+    $composeArgs = @('compose', '--profile', 'recorded')
+    if ($Device -eq 'gpu') {
+        $composeArgs += @('-f', 'compose.yaml', '-f', 'compose.recorded-gpu.yaml')
+        # Prove NVIDIA access before replacing a working CPU session. GPU
+        # requests fail explicitly rather than silently running on CPU.
+        if (!$SkipBuild) {
+            & $dockerExecutable @composeArgs build recorded-analysis
+            if ($LASTEXITCODE -ne 0) { throw 'GPU image build failed; current session was not replaced.' }
+        }
+        & $dockerExecutable @composeArgs run --rm --no-deps -T -e "RECORDED_DETECTOR_PROFILE=$DetectorProfile" --entrypoint python recorded-analysis /workspace/tools/run_ocr_research.py /workspace/tools/check_gpu_runtime.py
+        if ($LASTEXITCODE -ne 0) { throw 'GPU preflight failed; current session was not replaced. Use -Device cpu or repair NVIDIA/WSL support.' }
+    }
     # The API is rebuilt with the service: an older API would reject recorded events.
-    & $dockerExecutable compose --profile recorded up -d @buildArgs api dashboard recorded-analysis
+    & $dockerExecutable @composeArgs up -d @buildArgs api dashboard recorded-analysis
     if ($LASTEXITCODE -ne 0) { throw 'Recorded analysis could not be started. Check Docker and the restored models.' }
     Write-Host 'Operator dashboard:  http://127.0.0.1:5173/'
     Write-Host 'Engineering console: http://127.0.0.1:7780/'
     Write-Host 'Unlock each with the local operator key, choose a recording, and start analysis explicitly.'
-    Write-Host "Profile: $DetectorProfile on CPU. Footage is labelled RECORDED. Model acceptance is not verified accuracy."
+    Write-Host "Profile: $DetectorProfile on $Device. Footage is labelled RECORDED. Model acceptance is not verified accuracy."
     Write-Host 'Stop with: docker compose --profile recorded stop recorded-analysis'
 } finally { Pop-Location }
