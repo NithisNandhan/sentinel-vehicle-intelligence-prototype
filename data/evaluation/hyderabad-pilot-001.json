@@ -1,0 +1,253 @@
+{
+  "schema_version": "1.0",
+  "split": "development",
+  "labels_sha256": "7d07cf27a6dbe235b656f74ce5208ce349ab7d73890eb93b25c5f16a37835b65",
+  "settings": {
+    "detector_profile": "general",
+    "acceptance_threshold": 0.85,
+    "sampling_interval_ms": 500,
+    "plate_recovery": false,
+    "top_k": 20,
+    "pacing": "unpaced",
+    "frames_dropped_by_design": 0
+  },
+  "rules": {
+    "matching": "A track belongs to a passage when their video-time ranges overlap (tolerance 500 ms).",
+    "vehicle_coverage": "Over passages with a labelled vehicle box: a track box within 500 ms of a labelled instant has IoU >= 0.5.",
+    "plate_localisation": "Over labelled plate boxes: a predicted plate box within 500 ms has IoU >= 0.5.",
+    "ocr_observation_yield": "Over passages with a visible plate: an overlapping track produced at least one distinct OCR observation.",
+    "exact_read": "Over readable passages: an overlapping track was accepted by the unchanged gate with exactly the labelled string.",
+    "accepted_precision": "Correct accepted readings / (correct + wrong). Undefined when nothing was accepted. Readings on passages no human could read, or outside every labelled passage, are counted separately and excluded.",
+    "candidate_recall": "Over readable passages: the labelled string is at rank 1, within 5, or within K of an overlapping track's final ranking.",
+    "independence": "Outcomes are per labelled vehicle passage. Neighbouring frames and reconstructions are not separate successes."
+  },
+  "totals": {
+    "passages": 4,
+    "time_overlap_coverage": {
+      "count": 4,
+      "of": 4,
+      "rate": 1.0
+    },
+    "vehicle_coverage": {
+      "count": 0,
+      "of": 0,
+      "rate": null
+    },
+    "plate_localisation": {
+      "count": 2,
+      "of": 3,
+      "rate": 0.6667
+    },
+    "ocr_observation_yield": {
+      "count": 4,
+      "of": 4,
+      "rate": 1.0
+    },
+    "exact_read_coverage": {
+      "count": 0,
+      "of": 3,
+      "rate": 0.0
+    },
+    "wrong_reads": {
+      "count": 0,
+      "of": 3,
+      "rate": 0.0
+    },
+    "abstentions": {
+      "count": 3,
+      "of": 3,
+      "rate": 1.0
+    },
+    "unreadable_passages": 1,
+    "accepted_readings": {
+      "correct": 0,
+      "wrong": 0,
+      "on_passages_no_person_could_read": 0,
+      "outside_labelled_passages": 0
+    },
+    "accepted_precision": {
+      "count": 0,
+      "of": 0,
+      "rate": null,
+      "note": "undefined: nothing was accepted"
+    },
+    "candidate_recall": {
+      "top_1": {
+        "count": 0,
+        "of": 3,
+        "rate": 0.0
+      },
+      "top_5": {
+        "count": 0,
+        "of": 3,
+        "rate": 0.0
+      },
+      "top_20": {
+        "count": 0,
+        "of": 3,
+        "rate": 0.0
+      }
+    }
+  },
+  "recordings": [
+    {
+      "recording_id": "rec-89709cdda521",
+      "runtime": {
+        "wall_seconds": 419.61,
+        "video_seconds": 56.31,
+        "speed_relative_to_real_time": 0.134,
+        "analysed_frames": 113,
+        "ocr_calls": 88,
+        "vehicle_tracks": 45,
+        "reached_end": true
+      },
+      "passages": 4,
+      "time_overlap_coverage": {
+        "count": 4,
+        "of": 4,
+        "rate": 1.0
+      },
+      "vehicle_coverage": {
+        "count": 0,
+        "of": 0,
+        "rate": null
+      },
+      "plate_localisation": {
+        "count": 2,
+        "of": 3,
+        "rate": 0.6667
+      },
+      "ocr_observation_yield": {
+        "count": 4,
+        "of": 4,
+        "rate": 1.0
+      },
+      "exact_read_coverage": {
+        "count": 0,
+        "of": 3,
+        "rate": 0.0
+      },
+      "wrong_reads": {
+        "count": 0,
+        "of": 3,
+        "rate": 0.0
+      },
+      "abstentions": {
+        "count": 3,
+        "of": 3,
+        "rate": 1.0
+      },
+      "unreadable_passages": 1,
+      "accepted_readings": {
+        "correct": 0,
+        "wrong": 0,
+        "on_passages_no_person_could_read": 0,
+        "outside_labelled_passages": 0
+      },
+      "accepted_precision": {
+        "count": 0,
+        "of": 0,
+        "rate": null,
+        "note": "undefined: nothing was accepted"
+      },
+      "candidate_recall": {
+        "top_1": {
+          "count": 0,
+          "of": 3,
+          "rate": 0.0
+        },
+        "top_5": {
+          "count": 0,
+          "of": 3,
+          "rate": 0.0
+        },
+        "top_20": {
+          "count": 0,
+          "of": 3,
+          "rate": 0.0
+        }
+      },
+      "per_passage": [
+        {
+          "passage_id": "p01-scooter",
+          "vehicle_id": "hyd-scooter-white",
+          "start_ms": 3500,
+          "end_ms": 8500,
+          "outcome": "abstained",
+          "labelled_plate_masked": "MH******57",
+          "accepted_masked": [],
+          "track_overlaps_in_time": true,
+          "vehicle_box_matched": null,
+          "ocr_observations": 8,
+          "true_plate_rank": null,
+          "failing_stage": "ocr_candidate_missing"
+        },
+        {
+          "passage_id": "p02-auto",
+          "vehicle_id": "hyd-auto-yellow-rear",
+          "start_ms": 32000,
+          "end_ms": 36500,
+          "outcome": "abstained",
+          "labelled_plate_masked": "TS*****12",
+          "accepted_masked": [],
+          "track_overlaps_in_time": true,
+          "vehicle_box_matched": null,
+          "ocr_observations": 8,
+          "true_plate_rank": null,
+          "failing_stage": "ocr_candidate_missing"
+        },
+        {
+          "passage_id": "p03-car",
+          "vehicle_id": "hyd-car-white-front",
+          "start_ms": 43500,
+          "end_ms": 46500,
+          "outcome": "abstained",
+          "labelled_plate_masked": "TS******29",
+          "accepted_masked": [],
+          "track_overlaps_in_time": true,
+          "vehicle_box_matched": null,
+          "ocr_observations": 4,
+          "true_plate_rank": null,
+          "failing_stage": "ocr_candidate_missing"
+        },
+        {
+          "passage_id": "p04-auto-front",
+          "vehicle_id": "hyd-auto-yellow-front",
+          "start_ms": 46500,
+          "end_ms": 49000,
+          "outcome": "not_readable_by_a_person",
+          "labelled_plate_masked": null,
+          "accepted_masked": [],
+          "track_overlaps_in_time": true,
+          "vehicle_box_matched": null,
+          "ocr_observations": 4,
+          "true_plate_rank": null,
+          "failing_stage": null
+        }
+      ]
+    }
+  ],
+  "generated_at": "2026-10-10T18:47:48.700826Z",
+  "commit": "27935a3+uncommitted",
+  "models": {
+    "ocr_model": "awiros-ctc-adapted",
+    "ocr_checkpoint_sha256": "c2ba896d994b174071c95ace0f5ffc8a61cec3fc6eecce8f0bc5feb7dec4456d",
+    "ocr_device": "cpu",
+    "detector_profile": "general",
+    "vehicle_model": "yolo26s",
+    "vehicle_model_sha256": "646f8bc3fe0a656803d95c294f7852321748cb29d13466a1af8862e2db384a1b",
+    "plate_model": "parent",
+    "plate_model_sha256": "746fdd358ec110418775d7c9d8d07910d48b1a21471f92bf4421f6510d6daade",
+    "detector_device": "cpu"
+  },
+  "environment": {
+    "platform": "Linux-6.18.33.2-microsoft-standard-WSL2-x86_64-with-glibc2.41",
+    "machine": "x86_64",
+    "processor": null,
+    "cpu_count": 16,
+    "python": "3.11.17",
+    "cpu_threads": "6",
+    "peak_memory_mb": 1679.8
+  },
+  "notice": "Scores are model outputs judged against human labels on this footage only. OCR ranking scores are not calibrated probabilities."
+}
