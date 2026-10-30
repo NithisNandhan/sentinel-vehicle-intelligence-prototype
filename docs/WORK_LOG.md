@@ -78,3 +78,44 @@ Baseline on the 50 draft-labelled crops:
   reach fusion. Phase 3 targets these.
 - Host note: `tools/test_handoff.py` has 4 Windows file-locking errors when run on the
   host; it passes 14/14 in the Linux container, which is where tools tests are run.
+
+## Phase 3: reject non-plates (done)
+
+- `edge/sentinel_edge/plate_filter.py`, setting `SENTINEL_REJECT_NON_PLATES` (off by
+  default). A proposal is dropped before it can become fusion evidence when: its
+  width/height is outside 0.8-8, its plate-detector score is below 0.35 (an unknown score
+  is never held against it), or the OCR has no character with peak probability >= 0.6
+  (the same per-character peak that acceptance already requires in two frames).
+- The screen runs right after the size check, so a rejected proposal cannot move the
+  plate centre or reset the reader that holds a real plate's evidence.
+- Fusion safety: tests show a low-confidence invented reading is never accepted, with
+  the filter off (fusion's own per-character gate) or on (it never becomes evidence).
+  The 3-frame rule and the 0.85 acceptance threshold are untouched.
+- Limits were chosen on the same 50 draft labels they are measured on, so the numbers
+  below are optimistic (overfit) and need a held-out check.
+
+| On 50 draft-labelled crops | Before | After |
+| --- | --- | --- |
+| False reads on NO_PLATE, raw (n=14) | 14 | **1** |
+| False reads on NO_PLATE, format-valid (n=14) | 5 | **1** |
+| Readable plates lost (n=2) | - | **0** |
+| UNREADABLE crops dropped (n=34) | - | 13 |
+
+- The remaining false read is c49, a goods-carrier sign: real, confident text that no
+  shape or confidence rule separates from a plate.
+- The 13 UNREADABLE crops dropped include c02, a real two-line plate whose OCR had no
+  confident character. In the pipeline each dropped crop is one fewer observation, so
+  some tracks may now take longer to reach 3 observations. Not measured on a full run.
+- Tests: 7 in `edge/tests/test_plate_filter.py`.
+
+## Phase 4: two-line plates (attempt 1 failed)
+
+- `edge/sentinel_edge/two_line.py`, setting `SENTINEL_TWO_LINE_PLATES` (off by default):
+  split when height/width >= 0.45 and an ink gap separates two inked rows, read each row,
+  join top then bottom with a blank step (5 tests).
+- Attempt 1 made readings worse. The single-line read of the two-line crops was already
+  consistent with the labeller's partial notes, and splitting turned it into noise. The
+  rule also split 7 single-line or non-plate crops whose padding makes them look tall.
+  Format-valid readings on two-line crops went from 4 of 5 to 0 of 5. The OCR model
+  appears to read stacked rows already (its training corpus included two-row plates).
+- Attempt 2: keep the split only when the OCR is more confident about it (see below).

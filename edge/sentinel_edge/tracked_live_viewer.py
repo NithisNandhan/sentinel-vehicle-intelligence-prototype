@@ -26,8 +26,9 @@ def observe_tracked(config,camera,model,detector,vehicle,state,stop, *, debug=Fa
                     if recorded else
                     (lambda track, candidate, pts: delivery.accept(camera.camera_id, track, candidate, pts)))
     from .plate_search import TargetedPlateSearch
+    from .plate_options import PlateOptions
     pipeline = TrackedOCR(model,TargetedPlateSearch(detector),threshold=config.ocr_min_confidence, debug=debug, on_accepted=callback,
-                          reconstruction=True)
+                          reconstruction=True, options=PlateOptions.from_env())
     # Running list of vehicles seen in this run, for the side panels.
     from .passed_vehicles import PassedVehicles
     seen = PassedVehicles(keep_text=debug, hmac_key=getattr(config,'hmac_key',None))

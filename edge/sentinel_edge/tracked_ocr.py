@@ -9,8 +9,10 @@ import time
 
 from .ctc_fusion import CTCPlateReader
 from .live_detection_viewer import clipped_box, crop_box, roi_schedule
+from .plate_options import PlateOptions
 from .plate_quality import crop_quality
 from .privacy import mask_plate
+from .two_line import row_aware_probabilities, two_line_split
 from .vision import track_consistent
 
 MAX_TRACK_HISTORIES = 512
@@ -30,10 +32,16 @@ class History:
 
 
 class TrackedOCR:
-    def __init__(self, ocr, detector, *, roi_budget=None, gap_ms=2500, threshold=.85, debug=False, on_accepted=None, reconstruction=False):
+    def __init__(self, ocr, detector, *, roi_budget=None, gap_ms=2500, threshold=.85, debug=False, on_accepted=None, reconstruction=False,
+                 options=None):
         if (roi_budget is not None and not 1 <= roi_budget <= 8) or not 150 <= gap_ms <= 5000 or not 0 < threshold <= 1:
             raise ValueError('Invalid diagnostic tracking bounds')
         self.ocr, self.detector = ocr, detector
+        self.options = options or PlateOptions()  # Every opt-in plate option is off unless given.
+        self.non_plates = None
+        if self.options.reject_non_plates:
+            from .plate_filter import NonPlateFilter
+            self.non_plates = NonPlateFilter()
         self.roi_budget, self.gap_ms, self.threshold = roi_budget, gap_ms, threshold
         self.histories = {}
         self.secret = secrets.token_bytes(32)
@@ -52,6 +60,25 @@ class TrackedOCR:
             from .reconstruction import CropBank
             self.crop_bank = CropBank(max_bytes=32*1024*1024, max_frames=8, max_tracks=32,
                                       retain_best=True, max_age_ms=gap_ms)
+
+    def _read(self, crop, posterior_cache):
+        """CTC rows for one crop, shared within the original frame through the cache."""
+        source = hashlib.sha256(crop.tobytes()).hexdigest()
+        rows = posterior_cache.get(source) if posterior_cache is not None else None
+        if rows is not None:
+            self.metrics['shared_frame_ocr_cache_hits'] += 1
+            return rows
+        started = time.monotonic()
+        if self.options.two_line and two_line_split(crop) is not None:
+            rows = row_aware_probabilities(self.ocr, crop)
+            self.metrics['two_line_reads'] += 1
+        else:
+            rows = self.ocr.probabilities(crop)
+        self.stage_ms['ocr'] += (time.monotonic()-started)*1000
+        self.metrics['ocr_calls'] += 1
+        if posterior_cache is not None:
+            posterior_cache[source] = rows
+        return rows
 
     def reset(self):
         self.histories.clear()
@@ -159,6 +186,17 @@ class TrackedOCR:
                 self.metrics['too_small_plate_regions'] += 1
                 state.last_plate_failure = 'Plate proposal is smaller than 24 by 8 native pixels'
                 continue
+            screened = None
+            if self.non_plates is not None:
+                # Screen before a non-plate can move the plate centre or reset this vehicle's reader.
+                crop = prepared['crop'] if prepared is not None else crop_box(region,local)
+                screened = self._read(crop,posterior_cache)
+                score = prepared.get('confidence') if prepared is not None else getattr(self.detector,'last_confidence',None)
+                reason = self.non_plates.reason(crop,screened,score)
+                if reason:
+                    self.metrics['non_plate_rejections'] += 1
+                    state.last_plate_failure = reason
+                    continue
             state.plate_detections += 1
             center = ((local[0]+local[2])/(2*region.shape[1]),(local[1]+local[3])/(2*region.shape[0]))
             if state.plate_center and sum((a-b)**2 for a,b in zip(center,state.plate_center)) > .12:
@@ -184,16 +222,7 @@ class TrackedOCR:
             duplicate = any(sample[1] == source for sample in state.reader.samples)
             separated = not state.reader.samples or pts_ms-state.reader.samples[-1][0] >= 150
             if not duplicate and separated:
-                rows = posterior_cache.get(source) if posterior_cache is not None else None
-                if rows is None:
-                    started = time.monotonic()
-                    rows = self.ocr.probabilities(crop)
-                    self.stage_ms['ocr'] += (time.monotonic()-started)*1000
-                    self.metrics['ocr_calls'] += 1
-                    if posterior_cache is not None:
-                        posterior_cache[source] = rows
-                else:
-                    self.metrics['shared_frame_ocr_cache_hits'] += 1
+                rows = screened if screened is not None else self._read(crop,posterior_cache)
                 if state.reader.add(rows,timestamp_ms=pts_ms,source_id=source,quality=quality):
                     self.metrics['distinct_ocr_observations'] += 1
                     if self.crop_bank is not None:
