@@ -49,3 +49,32 @@ labels are AI-drafted, not verified ground truth.
 - **Consequence for later phases:** exact-match and character error rate rest on n=2
   readable crops and cannot show an improvement or a regression with any confidence. The
   NO_PLATE false-read rate (n=14) is the most informative metric available.
+
+## Phase 2: evaluation script and baseline (done)
+
+- `tools/eval_plates.py`: exact-match rate, character error rate (edit distance / label
+  characters; an empty reading costs every character) and false-read rate on NO_PLATE
+  crops. Every rate carries its denominator and is `null` at n=0. 8 unit tests in
+  `tools/test_eval_plates.py`.
+- `tools/run_plate_variants.py` reads crops with the real OCR. Two readings per variant:
+  `raw` (greedy CTC text) and `format` (best Indian-format candidate from a one-crop
+  fusion reader, which is what the pipeline could display).
+- `tools/plate_crop_probe.py` re-runs the pipeline's detection steps on a clip and saves
+  each crop with its plate-detector score. To get that score, `PlateDetector.box` and
+  `TargetedPlateSearch` now keep `last_confidence`; which box is chosen is unchanged
+  (4 tests in `edge/tests/test_plate_confidence.py`).
+- The re-run reproduced the earlier probe exactly (271 vehicle boxes, 165 crops, 104 with
+  no plate) and all 50 labelled crops are byte-identical, so scores attach reliably.
+
+Baseline on the 50 draft-labelled crops:
+
+| Reading | Exact match (n=2) | CER | False reads on NO_PLATE (n=14) | Readings on UNREADABLE (n=34) |
+| --- | --- | --- | --- | --- |
+| raw | 2/2 | 0/20 | 14/14 | 34/34 |
+| format | 2/2 | 0/20 | 5/14 | 29/34 |
+
+- The OCR agrees with both image-only labels, but n=2 cannot show an accuracy level.
+- 5 of 14 non-plates yield a well-formed Indian plate string: invented readings that can
+  reach fusion. Phase 3 targets these.
+- Host note: `tools/test_handoff.py` has 4 Windows file-locking errors when run on the
+  host; it passes 14/14 in the Linux container, which is where tools tests are run.

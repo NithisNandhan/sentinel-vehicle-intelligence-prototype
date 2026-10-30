@@ -188,21 +188,27 @@ class PlateDetector:
         else:
             raise ValueError('Unknown diagnostic plate model')
 
-    def boxes(self, image):
+    def scored_boxes(self, image):
+        """Proposals with the detector's own score, in the adapter's ranking order."""
         if self.session is None:
             detections = sorted(self.model.model.predict(image),key=lambda d:-float(d.confidence))
-            return [[d.bounding_box.x1,d.bounding_box.y1,d.bounding_box.x2,d.bounding_box.y2]
+            return [([d.bounding_box.x1,d.bounding_box.y1,d.bounding_box.x2,d.bounding_box.y2],float(d.confidence))
                     for d in detections]
         tensor, scale, left, top = letterbox(image,512,512)
         output = self.session.run(None, {self.session.get_inputs()[0].name:tensor})[0]
-        return decode_yolo11(output,scale,left,top,image.shape)
+        return decode_yolo11(output,scale,left,top,image.shape,with_confidence=True)
+
+    def boxes(self, image):
+        return [box for box,_ in self.scored_boxes(image)]
 
     def box(self, image):
-        boxes = self.boxes(image)
-        if not boxes:
+        scored = self.scored_boxes(image)
+        # Uncalibrated detector score of the chosen box; diagnostics and opt-in filters only.
+        self.last_confidence = scored[0][1] if scored else None
+        if not scored:
             return None
         # Both adapters rank proposals by confidence before selecting a crop.
-        x1,y1,x2,y2 = boxes[0]
+        x1,y1,x2,y2 = scored[0][0]
         padx,pady = max(1,round((x2-x1)*.03)), max(1,round((y2-y1)*.03))
         return (max(0,int(x1)-padx),max(0,int(y1)-pady),
                 min(image.shape[1],int(x2)+padx),min(image.shape[0],int(y2)+pady))

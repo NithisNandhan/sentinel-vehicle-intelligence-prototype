@@ -100,7 +100,7 @@ def letterbox(image, height, width):
     return np.ascontiguousarray(tensor), scale, left, top
 
 
-def decode_yolo11(output, scale, left, top, shape, threshold=.25):
+def decode_yolo11(output, scale, left, top, shape, threshold=.25, with_confidence=False):
     import cv2
     values = np.asarray(output)
     if values.ndim != 3 or values.shape[0] != 1 or values.shape[1] != 5:
@@ -118,6 +118,8 @@ def decode_yolo11(output, scale, left, top, shape, threshold=.25):
         return []
     rects = [[b[0],b[1],b[2]-b[0],b[3]-b[1]] for b in boxes]
     kept = cv2.dnn.NMSBoxes(rects, confidences, threshold, .45)
+    if with_confidence:
+        return [(boxes[int(index)], confidences[int(index)]) for index in np.asarray(kept).reshape(-1)]
     return [boxes[int(index)] for index in np.asarray(kept).reshape(-1)]
 
 
