@@ -19,14 +19,17 @@ def plate(height, width, bands):
 
 
 class RecordingOCR:
+    """Reads "1" from every row crop; the whole crop reads `whole` (default "1")."""
     tokens = TOKENS
 
-    def __init__(self):
-        self.shapes = []
+    def __init__(self, whole=None):
+        self.shapes, self.whole = [], whole
 
     def probabilities(self, image):
         self.shapes.append(image.shape[:2])
-        return [[0., 1., 0.], [1., 0., 0.]]  # Reads "1".
+        if self.whole is not None and len(self.shapes) == 1:
+            return self.whole
+        return [[0., 1., 0.], [1., 0., 0.]]
 
 
 class TwoLineTests(unittest.TestCase):
@@ -47,9 +50,15 @@ class TwoLineTests(unittest.TestCase):
         self.assertTrue(16 <= round(40 * split) <= 24)
         ocr = RecordingOCR()
         rows = row_aware_probabilities(ocr, image)
-        self.assertEqual(len(ocr.shapes), 2)
-        self.assertEqual(sum(shape[0] for shape in ocr.shapes), 40)
+        self.assertEqual(ocr.shapes[0], (40, 70))  # Whole crop first, then each row.
+        self.assertEqual(sum(shape[0] for shape in ocr.shapes[1:]), 40)
         self.assertEqual(greedy_text(rows, TOKENS), '11')
+
+    def test_the_split_is_kept_only_when_the_ocr_is_more_confident(self):
+        image = plate(40, 70, [(4, 16), (24, 36)])
+        confident_whole = [[0., 1., 0.], [1., 0., 0.], [0., 0., 1.], [1., 0., 0.]]  # "1A", both confident.
+        rows = row_aware_probabilities(RecordingOCR(whole=confident_whole), image)
+        self.assertIs(rows, confident_whole)  # Split "11" is not more confident: keep the whole read.
 
     def test_a_repeated_character_at_the_join_is_kept(self):
         one = [[0., 1., 0.]]

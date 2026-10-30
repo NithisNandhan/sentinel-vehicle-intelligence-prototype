@@ -7,6 +7,7 @@ on its own and the rows are joined top then bottom. Nothing here changes fusion 
 acceptance: the joined rows are ordinary CTC evidence for the same reader.
 """
 from .hybrid import layout_hypotheses
+from .plate_filter import confident_characters
 
 # Single-line Indian plates are about 4.5:1 (height/width ~0.22); two-line about 1.7:1.
 TWO_LINE_MIN_HEIGHT_RATIO = .45
@@ -28,9 +29,17 @@ def join_rows(top, bottom):
 
 
 def row_aware_probabilities(ocr, crop):
-    """CTC rows for the crop: rows read separately when it is a two-line plate."""
+    """CTC rows for the crop: rows read separately when it is a two-line plate and
+    the OCR is more confident that way.
+
+    A first version always used the split; on draft-labelled crops it turned plausible
+    single-line reads of two-line plates into noise (docs/WORK_LOG.md, Phase 4), so the
+    split must now beat the single-line read on confident characters.
+    """
+    single = ocr.probabilities(crop)
     split = two_line_split(crop)
     if split is None:
-        return ocr.probabilities(crop)
+        return single
     boundary = round(crop.shape[0] * split)
-    return join_rows(ocr.probabilities(crop[:boundary]), ocr.probabilities(crop[boundary:]))
+    joined = join_rows(ocr.probabilities(crop[:boundary]), ocr.probabilities(crop[boundary:]))
+    return joined if confident_characters(joined) > confident_characters(single) else single

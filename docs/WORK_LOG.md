@@ -116,6 +116,19 @@ Baseline on the 50 draft-labelled crops:
 - Attempt 1 made readings worse. The single-line read of the two-line crops was already
   consistent with the labeller's partial notes, and splitting turned it into noise. The
   rule also split 7 single-line or non-plate crops whose padding makes them look tall.
-  Format-valid readings on two-line crops went from 4 of 5 to 0 of 5. The OCR model
+  Format-valid readings on two-line crops went from 5 of 5 to 0 of 5. The OCR model
   appears to read stacked rows already (its training corpus included two-row plates).
 - Attempt 2: keep the split only when the OCR is more confident about it (see below).
+- Attempt 2 failed too. Reading both ways and keeping the split only when it has more
+  confident characters left all 5 two-line crops at their single-line reading (no
+  change) and split exactly one crop, c43, a single-line plate cut off at the edge.
+  Exact match 2/2 and CER 0/20 unchanged; NO_PLATE false reads unchanged (format 5/14).
+  No benefit on this sample and one wrong split. Logged under **Blocked**; the code stays
+  off by default and should not be enabled.
+
+## Blocked
+
+- **Phase 4, two-line plates** (2 attempts). The OCR model already produces plausible
+  single-line reads of the two-line plates here, and splitting either adds noise
+  (attempt 1) or changes nothing useful (attempt 2). A real test needs readable,
+  human-labelled two-line plates; all 5 in this sample are UNREADABLE.
