@@ -231,6 +231,9 @@ services:
       # Opt-in: show the analysed frame and full unverified readings of a
       # permitted recording in the operator dashboard. Never applies to cameras.
       SENTINEL_DASHBOARD_EVIDENCE: ${DASHBOARD_RECORDED_EVIDENCE:-false}
+      # Opt-in: keep vehicles ByteTrack has not yet confirmed (often motorcycles
+      # between 500 ms samples). Fusion and acceptance thresholds are unchanged.
+      SENTINEL_KEEP_UNCONFIRMED_VEHICLES: ${SENTINEL_KEEP_UNCONFIRMED_VEHICLES:-false}
     volumes:
       - ./edge:/workspace/edge:ro
       - ./tools:/workspace/tools:ro

@@ -109,6 +109,15 @@ for the analysis, so no sampled frame is dropped; on a slow CPU a paced run
 simply takes longer than the video. Sampling is every 500 ms of video time,
 as for live cameras.
 
+**Unconfirmed vehicles (opt-in).** ByteTrack shows a new vehicle only after it
+matches in two samples. Between 500 ms samples a motorcycle often moves farther
+than its own width, so it is detected but never shown or searched for a plate.
+Set `SENTINEL_KEEP_UNCONFIRMED_VEHICLES=true` to keep such detections and link
+them by plausible motion (the same discontinuity rule the OCR stage uses). Off by
+default. The 3-frame fusion requirement and plate-acceptance threshold are
+unchanged. It adds short-lived IDs where linking fails, notably on low-resolution
+footage.
+
 **States.** `connecting`, `processing`, `paused`, `completed`, `unavailable`.
 When unavailable, a failure code explains why: `ChangedRecording`,
 `CorruptRecording`, `MissingPts` (a frame has no timestamp; the file is

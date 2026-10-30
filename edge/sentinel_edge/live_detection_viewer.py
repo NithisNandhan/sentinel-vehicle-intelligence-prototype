@@ -280,7 +280,8 @@ def viewer_frames(config, camera, stop):
     raise TimeoutError('No live frames received; no media retained')
 
 
-def load_models(config, cache, checkpoint, *, detector_profile=None, training_root=None, device='gpu'):
+def load_models(config, cache, checkpoint, *, detector_profile=None, training_root=None, device='gpu',
+                keep_unconfirmed=False):
     # Paddle's isolated CUDA 12 libraries must initialize before importing
     # Torch/YOLO (the production image bundles a different CUDA/cuDNN version).
     import numpy as np
@@ -299,7 +300,7 @@ def load_models(config, cache, checkpoint, *, detector_profile=None, training_ro
         # Torch preloads its matching CUDA libraries before ONNX constructs a
         # CUDA session. Paddle's isolated runtime must still warm up first.
         tracker = VehicleTracker(vehicle, config.model_cache_dir,
-                                 training_root or Path('/training'), device=device)
+                                 training_root or Path('/training'), device=device, keep_unconfirmed=keep_unconfirmed)
         return reader, PlateDetector(plate, config.model_cache_dir, device=device), tracker
     from ultralytics import YOLO
     from .ocr_selection_benchmark import PlateDetectorExperiment
@@ -515,7 +516,8 @@ def configured_relay_cameras(config):
 def serve(config, cache, checkpoint, port=7780, lifetime=1800, bind_host='127.0.0.1',
           detector_profile=None, training_root=None, operator_key=None, deliver=False,
           configured_relays=False, plate_recovery=False, device='gpu',
-          recordings_dir=None, live_catalogue=True, paced=True, dashboard_evidence=False):
+          recordings_dir=None, live_catalogue=True, paced=True, dashboard_evidence=False,
+          keep_unconfirmed_vehicles=False):
     if device not in ('cpu', 'gpu'):
         raise ValueError('Explicit CPU/GPU device required')
     if recordings_dir is not None and not detector_profile:
@@ -713,7 +715,8 @@ def serve(config, cache, checkpoint, port=7780, lifetime=1800, bind_host='127.0.
                     import av
                     av.logging.set_level(av.logging.PANIC)
                     model, detector, vehicle = load_models(config, cache, checkpoint,
-                        detector_profile=detector_profile, training_root=training_root, device=device)
+                        detector_profile=detector_profile, training_root=training_root, device=device,
+                        keep_unconfirmed=keep_unconfirmed_vehicles)
                     identity.update(model_identity(model, detector_profile,
                                                    detector=detector, vehicle_model=vehicle))
                 if recording is not None:
@@ -780,6 +783,9 @@ if __name__ == '__main__':
     parser.add_argument('--unpaced', action='store_true',
                         default=os.getenv('SENTINEL_RECORDED_UNPACED','').lower() == 'true',
                         help='Process recordings as fast as possible instead of at most real time; frames are never dropped either way')
+    parser.add_argument('--keep-unconfirmed-vehicles', action='store_true',
+                        default=os.getenv('SENTINEL_KEEP_UNCONFIRMED_VEHICLES','').lower() == 'true',
+                        help='Show and plate-search vehicles ByteTrack has not yet confirmed, linked by plausible motion; off by default')
     parser.add_argument('--cache', type=Path, required=True)
     parser.add_argument('--checkpoint', type=Path, required=True)
     parser.add_argument('--container-bind', action='store_true', help='Use only with a Docker loopback-only port publication')
@@ -801,4 +807,5 @@ if __name__ == '__main__':
           bind_host='0.0.0.0' if args.container_bind else '127.0.0.1',
           detector_profile=args.detector_profile, training_root=args.training_root, deliver=args.deliver,
           lifetime=max(60,min(28800,args.lifetime)), configured_relays=args.configured_relays,
-          plate_recovery=args.plate_recovery, device=args.device, dashboard_evidence=args.dashboard_evidence)
+          plate_recovery=args.plate_recovery, device=args.device, dashboard_evidence=args.dashboard_evidence,
+          keep_unconfirmed_vehicles=args.keep_unconfirmed_vehicles)

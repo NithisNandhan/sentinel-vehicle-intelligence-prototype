@@ -5,7 +5,7 @@ import json
 from pathlib import Path
 
 from .detector_comparison import PlateModel, decode_yolo11, letterbox
-from .vision import associate_vehicle_tracks
+from .vision import _box_iou, associate_vehicle_tracks
 
 PROFILES = {
     'legacy': ('yolov8n', 'parent'),
@@ -57,8 +57,11 @@ class VehicleTrack:
 
 
 class VehicleTracker:
-    def __init__(self, name, cache, training_root, *, device='cpu'):
+    def __init__(self, name, cache, training_root, *, device='cpu', keep_unconfirmed=False):
         self.device = _execution_device(device)
+        # Opt-in: ByteTrack hides a new track until it matches twice. Between 500 ms
+        # samples a motorcycle often moves farther than its own width, so it never does.
+        self.aliases = {} if keep_unconfirmed else None
         import torch
         if self.device == 'gpu' and not torch.cuda.is_available():
             raise RuntimeError('GPU requested but vehicle CUDA runtime is unavailable')
@@ -82,6 +85,8 @@ class VehicleTracker:
     def reset(self):
         self.frame_index = 0
         self.previous_tracks.clear()
+        if getattr(self, 'aliases', None) is not None:
+            self.aliases.clear()
         predictor = getattr(self.model, 'predictor', None)
         for tracker in getattr(predictor, 'trackers', ()):
             tracker.reset()
@@ -108,9 +113,31 @@ class VehicleTracker:
             identity = getattr(item,'id',None)
             detections.append((str(int(identity.item())) if identity is not None else None,
                                coords,coarse))
+        aliases = getattr(self, 'aliases', None)
+        if aliases is not None:
+            detections += self._unconfirmed(detections, scores)
         tracks,self.previous_tracks,self.next_detection_id = associate_vehicle_tracks(
-            detections,self.previous_tracks,self.frame_index,self.next_detection_id)
+            detections,self.previous_tracks,self.frame_index,self.next_detection_id,aliases=aliases)
         return [VehicleTrack(track_id,coords,coarse,scores.get(coords)) for track_id,coords,coarse in tracks]
+
+    def _unconfirmed(self, shown, scores):
+        """Detections ByteTrack holds back this frame, minus any that overlap a shown vehicle."""
+        trackers = getattr(getattr(self.model, 'predictor', None), 'trackers', None) or ()
+        result = []
+        for item in (getattr(trackers[0], 'tracked_stracks', ()) if trackers else ()):
+            if getattr(item, 'is_activated', True):
+                continue
+            cls = int(item.cls)
+            coarse = BMD_TO_COCO.get(cls) if self.name == 'bmd' else cls
+            if coarse is None or (self.name != 'bmd' and cls not in COCO_CLASSES):
+                continue
+            coords = tuple(int(v) for v in item.xyxy)
+            # One vehicle, one ID: never add a second box over one already shown (any class).
+            if any(_box_iou(coords, box) >= .5 for _, box, _ in shown + result):
+                continue
+            scores[coords] = float(item.score)
+            result.append((None, coords, coarse))
+        return result
 
 
 class PlateDetector:
