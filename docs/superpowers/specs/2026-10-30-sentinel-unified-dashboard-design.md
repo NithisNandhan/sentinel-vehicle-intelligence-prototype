@@ -6,15 +6,15 @@ Status: visual direction approved; written specification awaiting review. No app
 
 ## 1. Decisions and purpose
 
-The user selected **Paper teal** after reviewing the colour preview. This specification carries forward the proposed focused workspace: one dashboard, three navigation sections, and a contextual Inspector replacing the separate model dashboard.
+The user selected **Paper teal** after reviewing the colour preview and requested removal of operator unlock. This specification carries forward the proposed focused workspace: one dashboard, three navigation sections, a contextual Inspector replacing the separate model dashboard, and direct local access without a login or key-entry screen.
 
 The product processes downloaded CCTV recordings, recognises vehicle plates across frames, compares accepted readings with a watchlist, and presents operational alerts. Drawing vehicle or plate boxes is not the completion criterion. UI work does not establish recognition accuracy.
 
-The primary user is the local operator; the same authorised user may inspect model evidence. The Inspector is a progressive-disclosure control, not a separate security role.
+The primary user is the person using this laptop. That person may operate the application and inspect model evidence without manually entering a key. The Inspector is a progressive-disclosure control, not a separate security role. This is a trusted, single-user local application, not a public or multi-user service.
 
 ### In scope
 
-- One browser entry point at `http://127.0.0.1:5173/`, one operator unlock, and one shared recognition session.
+- One browser entry point at `http://127.0.0.1:5173/`, automatic local access without operator unlock, and one shared recognition session.
 - Analyse, Alerts and Watchlist sections.
 - Recording selection and existing start, pause, resume and stop controls.
 - Aligned analysed frames, recent vehicle-track results and an optional Inspector.
@@ -57,7 +57,7 @@ Existing source registration remains the way to add a permitted recording. The r
 
 ## 3. Application shell and navigation
 
-A compact top bar contains Sentinel, Analyse, Alerts, Watchlist, connection status and Lock/Unlock. A small settings menu replaces secondary navigation. There is no full-height sidebar.
+A compact top bar contains Sentinel, Analyse, Alerts, Watchlist and connection status. A small settings menu replaces secondary navigation. There is no full-height sidebar, Lock/Unlock action, key-entry dialog or login screen.
 
 Analyse is the initial section. Alerts shows a count of active central alerts. Switching sections does not create, reset or stop the shared inference session.
 
@@ -148,21 +148,31 @@ Deactivate is reversible and never hard-deletes existing sightings, alerts or au
 - Derive the keyed plate identifier on the server using the existing secret; never send that secret to the browser.
 - Retain the existing HMAC-based storage policy, plus a masked display value for new entries. Existing entries whose mask cannot be reconstructed show their entry ID and a legacy-hidden label; do not manufacture a mask.
 - Add a monotonic watchlist revision and mutation audit using an Alembic migration. The revision advances transactionally on actual changes, including deactivation. Do not derive it only from currently active entries, which could make it decrease.
-- Audit actions and changed non-sensitive metadata; do not retain plaintext input in request logs or audits. The actor is the local shared-key operator, not a claimed individually identified account.
-- Every management request requires the operator key. Reuse current origin/access restrictions; perform no mutations through GET.
+- Audit actions and changed non-sensitive metadata; do not retain plaintext input in request logs or audits. The actor is the local application operator, not a claimed individually identified account.
+- Every management request passes through the local-access boundary described below. Backend service credentials remain server-side; the browser never supplies an operator key. Perform no mutations through GET.
 - Preserve the edge snapshot contract and matching behaviour. Validate snapshot compatibility after mutations.
 
 ## 8. Single frontend and protected evidence boundary
 
 The React application remains the sole browser UI on port 5173. FastAPI remains the central API. The recognition worker may continue on its existing local service port; one dashboard does not mean one process.
 
-Add an authenticated, allowlisted central diagnostic gateway for the Inspector. The browser never receives the edge service key or worker viewer token. Do not iframe the old engineering dashboard or proxy arbitrary worker URLs.
+Add an allowlisted central diagnostic gateway for the Inspector, subject to the same local-access checks as other operator actions. The browser never receives the operator service key, edge service key or worker viewer token. Do not iframe the old engineering dashboard or proxy arbitrary worker URLs.
+
+### Automatic local access
+
+- The dashboard opens directly. Do not replace the removed dialog by embedding an operator key in JavaScript, a Vite client environment variable, browser storage or a URL. The existing auto-unlock shortcut is not the new access design.
+- Introduce an explicit laptop-only profile with automatic same-origin local sessions. Bootstrap and session handling occur without user interaction. Use HTTP-only, SameSite-strict session cookies, request-forgery protection and strict allowed Host/Origin checks. Session/CSRF values are not service credentials; keep any browser-readable request token in memory only.
+- Route browser API requests through the same local application origin. Limit the gateway to explicit application routes and reject cross-origin mutation/session-bootstrap requests; do not turn it into a general-purpose proxy or enable wildcard CORS.
+- Published UI, API and worker ports remain bound to loopback, even where services listen on internal container interfaces. Reject unsafe/non-local configuration rather than silently granting this access profile on a LAN/public listener.
+- Keep service-to-service credentials and existing keyed API compatibility for scripts. Do not blanket-disable FastAPI or worker security dependencies; validate a local session at the operator boundary instead of demanding manual key entry.
+- Anyone who can use this local browser/computer can use the dashboard. This profile does not identify individual people or defend against another trusted local process. Network or multi-user deployment requires a separate explicit authentication design.
+- Missing local-access/session configuration is a service setup error with a retry path, not a request for the user to enter an operator key.
 
 Use bounded track metadata and on-demand image responses rather than repeatedly forwarding the full engineering snapshot with every crop. Validate identifiers and session identity, enforce response-size/candidate limits and use no-store responses. Keep the existing lightweight status contract separate from diagnostics.
 
 Full plate hypotheses and images are transient, protected inspection data for permitted recorded footage and remain subject to the recorded-evidence setting. If that setting is disabled, show masked results and a clear evidence-unavailable state; do not bypass the flag. No such exposure is added to the genuine live-feed path. Existing persistent accepted-event storage remains masked/keyed.
 
-Do not put credentials, plates or diagnostic payloads into URLs, localStorage, analytics or automatic exports. Lock clears sensitive UI state and stops protected requests. Preserve existing worker lease behaviour without silently terminating another authorised consumer's session.
+Do not put credentials, plates or diagnostic payloads into URLs, localStorage, analytics or automatic exports. Clear sensitive UI state when the analysis session/source changes or the browser session ends. Preserve the existing worker lease behaviour; closing the Inspector or switching application sections does not terminate processing.
 
 Redirect legacy worker browser entry points, including the separate engineering page, to the unified application without placing keys in the redirect. Keep required internal worker endpoints. Update launcher messages and documentation to advertise only the unified UI.
 
@@ -182,7 +192,7 @@ Target checks: 1440x900 and 1366x768 desktop; 768x1024 tablet; 390x844 mobile, w
 | Error | Name the unavailable stage without revealing URLs or credentials | Retry the relevant action |
 | Partial | Keep available data but mark missing/aged evidence and service disconnection | Inspect available data or reconnect |
 | Success | Show completed playback or saved operator/watchlist action | Continue reviewing; reversible deactivation where relevant |
-| Permission | Locked state clears images and full text | Unlock using the existing operator key |
+| Permission/access | Explain local-profile/session configuration failure or blocked cross-origin access; clear protected evidence when local access fails | Retry local session setup or correct service configuration; no unlock prompt |
 
 ## 10. Boundaries and verification
 
@@ -193,9 +203,9 @@ Preserve existing user edits and data. Remove unused map dependencies only after
 Verification must cover:
 
 1. Frontend build/type checking and relevant unit tests.
-2. Backend validation, operator-key rejection, duplicate/conflicting watchlist edits, revision monotonicity, reversible deactivation and legacy-entry display.
+2. Backend validation, automatic local session establishment, cross-origin/forged-request rejection, unsafe-listener rejection, service-key compatibility, duplicate/conflicting watchlist edits, revision monotonicity, reversible deactivation and legacy-entry display.
 3. Diagnostic allowlists, bounds, no-store behaviour, source/session mismatch, disabled recorded-evidence settings and absence of leaked service keys or genuine live imagery.
-4. One shared session across sections; no inference on preview, no inference restart on navigation/Inspector changes, and no stale evidence after source changes or locking.
+4. One shared session across sections; no inference on preview, no inference restart on navigation/Inspector changes, and no stale evidence after source changes or local session expiry. No unlock controls or keys appear in the UI/client bundle.
 5. Alert actions and watchlist changes persisting across restart, using isolated test data.
 6. Browser verification at the target widths, including all listed content states, keyboard/focus behaviour and long content. Capture only clearly synthetic UI fixtures for rendered evidence.
 7. Existing CPU/GPU startup and recognition interfaces remaining compatible. Model scores/outputs are not tuned to make the new UI look successful.
@@ -206,4 +216,4 @@ Known recognition-quality gaps, rejected-event queue handling and the handoff ar
 
 ## 11. Approval and next step
 
-Paper teal is approved. This document records the proposed unified implementation boundary. Review and approve this written specification before implementation planning or application changes. No further visual direction needs to be invented unless the user requests a revision.
+Paper teal and removal of manual operator unlock are approved. This document records the revised unified implementation boundary, including laptop-only automatic access. Review and approve this written specification before implementation planning or application changes. No further visual direction needs to be invented unless the user requests a revision.
