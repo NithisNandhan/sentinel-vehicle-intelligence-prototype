@@ -78,9 +78,8 @@ def observe_tracked(config,camera,model,detector,vehicle,state,stop, *, debug=Fa
             displays = pipeline.process(frame.image,tracks,frame.pts_ms,plate_cache=getattr(frame,'plate_cache',None))
             if on_sample is not None:on_sample(frame,tracks,displays,pipeline)
             view = frame.image.copy()
-            from .overlay import draw_plate_callout, draw_vehicle, scale_for
+            from .overlay import draw_plate_label, draw_vehicle, scale_for
             scale = scale_for(view)
-            boxes = {track.track_id:track.box for track in tracks}
             plain,shown = {},{}
             for display in displays:
                 history = pipeline.histories.get(display['track_id'])
@@ -91,11 +90,12 @@ def observe_tracked(config,camera,model,detector,vehicle,state,stop, *, debug=Fa
                 shown[display['track_id']] = plain[display['track_id']] if debug else display['masked_plate']
             seen.update(pipeline.metrics['scene_resets'],
                         frame.pts_ms-(recorded.recording.start_pts_ms if recorded else 0),tracks,displays,plain)
+            # Small vehicle tags first, then plate readings on top; no enlarged
+            # crops, which hid the traffic behind.
             for track in tracks:
-                draw_vehicle(view,track,scale,shown.get(track.track_id))
+                draw_vehicle(view,track,scale)
             for display in displays:
-                draw_plate_callout(view,boxes.get(display['track_id'],display['box']),display['box'],display['crop'],
-                                   shown[display['track_id']],display['ocr_status'],display['observations'],scale)
+                draw_plate_label(view,display['box'],shown[display['track_id']],display['ocr_status'],scale)
             if displays:
                 selected = max(displays,key=lambda d:d['observations'])
                 crop = selected['crop']

@@ -37,16 +37,19 @@ def _banner(view, text, origin, colour, scale):
     return x, y, width + 2 * pad, height + baseline + 2 * pad
 
 
-def draw_vehicle(view, track, scale, reading=None):
-    """Corner brackets and a tag such as `CAR 39% #5 | ANPR: <reading>`.
+VEHICLE_TAG_SIZE, PLATE_LABEL_SIZE = .42, .7  # Vehicle tags stay smaller than plate readings.
+
+
+def draw_vehicle(view, track, scale):
+    """Thin corner brackets and a small tag such as `CAR 39%`.
 
     The percentage is the vehicle detector's own score for the box, not the
-    chance that a plate reading is right.
+    chance that a plate reading is right. Kept small so traffic behind stays visible.
     """
     import cv2
     x1, y1, x2, y2 = (int(v) for v in track.box)
-    thickness = thickness_for(scale)
-    arm = int(max(8 * scale, min(x2 - x1, y2 - y1) * .18))
+    thickness = max(1, round(scale))
+    arm = int(max(6 * scale, min(x2 - x1, y2 - y1) * .1))
     for cx, cy, dx, dy in ((x1, y1, 1, 1), (x2, y1, -1, 1), (x1, y2, 1, -1), (x2, y2, -1, -1)):
         cv2.line(view, (cx, cy), (cx + dx * arm, cy), GREEN, thickness, cv2.LINE_AA)
         cv2.line(view, (cx, cy), (cx, cy + dy * arm), GREEN, thickness, cv2.LINE_AA)
@@ -54,13 +57,22 @@ def draw_vehicle(view, track, scale, reading=None):
     confidence = getattr(track, 'confidence', None)
     if confidence is not None:
         label += f' {round(float(confidence) * 100)}%'
-    label += f' #{track.track_id}'
+    _banner(view, label, (x1 + thickness, y1 + thickness), GREEN, scale * VEHICLE_TAG_SIZE)
+
+
+def draw_plate_label(view, plate_box, reading, status, scale):
+    """Box the plate itself and put a small reading just above it.
+
+    No vehicle tag and no enlarged crop, so vehicles behind stay visible.
+    """
+    import cv2
+    _, colour = STATES.get(status, (None, GREY))
+    plate = tuple(int(v) for v in plate_box)
+    cv2.rectangle(view, plate[:2], plate[2:], colour, thickness_for(scale))
     if reading:
-        label += f' | ANPR: {reading}'
-    # Inside the top-right corner, clear of the plate call-out drawn above the left side.
-    import cv2 as _cv2
-    (width, _), _ = _cv2.getTextSize(label, _cv2.FONT_HERSHEY_SIMPLEX, .55 * scale * .8, max(1, round(1.4 * scale * .8)))
-    _banner(view, label, (x2 - width - round(12 * scale), y1 + thickness), GREEN, scale * .8)
+        size = scale * PLATE_LABEL_SIZE
+        (_, height), baseline = cv2.getTextSize(reading, cv2.FONT_HERSHEY_SIMPLEX, .55 * size, max(1, round(1.4 * size)))
+        _banner(view, reading, (plate[0], plate[1] - height - baseline - round(12 * size)), colour, size)
 
 
 def draw_plate_callout(view, vehicle_box, plate_box, crop, reading, status, observations, scale):

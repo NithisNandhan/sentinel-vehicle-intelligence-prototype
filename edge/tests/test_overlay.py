@@ -4,7 +4,8 @@ import unittest
 
 import numpy as np
 
-from sentinel_edge.overlay import draw_plate_callout, draw_vehicle, scale_for
+from sentinel_edge.overlay import (PLATE_LABEL_SIZE, VEHICLE_TAG_SIZE, draw_plate_callout, draw_plate_label,
+                                   draw_vehicle, scale_for)
 
 
 class OverlayTests(unittest.TestCase):
@@ -27,6 +28,37 @@ class OverlayTests(unittest.TestCase):
             self.assertEqual(view.shape, original.shape)
             self.assertTrue((view != original).any())
             self.assertTrue((original == 60).all())
+
+    def test_plate_label_marks_only_the_plate_area_on_any_frame(self):
+        for shape, plate in (((1080, 1920, 3), (560, 650, 680, 680)),
+                             ((2160, 3840, 3), (3700, 2, 3839, 60)),   # top-right edge
+                             ((120, 160, 3), (5, 5, 150, 35))):         # tiny test frame
+            original = np.full(shape, 60, np.uint8)
+            for reading in ('TS07FS8429', None):
+                view = original.copy()
+                draw_plate_label(view, plate, reading, 'uncertain', scale_for(view))
+                self.assertEqual(view.shape, original.shape)
+                self.assertTrue((view != original).any())
+                self.assertTrue((original == 60).all())
+        # Nothing is drawn far from the plate, so vehicles elsewhere stay visible.
+        view = np.full((1080, 1920, 3), 60, np.uint8)
+        draw_plate_label(view, (900, 700, 1020, 730), 'TS07FS8429', 'uncertain', scale_for(view))
+        rows, cols = np.nonzero((view != 60).any(axis=2))
+        self.assertGreaterEqual(rows.min(), 600)
+        self.assertLessEqual(rows.max(), 740)
+        self.assertLessEqual(cols.max() - cols.min(), 400)
+
+    def test_vehicle_tag_is_smaller_than_the_plate_reading(self):
+        self.assertLess(VEHICLE_TAG_SIZE, PLATE_LABEL_SIZE)
+        view = np.full((1080, 1920, 3), 60, np.uint8)
+        draw_vehicle(view, SimpleNamespace(track_id='7', box=(400, 300, 900, 800), vehicle_class=2, confidence=.25),
+                     scale_for(view))
+        rows = np.nonzero((view[300:400, 405:895] != 60).any(axis=(1, 2)))[0]
+        tag_height = rows.max() - rows.min() + 1
+        view = np.full((1080, 1920, 3), 60, np.uint8)
+        draw_plate_label(view, (560, 650, 680, 680), 'TS07FS8429', 'uncertain', scale_for(view))
+        rows = np.nonzero((view[:648] != 60).any(axis=(1, 2)))[0]
+        self.assertLess(tag_height, rows.max() - rows.min() + 1)
 
     def test_an_oversized_crop_is_bounded_to_a_third_of_the_frame(self):
         view = np.zeros((300, 400, 3), np.uint8)
