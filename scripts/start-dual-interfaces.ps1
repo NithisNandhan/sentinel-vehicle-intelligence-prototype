@@ -18,7 +18,7 @@ try {
     } else {
         & (Join-Path $PSScriptRoot 'start-live-detection-viewer.ps1') -Background -DeliverAccepted -LifetimeMinutes 480
     }
-    Write-Host 'Operator dashboard: http://127.0.0.1:5173/'
-    Write-Host 'Engineering console: http://127.0.0.1:7780/'
-    Write-Host 'Unlock each using the local operator key. Start one shared camera analysis explicitly.'
+    Write-Host 'Legacy launcher: use start-recorded-analysis.ps1 for the current recorded-footage product.'
+    Write-Host 'Sentinel dashboard: http://127.0.0.1:5173/'
+    Write-Host 'The worker remains a background service. Diagnostics now open in the dashboard Inspector.'
 } finally { Pop-Location }

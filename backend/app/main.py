@@ -5,9 +5,10 @@ from html import escape
 from urllib.parse import quote, urlencode
 from uuid import uuid4
 
-from fastapi import Depends, FastAPI, HTTPException, Query, WebSocket, WebSocketDisconnect
+from fastapi import Depends, FastAPI, HTTPException, Query, WebSocket, WebSocketDisconnect, Request
+from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import HTMLResponse
+from fastapi.responses import HTMLResponse, JSONResponse
 from sqlalchemy import func, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session, selectinload
@@ -15,23 +16,36 @@ from sqlalchemy.orm import Session, selectinload
 from .config import get_settings
 from .catalogue import gateway_request
 from .recognition import router as recognition_router
+from .local_access import router as local_router
+from .watchlist import router as watchlist_router, revision as watchlist_revision
 from .db import Base, SessionLocal, engine, get_db
 from .models import Alert, AlertAudit, Camera, HealthReport, Sighting, WatchlistEntry, utc_now
 from .schemas import (AlertOut, AlertPatch, AuditOut, CameraSyncIn, CatalogueSearchOut,
                       DemoInject, HealthIn, PreviewOut, RouteSearch, SightingIn)
-from .security import check_edge_key, check_operator_key, plate_token
+from .security import check_edge_key, check_operator_key, plate_token, local_session
 
 
 settings = get_settings()
 app = FastAPI(title="Sentinel Vehicle Intelligence API", version="1.0.0")
 app.include_router(recognition_router)
+app.include_router(local_router)
+app.include_router(watchlist_router)
 app.add_middleware(
     CORSMiddleware,
     allow_origins=settings.cors_origin_list,
-    allow_credentials=False,
+    allow_credentials=settings.local_dashboard_mode,
     allow_methods=["GET", "POST", "PATCH", "OPTIONS"],
-    allow_headers=["X-Edge-Key", "X-Operator-Key", "Content-Type"],
+    allow_headers=["X-Edge-Key", "X-Operator-Key", "Content-Type", "X-CSRF-Token"],
 )
+
+
+@app.exception_handler(RequestValidationError)
+async def safe_validation_error(request: Request, error: RequestValidationError):
+    # Pydantic normally echoes rejected inputs, including raw watchlist plates.
+    return JSONResponse(status_code=422, content={"detail": [
+        {"loc": list(item["loc"]), "type": item["type"], "msg": "Request field is invalid"}
+        for item in error.errors()
+    ]})
 
 
 class AlertSockets:
@@ -82,6 +96,8 @@ def startup() -> None:
                 session.add(Camera(id=camera_id, name=name, region="Ahmedabad", latitude=lat, longitude=lon,
                                    coordinates_approximate=True, coordinate_source="demo_approximate", status="UNSCHEDULED",
                                    source_mode="synthetic"))
+        session.commit()
+        watchlist_revision(session)
         session.commit()
 
 
@@ -280,7 +296,7 @@ async def post_health(payload: HealthIn, session: Session = Depends(get_db)) -> 
 def watchlist_snapshot(session: Session = Depends(get_db)) -> dict:
     entries = session.scalars(select(WatchlistEntry).where(WatchlistEntry.active.is_(True))).all()
     return {
-        "version": max((entry.version for entry in entries), default=1),
+        "version": watchlist_revision(session),
         "generated_at": utc_now().isoformat(),
         "entries": [{"plate_hmac": entry.plate_hmac, "reason": entry.reason, "severity": entry.severity} for entry in entries],
     }
@@ -431,10 +447,13 @@ async def inject_demo(payload: DemoInject, session: Session = Depends(get_db)) -
 @app.websocket("/v1/ws/alerts")
 async def alert_websocket(websocket: WebSocket) -> None:
     protocols = websocket.scope.get("subprotocols", [])
-    if len(protocols) != 2 or protocols[0] != "sentinel-operator" or not hmac.compare_digest(protocols[1], settings.operator_api_key):
+    keyed = (len(protocols) == 2 and protocols[0] == "sentinel-operator"
+             and hmac.compare_digest(protocols[1], settings.operator_api_key))
+    local = not protocols and local_session(websocket, require_origin=True) is not None
+    if not keyed and not local:
         await websocket.close(code=1008)
         return
-    await websocket.accept(subprotocol="sentinel-operator")
+    await websocket.accept(subprotocol="sentinel-operator" if keyed else None)
     sockets.clients.add(websocket)
     try:
         while True:

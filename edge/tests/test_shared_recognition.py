@@ -58,37 +58,41 @@ class SharedRecognitionTests(unittest.TestCase):
         config.media_relay_base_url = 'rtsp://external.invalid:8554'
         self.assertEqual(configured_relay_cameras(config),{})
 
-    def test_http_evidence_needs_both_token_and_operator_key(self):
+    def test_old_browser_ui_redirects_and_internal_api_stays_keyed(self):
         import http.client
-        import re
         import socket
         import threading
         import time
         from sentinel_edge.live_detection_viewer import serve
         with socket.socket() as sock:
             sock.bind(('127.0.0.1',0)); port = sock.getsockname()[1]
-        thread = threading.Thread(target=serve,args=(None,None,None),
-                                  kwargs={'port':port,'lifetime':2,'operator_key':'private-test-key'},daemon=True)
+        config = SimpleNamespace(edge_api_key='test-edge-key')
+        thread = threading.Thread(target=serve,args=(config,None,None),
+                                  kwargs={'port':port,'lifetime':2,'operator_key':'private-test-key',
+                                          'live_catalogue':False},daemon=True)
         thread.start()
         for _ in range(50):
             try:
                 conn = http.client.HTTPConnection('127.0.0.1',port,timeout=2)
                 conn.request('GET','/'); response = conn.getresponse(); page = response.read().decode(); break
             except OSError:time.sleep(.02)
-        self.assertEqual(response.status,200)
+        self.assertEqual(response.status,307)
+        self.assertEqual(response.getheader('Location'),'http://127.0.0.1:5173/')
         self.assertNotIn('private-test-key',page)
-        token = re.search(r'const viewerToken="([^"]+)"',page)[1]
-        for headers in ({},{'X-Viewer-Token':token},{'X-Operator-Key':'private-test-key'}):
+        for headers in ({},{'X-Viewer-Token':'old-viewer-token'},{'X-Operator-Key':'private-test-key'}):
             conn.request('GET','/engineering',headers=headers)
             response = conn.getresponse(); response.read()
-            self.assertEqual(response.status,403)
-        conn.request('GET','/engineering',headers={'X-Viewer-Token':token,'X-Operator-Key':'private-test-key'})
+            self.assertEqual(response.status,307)
+        conn.request('GET','/snapshot',headers={'X-Viewer-Token':'old-viewer-token','X-Operator-Key':'private-test-key'})
+        response = conn.getresponse()
+        self.assertEqual(response.status,410); response.read()
+        conn.request('GET','/internal/status',headers={'X-Viewer-Token':'old-viewer-token','X-Operator-Key':'private-test-key'})
+        response = conn.getresponse(); response.read()
+        self.assertEqual(response.status,403)
+        conn.request('GET','/internal/status',headers={'X-Edge-Key':'test-edge-key'})
         response = conn.getresponse()
         self.assertEqual(response.status,200)
         self.assertEqual(json.loads(response.read())['status'],'paused')
-        conn.request('GET','/internal/status',headers={'X-Viewer-Token':token,'X-Operator-Key':'private-test-key'})
-        response = conn.getresponse(); response.read()
-        self.assertEqual(response.status,403)
         conn.close(); thread.join(timeout=5)
         self.assertFalse(thread.is_alive())
 

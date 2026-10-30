@@ -11,13 +11,14 @@ import urllib.error
 import urllib.parse
 import urllib.request
 
-from fastapi import APIRouter, Depends, HTTPException, Response
+from fastapi import APIRouter, Depends, HTTPException, Response, Query
 from typing import Literal
 
-from pydantic import BaseModel, ConfigDict, Field, StrictInt, StrictStr, model_validator
+from pydantic import BaseModel, ConfigDict, Field, StrictInt, StrictStr, model_validator, ValidationError
 
 from .config import get_settings
 from .security import check_operator_key
+from .unified_contract import DiagnosticsSnapshot
 
 
 router = APIRouter(prefix="/v1/recognition", tags=["recognition"],
@@ -87,14 +88,17 @@ def request_edge(method: str, path: str, payload: dict | None = None) -> dict:
                 request, timeout=3 if method == "GET" else 5) as response:
             if response.headers.get_content_type() != "application/json":
                 raise unavailable()
-            raw = response.read(1_048_577)
-            if len(raw) > 1_048_576:
+            limit = 3 * 1024 * 1024 if path.startswith("/internal/diagnostics?") else 1_048_576
+            raw = response.read(limit + 1)
+            if len(raw) > limit:
                 raise unavailable()
             value = json.loads(raw)
             if not isinstance(value, dict):
                 raise unavailable()
             return value
     except urllib.error.HTTPError as error:
+        if error.code == 404 and path.startswith("/internal/diagnostics?"):
+            raise HTTPException(status_code=404, detail="Track evidence is no longer available") from None
         # A heartbeat conflict must remain visible, not silently switch cameras.
         if error.code == 409:
             detail = ("Playback control not available for the current session" if path.endswith("/control")
@@ -265,12 +269,36 @@ _BASE64 = re.compile(r"^[A-Za-z0-9+/]*={0,2}$")
 _READING = re.compile(r"^[A-Z0-9]{4,12}$")
 
 
+@router.get("/diagnostics", response_model=DiagnosticsSnapshot)
+def diagnostics(response: Response, session_id: str = Query(pattern=_SESSION.pattern),
+                track_id: str = Query(pattern=_ID.pattern)):
+    if not get_settings().dashboard_recorded_evidence:
+        raise HTTPException(status_code=404, detail="Recorded evidence view is not enabled")
+    query = urllib.parse.urlencode({"session_id": session_id, "track_id": track_id})
+    value = request_edge("GET", "/internal/diagnostics?" + query)
+    if value.get("source_mode") != "recorded":
+        raise HTTPException(status_code=404, detail="No recorded evidence available")
+    if not _id(value.get("camera_id")):
+        raise unavailable()
+    if value.get("session_id") != session_id:
+        raise HTTPException(status_code=409, detail="Recognition session changed")
+    if not isinstance(value.get("track"), dict) or value["track"].get("track_id") != track_id:
+        raise HTTPException(status_code=404, detail="Track evidence is no longer available")
+    try:
+        from .diagnostics import snapshot
+        result = snapshot(value)
+    except (ValidationError, ValueError, TypeError):
+        raise unavailable() from None
+    response.headers["Cache-Control"] = "no-store, max-age=0"
+    return result
+
+
 def _image(value, limit):
     return value if isinstance(value, str) and 0 < len(value) <= limit and _BASE64.fullmatch(value) else None
 
 
 @router.get("/evidence")
-def evidence(response: Response):
+def evidence(response: Response, mode: Literal["original", "overlays"] = "overlays"):
     """Analysed frame and full unverified readings for a permitted recording.
 
     Opt-in (DASHBOARD_RECORDED_EVIDENCE) and recorded sources only. Nothing is
@@ -278,7 +306,8 @@ def evidence(response: Response):
     """
     if not get_settings().dashboard_recorded_evidence:
         raise HTTPException(status_code=404, detail="Recorded evidence view is not enabled")
-    value = request_edge("GET", "/internal/evidence")
+    path = "/internal/evidence?mode=original" if mode == "original" else "/internal/evidence"
+    value = request_edge("GET", path)
     if value.get("source_mode") != "recorded":
         raise HTTPException(status_code=404, detail="No recording is being analysed")
     response.headers["Cache-Control"] = "no-store, max-age=0"

@@ -27,6 +27,9 @@ services:
       CATALOGUE_GATEWAY_URL: http://catalogue-gateway:8765
       RECOGNITION_GATEWAY_URL: http://host.docker.internal:7780
       DASHBOARD_RECORDED_EVIDENCE: ${DASHBOARD_RECORDED_EVIDENCE:-false}
+      LOCAL_DASHBOARD_MODE: ${LOCAL_DASHBOARD_MODE:-true}
+      LOCAL_DASHBOARD_ORIGINS: http://localhost:5173,http://127.0.0.1:5173
+      LOCAL_DASHBOARD_BIND_HOST: 127.0.0.1
       CORS_ORIGINS: http://localhost:5173,http://127.0.0.1:5173
     ports:
       - 127.0.0.1:8000:8000

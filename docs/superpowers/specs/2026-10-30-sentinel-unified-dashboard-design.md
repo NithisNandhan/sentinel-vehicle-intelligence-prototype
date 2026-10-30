@@ -2,7 +2,7 @@
 
 Date: 30 October 2026
 
-Status: visual direction approved; written specification awaiting review. No application implementation is included in this document.
+Status: approved for implementation by the user. The unified interface is implemented; verification and current limits are recorded in `docs/UNIFIED_DASHBOARD_VALIDATION.md`.
 
 ## 1. Decisions and purpose
 
@@ -216,4 +216,4 @@ Known recognition-quality gaps, rejected-event queue handling and the handoff ar
 
 ## 11. Approval and next step
 
-Paper teal and removal of manual operator unlock are approved. This document records the revised unified implementation boundary, including laptop-only automatic access. Review and approve this written specification before implementation planning or application changes. No further visual direction needs to be invented unless the user requests a revision.
+The user approved implementation of this unified dashboard, including Paper teal, the contextual Inspector and removal of manual operator unlock. This specification remains the implementation boundary, including laptop-only automatic access. Recognition-quality changes require their own evidence and are not implied by the interface overhaul.

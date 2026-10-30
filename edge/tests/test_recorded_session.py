@@ -414,15 +414,19 @@ class RecordedServiceTests(RecordedCase):
         for _ in range(100):
             try:
                 self.connection = http.client.HTTPConnection('127.0.0.1', self.port, timeout=5)
-                self.connection.request('GET', '/'); page = self.connection.getresponse().read().decode(); break
+                self.connection.request('GET', '/'); response = self.connection.getresponse(); response.read(); break
             except OSError:
                 time.sleep(.02)
-        token = re.search(r'const viewerToken="([^"]+)"', page)[1]
-        self.headers = {'X-Viewer-Token': token, 'X-Operator-Key': 'private-test-key',
+        self.headers = {'X-Edge-Key': 'test-edge-key',
                         'Host': f'127.0.0.1:{self.port}', 'Origin': f'http://127.0.0.1:{self.port}'}
         self.edge = {'X-Edge-Key': 'test-edge-key'}
 
     def call(self, method, path, body=None, headers=None):
+        # The worker is now a keyed service; only the main React app is a UI.
+        if path == '/engineering':
+            path = '/internal/status'
+        elif path in ('/session', '/heartbeat', '/control', '/cameras'):
+            path = '/internal' + path
         headers = dict(self.headers if headers is None else headers)
         payload = None
         if body is not None:
@@ -456,7 +460,7 @@ class RecordedServiceTests(RecordedCase):
         self.assertEqual(self.call('POST', '/session', {'camera_id': rec})[0], 200)
         done = self.wait_for(lambda s: s['status'] == 'completed')
         self.assertEqual((done['source_mode'], done['analysed_frames'], done['video_position_ms']), ('recorded', 12, 5500))
-        self.assertEqual(done['models']['ocr_device'], 'cpu')
+        self.assertEqual(done['inference_device'], 'cpu')
         first_session = done['session_id']
 
         status, operator = self.call('GET', '/internal/status', headers=self.edge)

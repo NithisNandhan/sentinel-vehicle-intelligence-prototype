@@ -20,6 +20,7 @@ from dataclasses import replace
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from collections import deque
+from urllib.parse import parse_qs, urlsplit
 
 from .privacy import mask_plate
 
@@ -305,13 +306,15 @@ def load_models(config, cache, checkpoint, *, detector_profile=None, training_ro
     return reader, PlateDetectorExperiment(), YOLO(str(config.model_cache_dir/'yolov8n.pt'))
 
 
-def dashboard_view(snapshot, width=1280, rows=30):
+def dashboard_view(snapshot, width=1280, rows=30, *, mode='overlays'):
     """Analysed frame (shrunk for transport) and vehicles seen, for a recording only."""
     import cv2
     import numpy as np
     if snapshot.get('source_mode') != 'recorded':
         return None
-    frame = snapshot.get('frame')
+    if mode not in ('original', 'overlays'):
+        raise ValueError('Unknown frame display mode')
+    frame = snapshot.get('debug', {}).get('original_frame') if mode == 'original' else snapshot.get('frame')
     if frame:
         image = cv2.imdecode(np.frombuffer(base64.b64decode(frame), np.uint8), cv2.IMREAD_COLOR)
         if image is not None and image.shape[1] > width:
@@ -526,12 +529,8 @@ def serve(config, cache, checkpoint, port=7780, lifetime=1800, bind_host='127.0.
         library = RecordingLibrary(recordings_dir)
     if not live_catalogue:
         state.authorise(())  # Recordings only: no camera is selectable.
-    token = secrets.token_urlsafe(32)
-    operator_key = operator_key if operator_key is not None else os.getenv('OPERATOR_API_KEY', '')
-    # Tests with no live configuration retain the legacy masked-only page.
-    privileged = config is not None or bool(operator_key)
-    if privileged and not operator_key:
-        raise ValueError('OPERATOR_API_KEY is required for the engineering console')
+    # Browser UI is provided only by the unified dashboard. Retain the
+    # operator_key argument for launch/library compatibility, never publish it.
     catalogue = {'available': False, 'scope': 'unavailable', 'cameras': []}
     delivery = None
     if deliver:
@@ -545,7 +544,7 @@ def serve(config, cache, checkpoint, port=7780, lifetime=1800, bind_host='127.0.
         def log_message(self, *_):
             pass  # Never log live URLs, media or OCR text.
 
-        def reply(self, code, body, content_type='application/json'):
+        def reply(self, code, body, content_type='application/json', *, headers=None):
             self.send_response(code)
             self.send_header('Content-Type', content_type)
             self.send_header('Content-Length', str(len(body)))
@@ -553,6 +552,8 @@ def serve(config, cache, checkpoint, port=7780, lifetime=1800, bind_host='127.0.
             self.send_header('X-Content-Type-Options', 'nosniff')
             self.send_header('Referrer-Policy', 'no-referrer')
             self.send_header('Content-Security-Policy', "default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; img-src data:; connect-src 'self'; frame-ancestors 'none'")
+            for key, value in (headers or {}).items():
+                self.send_header(key, value)
             self.end_headers()
             try:
                 self.wfile.write(body)
@@ -566,51 +567,50 @@ def serve(config, cache, checkpoint, port=7780, lifetime=1800, bind_host='127.0.
                 if not valid:
                     self.reply(403, b'{"error":"Shared recognition access rejected"}')
                 return valid
-            valid = safe_request(self.headers.get('Host'), self.headers.get('Origin'), mutation, port)
-            if self.path != '/' or mutation:
-                valid = valid and secrets.compare_digest(self.headers.get('X-Viewer-Token', ''), token)
-                if privileged:
-                    valid = valid and secrets.compare_digest(self.headers.get('X-Operator-Key', ''), operator_key)
-            if not valid:
-                self.reply(403, b'{"error":"Local viewer access rejected"}')
-            return valid
+            self.reply(410, b'{"error":"Use the unified dashboard"}')
+            return False
 
         def do_GET(self):
+            parsed = urlsplit(self.path)
+            path = parsed.path
+            if path in ('/', '/engineering'):
+                if not safe_request(self.headers.get('Host'), self.headers.get('Origin'), False, port):
+                    self.reply(403, b'{"error":"Local viewer access rejected"}'); return
+                self.reply(307, b'', headers={'Location': 'http://127.0.0.1:5173/'})
+                return
             if not self.allowed():
                 return
-            if self.path == '/':
-                if privileged:
-                    from .engineering_page import engineering_page
-                    page = engineering_page(token, detector_profile)
-                else:
-                    page = viewer_page(token,detector_profile)
-                self.reply(200, page.encode(), 'text/html; charset=utf-8')
-            elif self.path == '/snapshot':
-                self.reply(200, json.dumps(state.snapshot()).encode())
-            elif self.path == '/engineering' and privileged:
-                snapshot = state.snapshot(engineering=True)
-                snapshot['models'] = dict(identity)
-                self.reply(200, json.dumps(snapshot).encode())
-            elif self.path == '/internal/evidence':
+            if path == '/internal/diagnostics':
+                from .unified_diagnostics import DiagnosticUnavailable, diagnostic_view
+                query = parse_qs(parsed.query, keep_blank_values=True)
+                if set(query) != {'session_id', 'track_id'} or any(len(values) != 1 for values in query.values()):
+                    self.reply(400, b'{"error":"Invalid diagnostic identifiers"}'); return
+                try:
+                    body = diagnostic_view(state.snapshot(engineering=True), dict(identity),
+                                           query['session_id'][0], query['track_id'][0], enabled=dashboard_evidence)
+                except DiagnosticUnavailable as error:
+                    self.reply(error.status, json.dumps({'error': error.detail}).encode()); return
+                self.reply(200, json.dumps(body, allow_nan=False).encode())
+            elif path == '/internal/evidence':
                 # Opt-in, and for permitted recordings only: the analysed frame and
                 # full unverified readings for the operator dashboard. A live
                 # camera's imagery and plate text never leave this process.
-                body = dashboard_view(state.snapshot(engineering=True)) if dashboard_evidence else None
+                query = parse_qs(parsed.query, keep_blank_values=True)
+                if set(query) - {'mode'} or len(query.get('mode', ['overlays'])) != 1 or query.get('mode', ['overlays'])[0] not in ('original', 'overlays'):
+                    self.reply(400, b'{"error":"Invalid frame display mode"}'); return
+                body = dashboard_view(state.snapshot(engineering=True), mode=query.get('mode', ['overlays'])[0]) if dashboard_evidence else None
                 if body is None:
                     self.reply(404, b'{}')
                 else:
                     self.reply(200, json.dumps(body).encode())
-            elif self.path == '/internal/status':
+            elif path == '/internal/status':
                 snapshot = state.operator_snapshot()
                 snapshot['model_profile'] = detector_profile or 'legacy'
                 snapshot['inference_device'] = identity.get('ocr_device')
                 snapshot['delivery'] = {'enabled': delivery is not None, 'outbox_depth': delivery.depth() if delivery else 0}
                 self.reply(200, json.dumps(snapshot).encode())
-            elif self.path in ('/cameras', '/internal/cameras'):
+            elif path == '/internal/cameras':
                 body = dict(catalogue, recordings=recordings_view['recordings'])
-                if self.path == '/cameras' and privileged:
-                    # File names and a reason code help fix a missing receipt.
-                    body['recordings_rejected'] = recordings_view['rejected']
                 self.reply(200, json.dumps(body).encode())
             else:
                 self.reply(404, b'{}')

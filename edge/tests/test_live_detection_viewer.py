@@ -184,9 +184,8 @@ class LiveViewerTests(unittest.TestCase):
         self.assertEqual(order, ['ocr_warmup', 'yolo'])
         self.assertEqual(result, (model, 'detector', 'vehicle'))
 
-    def test_http_security_headers_and_origin_token_requirements(self):
+    def test_http_security_headers_redirect_and_retired_browser_mutations(self):
         import http.client
-        import re
         import socket
         import threading
         import time
@@ -203,21 +202,24 @@ class LiveViewerTests(unittest.TestCase):
                 response = connection.getresponse(); page = response.read().decode(); break
             except OSError:
                 time.sleep(.02)
-        self.assertEqual(response.status, 200)
+        self.assertEqual(response.status, 307)
+        self.assertEqual(response.getheader('Location'), 'http://127.0.0.1:5173/')
         self.assertIn('no-store', response.getheader('Cache-Control'))
         self.assertIn("frame-ancestors 'none'", response.getheader('Content-Security-Policy'))
-        token = re.search(r'const token="([^"]+)"', page)[1]
+        self.assertNotIn('token', page)
         connection.request('GET', '/snapshot')
         response = connection.getresponse(); response.read()
-        self.assertEqual(response.status, 403)
-        connection.request('GET', '/snapshot', headers={'X-Viewer-Token': token})
-        response = connection.getresponse(); self.assertEqual(json.loads(response.read())['status'], 'paused')
+        self.assertEqual(response.status, 410)
+        connection.request('GET', '/snapshot', headers={'X-Viewer-Token': 'retired-token'})
+        response = connection.getresponse(); response.read(); self.assertEqual(response.status, 410)
         connection.request('POST', '/session', json.dumps({'camera_id': None}),
-                           headers={'Origin': 'http://evil.test', 'X-Viewer-Token': token})
+                           headers={'Origin': 'http://evil.test', 'X-Viewer-Token': 'retired-token'})
+        response = connection.getresponse(); response.read(); self.assertEqual(response.status, 410)
+        connection.request('POST', '/session', json.dumps({'camera_id': None}),
+                           headers={'Origin': f'http://127.0.0.1:{port}', 'X-Viewer-Token': 'retired-token'})
+        response = connection.getresponse(); response.read(); self.assertEqual(response.status, 410)
+        connection.request('GET', '/internal/status')
         response = connection.getresponse(); response.read(); self.assertEqual(response.status, 403)
-        connection.request('POST', '/session', json.dumps({'camera_id': None}),
-                           headers={'Origin': f'http://127.0.0.1:{port}', 'X-Viewer-Token': token})
-        response = connection.getresponse(); response.read(); self.assertEqual(response.status, 200)
         connection.close(); thread.join(timeout=5); self.assertFalse(thread.is_alive())
 
     def test_request_rejects_rebinding_and_cross_site(self):

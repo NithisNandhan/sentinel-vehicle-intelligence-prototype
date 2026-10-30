@@ -48,13 +48,13 @@ Supported containers: `.mp4`, `.mkv`, `.mov`, `.avi`, `.m4v`, `.ts`, `.webm`.
 ```
 
 This builds and starts the central API, the dashboard and the
-`recorded-analysis` service (CPU). Then open either interface, unlock it with
-`OPERATOR_API_KEY` from `.env`, choose a recording and start analysis:
+`recorded-analysis` service (CPU). Then open the unified local dashboard,
+choose a recording and start analysis. No manual operator unlock is required:
 
-- Operator dashboard: <http://127.0.0.1:5173/>
-- Engineering console: <http://127.0.0.1:7780/>
+- Sentinel dashboard: <http://127.0.0.1:5173/>
+- Model evidence: select a vehicle track and open its Inspector.
 
-Both show the same single session. Opening a page or a preview never starts
+All sections share one session. Opening a page or a preview never starts
 analysis. The API is rebuilt with the service on purpose: an API from before
 this change would reject recorded events.
 

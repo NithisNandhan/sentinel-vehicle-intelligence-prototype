@@ -15,7 +15,7 @@ $dockerExecutable = if ($dockerCommand) { $dockerCommand.Source } else {
 }
 if (!(Test-Path -LiteralPath $dockerExecutable)) { throw 'Docker Desktop was not found.' }
 if (!(Test-Path -LiteralPath (Join-Path $projectRoot '.env'))) { throw 'The local .env file is required.' }
-Write-Host 'Open http://127.0.0.1:7780/ and unlock with your local operator key. No footage is recorded.'
+Write-Host 'Legacy live-mode service. The unified dashboard is at http://127.0.0.1:5173/; permitted recordings are the current UI scope.'
 Write-Host "The shared session pauses when idle and the service shuts down after $LifetimeMinutes minutes."
 Write-Host "Experimental tracked profile: $DetectorProfile. Model acceptance is not verified plate accuracy."
 $backgroundArgs = @()

@@ -75,7 +75,7 @@ export interface RecognitionStatus {
     recognition_state: RecognitionState;
     candidate_count: number;
   }[];
-  /** Every vehicle seen in this run, newest first. Masked text only; no image ever reaches this page. */
+  /** Bounded recent tracks, newest first. The status route carries masked metadata only. */
   vehicles_seen?: {
     track_id: string;
     vehicle_class: string;
@@ -166,22 +166,36 @@ export interface HourlyReportResponse {
 
 export type IncidentReport = Record<string, unknown>;
 
-const API_BASE = (import.meta.env.VITE_API_BASE_URL || '').replace(/\/$/, '');
-const OPERATOR_KEY_NAME = 'sentinel.operatorKey';
+import type { DiagnosticsSnapshot, LocalSessionOut, WatchlistCreate, WatchlistItem, WatchlistPage, WatchlistPatch } from './unified-contract';
 
-// Opt-in local convenience (compose.autounlock.yaml): the dev server may be
-// given the operator key so this machine's dashboard opens unlocked. It is
-// never set by default and is ignored in a production build.
-const LOCAL_OPERATOR_KEY = import.meta.env.DEV ? String(import.meta.env.VITE_LOCAL_OPERATOR_KEY || '').trim() : '';
+// Same-origin only: cookies and browser request tokens never go to another host.
+const API_BASE = '';
+let localSession: LocalSessionOut | null = null;
+let sessionPending: Promise<LocalSessionOut> | null = null;
 
-export function getOperatorKey(): string {
-  return sessionStorage.getItem(OPERATOR_KEY_NAME) || LOCAL_OPERATOR_KEY;
+export class ApiError extends Error {
+  constructor(message: string, public readonly status: number) { super(message); }
 }
 
-export function setOperatorKey(value: string): void {
-  const key = value.trim();
-  if (key) sessionStorage.setItem(OPERATOR_KEY_NAME, key);
-  else sessionStorage.removeItem(OPERATOR_KEY_NAME);
+/** Tokens are transient request-forgery protection, not operator/service keys. */
+export function resetLocalSession(): void { localSession = null; sessionPending = null; }
+
+export async function ensureLocalSession(): Promise<LocalSessionOut> {
+  if (localSession && Date.parse(localSession.expires_at) > Date.now() + 10_000) return localSession;
+  if (sessionPending) return sessionPending;
+  sessionPending = (async () => {
+    // Remove obsolete credentials from older installations without ever reading them.
+    try { sessionStorage.removeItem('sentinel.operatorKey'); } catch { /* storage may be disabled */ }
+    let response: Response;
+    try { response = await fetch('/v1/local/session', { method: 'POST', credentials: 'same-origin', cache: 'no-store', headers: { 'Content-Type': 'application/json' }, body: '{}' }); }
+    catch { throw new Error('The central service is unavailable. Check Docker, then retry.'); }
+    if (!response.ok) throw new ApiError('Local access is unavailable. Check the laptop-only service configuration, then retry.', response.status);
+    const session = await response.json() as LocalSessionOut;
+    if (typeof session.csrf_token !== 'string' || !session.csrf_token || !Number.isFinite(Date.parse(session.expires_at))) throw new Error('The local session response was invalid.');
+    localSession = session;
+    return session;
+  })();
+  try { return await sessionPending; } finally { sessionPending = null; }
 }
 
 function unwrapList<T>(value: unknown, keys: string[]): T[] {
@@ -193,28 +207,30 @@ function unwrapList<T>(value: unknown, keys: string[]): T[] {
   return [];
 }
 
-async function request<T>(path: string, init?: RequestInit, protectedRequest = false): Promise<T> {
+async function request<T>(path: string, init?: RequestInit, protectedRequest = false, retried = false): Promise<T> {
   const headers = new Headers(init?.headers);
   if (init?.body) headers.set('Content-Type', 'application/json');
   if (protectedRequest) {
-    const key = getOperatorKey();
-    if (!key) throw new Error('Enter the operator key to use this action.');
-    headers.set('X-Operator-Key', key);
+    const session = await ensureLocalSession();
+    if (!['GET', 'HEAD', 'OPTIONS'].includes((init?.method || 'GET').toUpperCase())) headers.set('X-CSRF-Token', session.csrf_token);
   }
   let response: Response;
   try {
-    response = await fetch(`${API_BASE}${path}`, { ...init, headers });
+    response = await fetch(`${API_BASE}${path}`, { ...init, headers, credentials: 'same-origin' });
   } catch {
     throw new Error('The central service is unreachable. Check that it is running.');
   }
   if (!response.ok) {
+    // An authentication rejection occurs before an operation executes. Retry once;
+    // never automatically replay conflicts, validation errors or network failures.
+    if (response.status === 401 && protectedRequest && !retried) { resetLocalSession(); return request<T>(path, init, protectedRequest, true); }
     let detail = '';
     try {
       const body = await response.json() as { detail?: unknown };
       detail = typeof body.detail === 'string' ? body.detail : '';
     } catch { /* server may return plain text */ }
-    if (response.status === 401 || response.status === 403) throw new Error('Operator key rejected. Check it and try again.');
-    throw new Error(detail || `Request failed (${response.status}).`);
+    if (response.status === 401 || response.status === 403) throw new ApiError('Local access was rejected. Retry or check the service configuration.', response.status);
+    throw new ApiError(detail || `Request failed (${response.status}).`, response.status);
   }
   if (response.status === 204) return undefined as T;
   return response.json() as Promise<T>;
@@ -247,9 +263,27 @@ export interface RecognitionEvidence {
 }
 
 /** Resolves to null when the view is switched off or no recording is being analysed. */
-export async function getRecognitionEvidence(): Promise<RecognitionEvidence | null> {
-  try { return await request<RecognitionEvidence>('/v1/recognition/evidence', { cache: 'no-store' }, true); }
-  catch { return null; }
+export async function getRecognitionEvidence(mode: 'original' | 'overlays' = 'overlays'): Promise<RecognitionEvidence | null> {
+  try { return await request<RecognitionEvidence>(`/v1/recognition/evidence?mode=${mode}`, { cache: 'no-store' }, true); }
+  catch (error) { if (error instanceof ApiError && error.status === 404) return null; throw error; }
+}
+
+export function getDiagnostics(sessionId: string, trackId: string): Promise<DiagnosticsSnapshot> {
+  const query = new URLSearchParams({ session_id: sessionId, track_id: trackId });
+  return request(`/v1/recognition/diagnostics?${query}`, { cache: 'no-store' }, true);
+}
+
+export function getWatchlist(offset = 0): Promise<WatchlistPage> {
+  return request(`/v1/watchlist?offset=${offset}&limit=25`, { cache: 'no-store' }, true);
+}
+export function searchWatchlist(query: string, offset = 0): Promise<WatchlistPage> {
+  return request('/v1/watchlist/search', { method: 'POST', body: JSON.stringify({ query, offset, limit: 25 }) }, true);
+}
+export function addWatchlist(item: WatchlistCreate): Promise<WatchlistItem> {
+  return request('/v1/watchlist', { method: 'POST', body: JSON.stringify(item) }, true);
+}
+export function patchWatchlist(id: number, patch: WatchlistPatch): Promise<WatchlistItem> {
+  return request(`/v1/watchlist/${id}`, { method: 'PATCH', body: JSON.stringify(patch) }, true);
 }
 
 export function getRecognitionRecordings(): Promise<RecognitionRecordings> {
@@ -335,9 +369,6 @@ export async function injectDemo(): Promise<unknown> {
 }
 
 export function wsUrl(): string {
-  const configured = import.meta.env.VITE_WS_BASE_URL as string | undefined;
-  const base = configured || API_BASE;
-  if (base.startsWith('http')) return `${base.replace(/^http/, 'ws')}/v1/ws/alerts`;
   return `${window.location.protocol === 'https:' ? 'wss' : 'ws'}://${window.location.host}/v1/ws/alerts`;
 }
 

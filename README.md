@@ -1,5 +1,17 @@
 # Sentinel Vehicle Intelligence Prototype
 
+## Current interface — Paper teal unified dashboard
+
+The current product is a **single local dashboard** for downloaded CCTV recordings,
+plate recognition, watchlist management and operator alerts. Open
+<http://127.0.0.1:5173/>; no manual operator unlock is required. Model diagnostics
+are in the selected track's Inspector, not a second dashboard. Maps, routes,
+regional statistics and live-catalogue navigation are outside this version.
+
+See [unified dashboard setup and boundaries](docs/UNIFIED_DASHBOARD.md).
+Historical sections below describe earlier iterations; current setup and access
+instructions in that guide supersede the old dual-interface/unlock directions.
+
 ## Teammate handoff — 7 October 2026
 
 Start with [the complete handoff guide](docs/TEAMMATE_HANDOFF.md). The repository
@@ -9,7 +21,7 @@ SQLite snapshots and demonstration videos are distributed as checksum-verified
 assets in the private [handoff release](https://github.com/NithisNandhan/sentinel-vehicle-intelligence-prototype/releases/tag/handoff-2026-10-07).
 **A repository ZIP alone does not include these large assets.** No credentials
 are included. The next development direction is permitted downloaded CCTV
-footage, not Sentinel live access; that adapter remains to be implemented.
+footage, not Sentinel live access; the recorded-source adapter is now implemented.
 
 The [project status and completion report](output/pdf/Sentinel_Project_Status_and_Next_Steps.pdf)
 records completed features, model experiments, measured results, limitations and
@@ -27,7 +39,7 @@ measurement, and [BUILD_INSTRUCTIONS.md](BUILD_INSTRUCTIONS.md) with
 **No recognition accuracy has been measured on recorded footage yet**; the
 code is covered by tests that use a mocked recogniser.
 
-## Two working interfaces
+## Earlier dual-interface architecture (superseded)
 
 Use `scripts/start-dual-interfaces.ps1` for the operator dashboard at
 http://127.0.0.1:5173/ and protected engineering console at

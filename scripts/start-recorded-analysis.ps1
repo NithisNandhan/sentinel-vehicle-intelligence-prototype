@@ -63,9 +63,9 @@ try {
     # The API is rebuilt with the service: an older API would reject recorded events.
     & $dockerExecutable @composeArgs up -d @buildArgs api dashboard recorded-analysis
     if ($LASTEXITCODE -ne 0) { throw 'Recorded analysis could not be started. Check Docker and the restored models.' }
-    Write-Host 'Operator dashboard:  http://127.0.0.1:5173/'
-    Write-Host 'Engineering console: http://127.0.0.1:7780/'
-    Write-Host 'Unlock each with the local operator key, choose a recording, and start analysis explicitly.'
+    Write-Host 'Sentinel dashboard: http://127.0.0.1:5173/'
+    Write-Host 'Choose a recording and start analysis explicitly. Select a track to open the Inspector.'
+    Write-Host 'Trusted local-PC access is automatic; no operator unlock is required.'
     Write-Host "Profile: $DetectorProfile on $Device. Footage is labelled RECORDED. Model acceptance is not verified accuracy."
     Write-Host 'Stop with: docker compose --profile recorded stop recorded-analysis'
 } finally { Pop-Location }

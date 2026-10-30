@@ -1,171 +1,146 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { cameraPreview, formatTime, getAlerts, getHourlyReports, injectDemo,
-  searchCatalogue, setOperatorKey, startCataloguePreview, getRecognitionStatus,
-  getRecognitionCameras, setRecognitionSession, heartbeatRecognition,
-  getRecognitionRecordings, controlRecognition } from './api';
+import { cameraPreview, formatTime, getAlerts, getHourlyReports, injectDemo, searchCatalogue, startCataloguePreview,
+  getRecognitionStatus, getRecognitionCameras, setRecognitionSession, heartbeatRecognition, getRecognitionRecordings,
+  controlRecognition, ensureLocalSession, resetLocalSession, addWatchlist, patchWatchlist, searchWatchlist, getDiagnostics, getRecognitionEvidence } from './api';
+import { imageData } from './Inspector';
 
 const values = new Map<string, string>();
+const localSession = { csrf_token: 'test-request-token', expires_at: '2037-01-01T00:00:00Z' };
+const json = (value: unknown, status = 200) => new Response(JSON.stringify(value), { status, headers: { 'Content-Type': 'application/json' } });
+function mockApi(value: unknown = {}) {
+  const fetcher = vi.fn(async (path: RequestInfo | URL, _init?: RequestInit) => String(path) === '/v1/local/session' ? json(localSession) : json(value));
+  vi.stubGlobal('fetch', fetcher);
+  return fetcher;
+}
+const operationCalls = (fetcher: ReturnType<typeof mockApi>) => fetcher.mock.calls.filter(call => String(call[0]) !== '/v1/local/session');
 
 beforeEach(() => {
-  values.clear();
-  vi.stubGlobal('sessionStorage', {
-    getItem: (key: string) => values.get(key) ?? null,
-    setItem: (key: string, value: string) => { values.set(key, value); },
-    removeItem: (key: string) => { values.delete(key); },
-  });
-  vi.restoreAllMocks();
+  vi.restoreAllMocks(); resetLocalSession(); values.clear();
+  vi.stubGlobal('sessionStorage', { getItem: (key: string) => values.get(key) ?? null, setItem: (key: string, value: string) => values.set(key, value), removeItem: (key: string) => values.delete(key) });
 });
 
-describe('operator API boundary', () => {
-  it('uses the operator key and converts numeric alert IDs for UI selection', async () => {
-    setOperatorKey('test-operator-key');
-    const fetcher = vi.fn().mockResolvedValue({ ok: true, status: 200, json: async () => [{
-      id: 42, sighting_id: 7, camera_id: 'cam01', observed_at: '2026-09-23T12:00:00Z',
-      masked_plate: 'GJ••1234', reason: 'Synthetic test', severity: 'high', status: 'new', source_mode: 'synthetic',
-    }] });
-    vi.stubGlobal('fetch', fetcher);
-    const alerts = await getAlerts();
-    expect(alerts[0].id).toBe('42');
-    expect(alerts[0].sighting_id).toBe('7');
-    const headers = (fetcher.mock.calls[0][1] as RequestInit).headers as Headers;
-    expect(headers.get('X-Operator-Key')).toBe('test-operator-key');
-  });
-
-  it('parses central hourly aggregation buckets', async () => {
-    setOperatorKey('test-operator-key');
-    vi.stubGlobal('fetch', vi.fn().mockResolvedValue({ ok: true, status: 200, json: async () => ({
-      hours: 24, buckets: [{ window_start: '2026-09-23T12:00:00Z', sightings: 3, alerts: 1 }],
-    }) }));
-    expect((await getHourlyReports())[0].alerts).toBe(1);
-  });
-
-  it('sends an empty JSON object for the demo injector request model', async () => {
-    setOperatorKey('test-operator-key');
-    const fetcher = vi.fn().mockResolvedValue({ ok: true, status: 200, json: async () => ({ accepted: true }) });
-    vi.stubGlobal('fetch', fetcher);
-    await injectDemo();
-    expect((fetcher.mock.calls[0][1] as RequestInit).body).toBe('{}');
-  });
-
-  it('searches the catalogue with the operator key and pagination', async () => {
-    setOperatorKey('test-operator-key');
-    const fetcher = vi.fn().mockResolvedValue({ ok: true, status: 200, json: async () => ({
-      total: 1, offset: 25, limit: 25,
-      items: [{ id: 'cam03', name: 'Janpath', location: 'Janpath', codec: 'h264', live: true }],
-    }) });
-    vi.stubGlobal('fetch', fetcher);
-    expect((await searchCatalogue(' Janpath ', 25)).items[0].id).toBe('cam03');
-    expect(fetcher.mock.calls[0][0]).toContain('q=Janpath&offset=25&limit=25');
-    expect(((fetcher.mock.calls[0][1] as RequestInit).headers as Headers).get('X-Operator-Key'))
-      .toBe('test-operator-key');
-  });
-
-  it('starts an on-demand preview without sending a source URL', async () => {
-    setOperatorKey('test-operator-key');
-    const fetcher = vi.fn().mockResolvedValue({ ok: true, status: 200, json: async () => ({
-      id: 'a'.repeat(32), camera_id: 'cam03', status: 'starting',
-      preview_url: `/media/preview-${'a'.repeat(32)}/index.m3u8`,
-    }) });
-    vi.stubGlobal('fetch', fetcher);
-    await startCataloguePreview('cam03');
-    expect(fetcher.mock.calls[0][0]).toBe('/v1/catalogue/cam03/preview');
-    expect((fetcher.mock.calls[0][1] as RequestInit).method).toBe('POST');
-  });
-});
-
-describe('shared recognition API', () => {
-  it('rejects locked reads without sending a network request', async () => {
-    const fetcher = vi.fn();
-    vi.stubGlobal('fetch', fetcher);
-    await expect(getRecognitionStatus()).rejects.toThrow('operator key');
-    await expect(getRecognitionCameras()).rejects.toThrow('operator key');
-    expect(fetcher).not.toHaveBeenCalled();
-  });
-  it('observes status without implicitly starting inference', async () => {
-    setOperatorKey('test-operator-key');
-    const fetcher = vi.fn().mockResolvedValue({ ok: true, status: 200, json: async () => ({
-      schema_version: '1.0', status: 'paused', camera_id: null, source_mode: 'live',
-      recognition_state: 'paused', tracks: [],
-    }) });
-    vi.stubGlobal('fetch', fetcher);
-    expect((await getRecognitionStatus()).status).toBe('paused');
-    expect(fetcher.mock.calls[0][0]).toBe('/v1/recognition/status');
-    const init = fetcher.mock.calls[0][1] as RequestInit;
-    expect(init.method).toBeUndefined();
-    expect(init.cache).toBe('no-store');
-    expect((init.headers as Headers).get('X-Operator-Key')).toBe('test-operator-key');
-  });
-  it('preserves an explicitly limited configured-relay scope', async () => {
-    setOperatorKey('test-operator-key');
-    const fetcher = vi.fn().mockResolvedValue({ ok: true, status: 200, json: async () => ({
-      available: true, scope: 'configured_relays', cameras: [{ id: 'cam01', name: 'CAM01' }],
-    }) });
-    vi.stubGlobal('fetch', fetcher);
-    const catalogue = await getRecognitionCameras();
-    expect(catalogue.scope).toBe('configured_relays');
-    expect(catalogue.cameras.map(camera => camera.id)).toEqual(['cam01']);
-    expect(fetcher.mock.calls[0][0]).toBe('/v1/recognition/cameras');
-    expect(((fetcher.mock.calls[0][1] as RequestInit).headers as Headers).get('X-Operator-Key'))
-      .toBe('test-operator-key');
-  });
-  it('uses explicit camera-only start, keepalive and pause requests', async () => {
-    setOperatorKey('test-operator-key');
-    const fetcher = vi.fn().mockResolvedValue({ ok: true, status: 200, json: async () => ({}) });
-    vi.stubGlobal('fetch', fetcher);
-    await setRecognitionSession('cam17');
-    await heartbeatRecognition('cam17');
-    await setRecognitionSession(null);
-    expect(fetcher.mock.calls.map(call => call[0])).toEqual([
-      '/v1/recognition/session', '/v1/recognition/heartbeat', '/v1/recognition/session',
-    ]);
-    expect(fetcher.mock.calls.map(call => (call[1] as RequestInit).body)).toEqual([
-      '{"camera_id":"cam17"}', '{"camera_id":"cam17"}', '{"camera_id":null}',
-    ]);
-    for (const call of fetcher.mock.calls) expect((call[1] as RequestInit).method).toBe('POST');
-  });
-  it('lists recordings and sends only validated playback controls with the operator key', async () => {
-    setOperatorKey('test-operator-key');
-    const fetcher = vi.fn().mockResolvedValue({ ok: true, status: 200, json: async () => ({
-      recordings: [{ id: 'rec-0123456789ab', name: 'Junction A', duration_ms: 6000, time_basis: 'processing_time' }],
-    }) });
-    vi.stubGlobal('fetch', fetcher);
-    expect((await getRecognitionRecordings()).recordings[0].id).toBe('rec-0123456789ab');
-    await controlRecognition('pause');
-    await controlRecognition('resume');
-    await controlRecognition('restart', 9999);   // a position is ignored unless seeking
-    await controlRecognition('seek', 4000.6);
-    await controlRecognition('seek', -50);
-    expect(fetcher.mock.calls.map(call => call[0])).toEqual([
-      '/v1/recognition/recordings', '/v1/recognition/control', '/v1/recognition/control',
-      '/v1/recognition/control', '/v1/recognition/control', '/v1/recognition/control',
-    ]);
-    expect(fetcher.mock.calls.slice(1).map(call => (call[1] as RequestInit).body)).toEqual([
-      '{"action":"pause"}', '{"action":"resume"}', '{"action":"restart"}',
-      '{"action":"seek","position_ms":4001}', '{"action":"seek","position_ms":0}',
-    ]);
-    for (const call of fetcher.mock.calls) {
-      expect(((call[1] as RequestInit).headers as Headers).get('X-Operator-Key')).toBe('test-operator-key');
+describe('automatic local-session boundary', () => {
+  it('bootstraps once without operator secrets and removes obsolete stored keys', async () => {
+    values.set('sentinel.operatorKey', 'obsolete-private-value');
+    const fetcher = mockApi([]);
+    await Promise.all([getAlerts(), getAlerts()]);
+    expect(fetcher.mock.calls.filter(call => call[0] === '/v1/local/session')).toHaveLength(1);
+    expect(values.size).toBe(0);
+    for (const [, init] of operationCalls(fetcher)) {
+      expect(init?.credentials).toBe('same-origin');
+      expect((init?.headers as Headers).get('X-Operator-Key')).toBeNull();
     }
   });
-  it('keeps the recorded label and traceability fields on alerts', async () => {
-    setOperatorKey('test-operator-key');
-    vi.stubGlobal('fetch', vi.fn().mockResolvedValue({ ok: true, status: 200, json: async () => [{
-      id: 9, sighting_id: 3, camera_id: 'rec-0123456789ab', observed_at: '2026-10-10T16:30:00Z',
-      masked_plate: 'AP******34', reason: 'Synthetic watchlist demonstration', severity: 'high', status: 'new',
-      source_mode: 'recorded', stream_pts_ms: 4500, session_id: 's-1', time_basis: 'processing_time',
-    }] }));
-    const [alert] = await getAlerts();
-    expect([alert.source_mode, alert.stream_pts_ms, alert.session_id, alert.time_basis])
-      .toEqual(['recorded', 4500, 's-1', 'processing_time']);
+  it('uses a transient CSRF token for mutations, not for reads', async () => {
+    const fetcher = mockApi({});
+    await getRecognitionStatus(); await setRecognitionSession('rec-example');
+    const [read, write] = operationCalls(fetcher);
+    expect((read[1]?.headers as Headers).get('X-CSRF-Token')).toBeNull();
+    expect((write[1]?.headers as Headers).get('X-CSRF-Token')).toBe(localSession.csrf_token);
+    expect(values.size).toBe(0);
+  });
+  it('exposes a setup failure instead of prompting for a manual key', async () => {
+    vi.stubGlobal('fetch', vi.fn(async () => json({}, 403)));
+    await expect(ensureLocalSession()).rejects.toThrow('Local access is unavailable');
+  });
+  it('rejects malformed bootstrap payloads', async () => {
+    vi.stubGlobal('fetch', vi.fn(async () => json({ csrf_token: '', expires_at: 'invalid' })));
+    await expect(ensureLocalSession()).rejects.toThrow('invalid');
+  });
+  it('re-establishes an expired session once following a pre-operation 401', async () => {
+    let requests = 0;
+    const fetcher = vi.fn(async (path: RequestInfo | URL) => path === '/v1/local/session' ? json(localSession) : ++requests === 1 ? json({}, 401) : json([]));
+    vi.stubGlobal('fetch', fetcher);
+    await getAlerts();
+    expect(fetcher.mock.calls.filter(call => call[0] === '/v1/local/session')).toHaveLength(2);
+    expect(requests).toBe(2);
+  });
+  it('does not replay a conflicting write', async () => {
+    const fetcher = vi.fn(async (path: RequestInfo | URL) => path === '/v1/local/session' ? json(localSession) : json({ detail: 'Entry changed; refresh.' }, 409));
+    vi.stubGlobal('fetch', fetcher);
+    await expect(patchWatchlist(3, { expected_version: 1, active: false })).rejects.toThrow('Entry changed');
+    expect(fetcher.mock.calls.filter(call => call[0] !== '/v1/local/session')).toHaveLength(1);
+  });
+  it('does not blindly retry an interrupted write', async () => {
+    const fetcher = vi.fn(async (path: RequestInfo | URL) => { if (path === '/v1/local/session') return json(localSession); throw new TypeError('network'); });
+    vi.stubGlobal('fetch', fetcher);
+    await expect(setRecognitionSession('rec-example')).rejects.toThrow('unreachable');
+    expect(fetcher.mock.calls.filter(call => call[0] !== '/v1/local/session')).toHaveLength(1);
   });
 });
 
-describe('presentation helpers', () => {
-  it('shows UTC observations in IST', () => {
-    expect(formatTime('2026-09-23T12:00:00Z')).toContain('17:30');
+describe('existing API compatibility', () => {
+  it('converts numeric alert IDs and preserves recorded traceability', async () => {
+    mockApi([{ id: 42, sighting_id: 7, camera_id: 'rec-example', source_mode: 'recorded', stream_pts_ms: 4500, session_id: 's-1', time_basis: 'processing_time' }]);
+    const [alert] = await getAlerts();
+    expect([alert.id, alert.sighting_id, alert.source_mode, alert.stream_pts_ms, alert.session_id, alert.time_basis]).toEqual(['42', '7', 'recorded', 4500, 's-1', 'processing_time']);
   });
+  it('parses central hourly aggregation buckets without exposing that legacy navigation', async () => {
+    mockApi({ buckets: [{ alerts: 1 }] }); expect((await getHourlyReports())[0].alerts).toBe(1);
+  });
+  it('keeps the explicit demo contract, without a normal UI injection control', async () => {
+    const fetcher = mockApi({ accepted: true }); await injectDemo();
+    expect(operationCalls(fetcher)[0][1]?.body).toBe('{}');
+  });
+  it('preserves catalogue paging and URL-free preview starts', async () => {
+    const fetcher = mockApi({ items: [] }); await searchCatalogue(' Janpath ', 25); await startCataloguePreview('cam03');
+    expect(operationCalls(fetcher)[0][0]).toContain('q=Janpath&offset=25&limit=25');
+    expect(operationCalls(fetcher)[1][0]).toBe('/v1/catalogue/cam03/preview');
+    expect(operationCalls(fetcher)[1][1]?.method).toBe('POST');
+  });
+  it('observes shared state without implicitly starting inference', async () => {
+    const fetcher = mockApi({ status: 'paused', tracks: [] });
+    expect((await getRecognitionStatus()).status).toBe('paused');
+    expect(operationCalls(fetcher)[0][0]).toBe('/v1/recognition/status');
+    expect(operationCalls(fetcher)[0][1]?.method).toBeUndefined();
+    expect(operationCalls(fetcher)[0][1]?.cache).toBe('no-store');
+  });
+  it('retains limited configured camera scope in the legacy adapter', async () => {
+    mockApi({ available: true, scope: 'configured_relays', cameras: [{ id: 'cam01' }] });
+    expect((await getRecognitionCameras()).scope).toBe('configured_relays');
+  });
+  it('uses explicit source-only start, heartbeat and stop', async () => {
+    const fetcher = mockApi(); await setRecognitionSession('rec-example'); await heartbeatRecognition('rec-example'); await setRecognitionSession(null);
+    expect(operationCalls(fetcher).map(call => call[1]?.body)).toEqual(['{"camera_id":"rec-example"}', '{"camera_id":"rec-example"}', '{"camera_id":null}']);
+  });
+  it('lists recordings independently and serializes supported playback actions', async () => {
+    const fetcher = mockApi({ recordings: [{ id: 'rec-example', name: 'Junction' }] });
+    expect((await getRecognitionRecordings()).recordings[0].id).toBe('rec-example');
+    await controlRecognition('pause'); await controlRecognition('resume'); await controlRecognition('restart', 999); await controlRecognition('seek', -50);
+    expect(operationCalls(fetcher).slice(1).map(call => call[1]?.body)).toEqual(['{"action":"pause"}', '{"action":"resume"}', '{"action":"restart"}', '{"action":"seek","position_ms":0}']);
+  });
+});
 
-  it('uses the local media proxy when the catalogue has no preview URL', () => {
-    expect(cameraPreview({ id: 'cam01', name: 'Camera 1', status: 'online' })).toBe('/media/cam01/index.m3u8');
+describe('new operator contracts', () => {
+  it('keeps watchlist identifiers out of URLs', async () => {
+    const fetcher = mockApi(); await addWatchlist({ plate: 'GJ01AB1234', reason: 'Fixture' }); await searchWatchlist('GJ01AB1234');
+    for (const call of operationCalls(fetcher)) { expect(String(call[0])).not.toContain('GJ01AB1234'); expect(call[1]?.body).toContain('GJ01AB1234'); }
+  });
+  it('includes expected revision for watchlist edits', async () => {
+    const fetcher = mockApi(); await patchWatchlist(9, { expected_version: 4, active: false });
+    expect(operationCalls(fetcher)[0][0]).toBe('/v1/watchlist/9');
+    expect(operationCalls(fetcher)[0][1]?.body).toBe('{"expected_version":4,"active":false}');
+  });
+  it('pins diagnostics to a selected session and track', async () => {
+    const fetcher = mockApi(); await getDiagnostics('s-1', 'det-2');
+    expect(operationCalls(fetcher)[0][0]).toBe('/v1/recognition/diagnostics?session_id=s-1&track_id=det-2');
+  });
+  it('treats disabled evidence as unavailable but does not conceal service failures', async () => {
+    const fetcher = vi.fn(async (path: RequestInfo | URL) => path === '/v1/local/session' ? json(localSession) : json({}, 404));
+    vi.stubGlobal('fetch', fetcher); expect(await getRecognitionEvidence('original')).toBeNull();
+    expect(fetcher.mock.calls.at(-1)?.[0]).toBe('/v1/recognition/evidence?mode=original');
+    fetcher.mockImplementation(async path => path === '/v1/local/session' ? json(localSession) : json({}, 503));
+    await expect(getRecognitionEvidence()).rejects.toThrow('503');
+  });
+});
+
+describe('presentation safety', () => {
+  it('shows UTC observations in IST', () => { expect(formatTime('2026-09-23T12:00:00Z')).toContain('17:30'); });
+  it('preserves the local media fallback', () => { expect(cameraPreview({ id: 'cam01', name: 'Camera', status: 'online' })).toBe('/media/cam01/index.m3u8'); });
+  it('accepts bounded base64 images only, never active content or remote URLs', () => {
+    expect(imageData('YWJj')).toBe('data:image/png;base64,YWJj');
+    expect(imageData('https://example.org/frame')).toBeUndefined();
+    expect(imageData('javascript:alert(1)')).toBeUndefined();
+    expect(imageData('A'.repeat(1_500_001))).toBeUndefined();
   });
 });

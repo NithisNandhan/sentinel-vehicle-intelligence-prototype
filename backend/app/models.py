@@ -51,11 +51,29 @@ class WatchlistEntry(Base):
     __tablename__ = "watchlist_entries"
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
     plate_hmac: Mapped[str] = mapped_column(String(64), unique=True, index=True)
+    masked_plate: Mapped[str | None] = mapped_column(String(32), nullable=True)
     reason: Mapped[str] = mapped_column(String(240))
     severity: Mapped[str] = mapped_column(String(16), default="high")
     active: Mapped[bool] = mapped_column(Boolean, default=True)
     version: Mapped[int] = mapped_column(Integer, default=1)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now)
+
+
+class WatchlistRevision(Base):
+    __tablename__ = "watchlist_revision"
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    version: Mapped[int] = mapped_column(Integer, default=1)
+
+
+class WatchlistAudit(Base):
+    __tablename__ = "watchlist_audit"
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    entry_id: Mapped[int] = mapped_column(ForeignKey("watchlist_entries.id"), index=True)
+    revision: Mapped[int] = mapped_column(Integer)
+    actor: Mapped[str] = mapped_column(String(80), default="local-operator")
+    action: Mapped[str] = mapped_column(String(24))
+    changes: Mapped[str] = mapped_column(Text)
+    changed_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now)
 
 
 class Alert(Base):

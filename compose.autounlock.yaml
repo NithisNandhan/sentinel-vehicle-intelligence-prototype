@@ -1,13 +1,9 @@
-# Optional, local-only convenience: open the operator dashboard already
-# unlocked by handing the dev server the operator key from .env.
-#
-#   docker compose -f compose.yaml -f compose.autounlock.yaml up -d dashboard
-#
-# With this file, anyone who can open http://127.0.0.1:5173/ on this computer
-# has operator access without knowing the key. The port is published on
-# localhost only. Do not use it on a shared machine or beyond a trusted PC;
-# start without this file to get the normal locked dashboard back.
+# Deprecated compatibility filename. The unified dashboard uses a local
+# session cookie, never a VITE_* operator key in the browser bundle.
+# All published ports must remain bound to loopback. This is a trusted-PC
+# profile, not public or individually authenticated multi-user access.
 services:
-  dashboard:
+  api:
     environment:
-      VITE_LOCAL_OPERATOR_KEY: ${OPERATOR_API_KEY:?Run scripts/init-env.ps1 first}
+      LOCAL_DASHBOARD_MODE: "true"
+      LOCAL_DASHBOARD_BIND_HOST: 127.0.0.1
