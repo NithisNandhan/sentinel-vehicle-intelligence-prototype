@@ -132,3 +132,53 @@ Baseline on the 50 draft-labelled crops:
   single-line reads of the two-line plates here, and splitting either adds noise
   (attempt 1) or changes nothing useful (attempt 2). A real test needs readable,
   human-labelled two-line plates; all 5 in this sample are UNREADABLE.
+
+## Phase 5: bike tracking (done earlier, re-measured on this branch)
+
+- Code from `tracker/keep-unconfirmed-vehicles` (`de00f38`): setting
+  `SENTINEL_KEEP_UNCONFIRMED_VEHICLES` (off by default) keeps detections ByteTrack hides
+  until confirmed and links them by plausible motion relative to box size (the same
+  discontinuity rule the OCR stage uses); 12 tests, including two touching bikes that
+  must not merge or swap and a car that must not get a second ID.
+- Re-measured on this branch: identical to the earlier numbers, off and on.
+
+Mumbai clip, 15 samples, motorcycles (heuristic counts; no ground truth):
+
+| | Off | On |
+| --- | --- | --- |
+| Boxes shown (detector found 92) | 11 | 92 |
+| Distinct IDs | 7 | 25 |
+| One-frame IDs (first/last sample excluded) | 1 | 6 |
+| Likely ID switches | 0 | 0 |
+| Same-frame duplicate-ID pairs, all classes | 15 | 15 |
+
+- Trucks: likely switches 0 -> 3. On the 720p `video-project-2.mp4` bikes are shown
+  (13 -> 122 boxes) but mostly not linked: 98 IDs, 80 one-frame. The switch heuristic
+  uses the same motion rule as the linker, so it cannot see breaks beyond that rule.
+
+## Phase 6: comparisons (report only, no default changed)
+
+**Plate detectors** on the Mumbai clip (271 vehicle boxes, 15 samples):
+
+| | general (parent, default) | plate_adapted |
+| --- | --- | --- |
+| Plate crops | 165 | 177 |
+| Vehicle boxes with no plate found | 104 | 92 |
+| Found by this detector only | 6 | 18 |
+
+- The 18 adapted-only crops were inspected (draft judgement): about 4 look like plates and
+  about 14 are windows, vehicle fronts, bars, a bus panel, a grille, an LED sign or blur.
+  Its extra finds are mostly false proposals. Detector scores are on different scales.
+
+**Enlarging crops before OCR** (cubic), on the 50 draft-labelled crops:
+
+| | Baseline | 2x | 3x |
+| --- | --- | --- | --- |
+| Exact match (n=2) | 2/2 | 2/2 | 2/2 |
+| CER | 0/20 | 0/20 | 0/20 |
+| Format-valid false reads on NO_PLATE (n=14) | 5 | 5 | 4 |
+| Format-valid readings on UNREADABLE (n=34) | 29 | 25 | 24 |
+| Raw readings changed vs baseline | - | 35 | 38 |
+
+- Every change falls on UNREADABLE or NO_PLATE crops, where nothing can be verified.
+  Enlarging adds no detail. No measurable benefit; no default change.
