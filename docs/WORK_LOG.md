@@ -202,3 +202,29 @@ Mumbai clip, 15 samples, motorcycles (heuristic counts; no ground truth):
   It was not restarted. So there are **no before/after times and no identical-output
   check** for the thread settings; leave them at the default until measured.
 - Earlier observation (service, not this tool): the analysis used about one CPU core of 16.
+
+## Phase 8: small fixes (done; each behind an off-by-default setting)
+
+The rules require every change to be behind a setting that is off by default, so even
+these fixes do nothing until enabled. Each was chosen as the safest reading of that rule.
+
+| Fix | Setting | Tests |
+| --- | --- | --- |
+| Idle panel heading "SHARED LIVE PROCESSING" -> "SHARED PROCESSING · NO SOURCE SELECTED" when no source is selected | `VITE_NEUTRAL_IDLE_LABEL` (dashboard build) | 1 frontend |
+| Evidence after Stop: 404 "No recording is being analysed" instead of 503; other edge failures stay 503 | `RECOGNITION_IDLE_EVIDENCE_404` (API) | 2 backend |
+| Pause/resume on a completed run: rejected (409, shown as "Playback control not available") instead of a silent no-op; restart/seek still work | `SENTINEL_STRICT_PLAYBACK` (edge) | 3 edge |
+
+- The dashboard already treats an evidence 404 as "nothing to show", so no frontend
+  change is needed for the second fix.
+- The running containers were not rebuilt or restarted; none of these settings is active.
+- Frontend tests and the type check were run in a throwaway container from the dashboard
+  image with `frontend/src` mounted read-only, so the running dashboard was untouched.
+
+## Final test results
+
+| Suite | Baseline | Final |
+| --- | --- | --- |
+| Edge | 397 passed, 2 skipped | 420 passed, 2 skipped |
+| Tools (container) | 14 passed | 22 passed |
+| Backend | 103 passed | 105 passed |
+| Frontend (vitest) + `tsc --noEmit` | 31 passed | 32 passed, type check clean |

@@ -1,8 +1,8 @@
 import { describe, expect, it } from 'vitest';
 import type { RecognitionStatus } from './api';
 import {
-  failureMessage, formatVideoTime, recognitionCount, recognitionIsFresh, recognitionIsRunning, recognitionLabel,
-  recognitionTone, sessionLabel, sourceDescription, sourceLabel, staleLimit,
+  failureMessage, formatVideoTime, processingHeading, recognitionCount, recognitionIsFresh, recognitionIsRunning,
+  recognitionLabel, recognitionTone, sessionLabel, sourceDescription, sourceLabel, staleLimit,
 } from './recognition';
 
 const status: RecognitionStatus = {
@@ -34,6 +34,16 @@ describe('operator recognition presentation', () => {
     expect(recognitionIsFresh({ ...status, status: 'connecting' })).toBe(false);
     expect(recognitionIsFresh(null)).toBe(false);
   });
+  it('calls an idle session live only while the opt-in neutral label is off', () => {
+    const idle: RecognitionStatus = { ...status, status: 'paused', camera_id: null };
+    expect(processingHeading(idle, false)).toBe('SHARED LIVE PROCESSING');
+    expect(processingHeading(idle, true)).toBe('SHARED PROCESSING · NO SOURCE SELECTED');
+    expect(processingHeading(status, true)).toBe('SHARED LIVE PROCESSING');
+    expect(processingHeading(recording, true)).toBe('SHARED RECORDED PROCESSING');
+    expect(processingHeading(recording, false)).toBe('SHARED RECORDED PROCESSING');
+    expect(processingHeading(null)).toBe('SHARED LIVE PROCESSING');  // Off unless VITE_NEUTRAL_IDLE_LABEL=true.
+  });
+
   it('never presents recorded footage as a live source', () => {
     expect(sourceLabel('recorded')).toBe('RECORDED');
     expect(sourceLabel('synthetic')).toBe('SIMULATED');

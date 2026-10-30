@@ -46,6 +46,9 @@ class LiveState:
         self.paused = threading.Event()
         self.start_ms = 0
         self.session_id = None
+        # Opt-in (SENTINEL_STRICT_PLAYBACK): refuse pause/resume on a finished run
+        # instead of silently doing nothing.
+        self.strict_playback = False
 
     def _selectable(self, camera_id):
         return camera_id in self.allowed_ids or camera_id in self.recordings
@@ -99,6 +102,8 @@ class LiveState:
                     raise ValueError('Seek position is outside the recording')
             else:
                 raise ValueError('Unknown playback action')
+            if self.strict_playback and action in ('pause', 'resume') and self.value.get('status') == 'completed':
+                raise ValueError('The run has finished; restart or seek to analyse again')
             self.last_heartbeat = self.clock()
             if action == 'pause':
                 if self.value.get('status') != 'completed':
@@ -523,6 +528,7 @@ def serve(config, cache, checkpoint, port=7780, lifetime=1800, bind_host='127.0.
     if recordings_dir is not None and not detector_profile:
         raise ValueError('Recorded analysis needs a tracked detector profile')
     state, shutdown = LiveState(), threading.Event()
+    state.strict_playback = os.getenv('SENTINEL_STRICT_PLAYBACK', '').lower() == 'true'
     identity = {}
     library = None
     recordings_view = {'recordings': [], 'rejected': []}

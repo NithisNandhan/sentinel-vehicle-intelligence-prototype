@@ -16,6 +16,9 @@ class Settings(BaseSettings):
     # Off by default. When on, the dashboard may show the analysed frame and full
     # unverified readings for permitted RECORDED footage only, never a live camera.
     dashboard_recorded_evidence: bool = False
+    # Off by default. When on, "no recording is being analysed" after Stop is a 404
+    # (which the dashboard treats as empty), not a 503 "service unavailable".
+    recognition_idle_evidence_404: bool = False
     local_dashboard_mode: bool = False
     local_dashboard_origins: str = "http://localhost:5173,http://127.0.0.1:5173"
     local_dashboard_bind_host: str = "127.0.0.1"

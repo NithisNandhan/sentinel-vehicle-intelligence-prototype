@@ -27,6 +27,8 @@ services:
       CATALOGUE_GATEWAY_URL: http://catalogue-gateway:8765
       RECOGNITION_GATEWAY_URL: http://host.docker.internal:7780
       DASHBOARD_RECORDED_EVIDENCE: ${DASHBOARD_RECORDED_EVIDENCE:-false}
+      # Opt-in: after Stop, evidence is a plain 404 (shown as empty), not a 503.
+      RECOGNITION_IDLE_EVIDENCE_404: ${RECOGNITION_IDLE_EVIDENCE_404:-false}
       LOCAL_DASHBOARD_MODE: ${LOCAL_DASHBOARD_MODE:-true}
       LOCAL_DASHBOARD_ORIGINS: http://localhost:5173,http://127.0.0.1:5173
       LOCAL_DASHBOARD_BIND_HOST: 127.0.0.1
@@ -43,6 +45,8 @@ services:
     environment:
       VITE_API_PROXY_TARGET: http://api:8000
       VITE_MEDIA_PROXY_TARGET: http://mediamtx:8888
+      # Opt-in: with no source selected, do not call the session "live".
+      VITE_NEUTRAL_IDLE_LABEL: ${VITE_NEUTRAL_IDLE_LABEL:-false}
     ports:
       - 127.0.0.1:5173:5173
     depends_on:
@@ -237,6 +241,8 @@ services:
       # Opt-in plate options (docs/WORK_LOG.md); all off by default.
       SENTINEL_REJECT_NON_PLATES: ${SENTINEL_REJECT_NON_PLATES:-false}
       SENTINEL_TWO_LINE_PLATES: ${SENTINEL_TWO_LINE_PLATES:-false}
+      # Opt-in: refuse pause/resume on a finished recording instead of a silent no-op.
+      SENTINEL_STRICT_PLAYBACK: ${SENTINEL_STRICT_PLAYBACK:-false}
     volumes:
       - ./edge:/workspace/edge:ro
       - ./tools:/workspace/tools:ro

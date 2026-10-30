@@ -22,6 +22,15 @@ export function isRecorded(status: RecognitionStatus | null): boolean {
   return status?.source_mode === 'recorded';
 }
 
+/** Panel eyebrow. Opt-in (VITE_NEUTRAL_IDLE_LABEL=true): with no source selected the
+ *  session is neither live nor recorded, so it is not called live. */
+export function processingHeading(status: RecognitionStatus | null,
+  neutralIdle = import.meta.env.VITE_NEUTRAL_IDLE_LABEL === 'true'): string {
+  if (isRecorded(status)) return 'SHARED RECORDED PROCESSING';
+  if (neutralIdle && !status?.camera_id) return 'SHARED PROCESSING · NO SOURCE SELECTED';
+  return 'SHARED LIVE PROCESSING';
+}
+
 /** Seconds after which shown evidence is no longer current. A recording analysed on a slow CPU gets longer than a live feed. */
 export function staleLimit(status: RecognitionStatus | null): number {
   const limit = status?.stale_after_seconds;

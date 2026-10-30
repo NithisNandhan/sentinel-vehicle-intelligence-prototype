@@ -6,7 +6,7 @@ import {
   type PlaybackAction, type RecognitionCameras, type RecognitionEvidence, type RecognitionRecordings, type RecognitionStatus,
 } from './api';
 import {
-  failureMessage, formatVideoTime, isRecorded, recognitionCount, recognitionIsFresh, recognitionIsRunning,
+  failureMessage, formatVideoTime, isRecorded, processingHeading, recognitionCount, recognitionIsFresh, recognitionIsRunning,
   recognitionLabel, recognitionTone, sessionLabel,
 } from './recognition';
 
@@ -142,7 +142,7 @@ export default function RecognitionPanel({ operatorKey }: { operatorKey: string 
   const failure = status?.status === 'unavailable' ? failureMessage(status.failure_code) : '';
 
   return <section className="panel recognition-panel" aria-labelledby="recognition-title">
-    <div className="panel-heading"><div><span className="eyebrow">{recorded ? 'SHARED RECORDED PROCESSING' : 'SHARED LIVE PROCESSING'}</span><h2 id="recognition-title">Vehicle recognition</h2></div>
+    <div className="panel-heading"><div><span className="eyebrow">{processingHeading(status)}</span><h2 id="recognition-title">Vehicle recognition</h2></div>
       <span className={`pill ${fresh && status?.status !== 'paused' && status?.status !== 'completed' ? 'good' : status?.status === 'connecting' ? 'warn' : 'neutral'}`}><Activity size={13} />{sessionLabel(status)}</span>
     </div>
     <div className="recognition-body">

@@ -109,6 +109,35 @@ class RecordedStateTests(RecordedCase):
         self.assertIs(state.capture_stop, generation)
         self.assertEqual(state.session_id, session)
 
+    def test_pause_on_a_completed_run_is_a_silent_no_op_by_default(self):
+        state = self.state()
+        state.select(self.recording.recording_id)
+        state.complete(state.capture_stop)
+        state.control('pause')
+        self.assertEqual(state.snapshot()['status'], 'completed')
+
+    def test_strict_playback_refuses_pause_and_resume_on_a_completed_run(self):
+        state = self.state()
+        state.strict_playback = True
+        state.select(self.recording.recording_id)
+        session = state.session_id
+        state.complete(state.capture_stop)
+        for action in ('pause', 'resume'):
+            with self.assertRaises(ValueError):
+                state.control(action)
+        self.assertEqual(state.snapshot()['status'], 'completed')
+        self.assertEqual(state.session_id, session)
+        state.control('restart')  # A new run is still allowed.
+        self.assertNotEqual(state.session_id, session)
+
+    def test_strict_playback_still_pauses_a_running_recording(self):
+        state = self.state()
+        state.strict_playback = True
+        state.select(self.recording.recording_id)
+        state.publish({'camera_id': self.recording.recording_id, 'status': 'processing'}, state.capture_stop)
+        state.control('pause')
+        self.assertEqual(state.snapshot()['status'], 'paused')
+
     def test_restart_and_seek_are_new_sessions_with_cleared_evidence(self):
         state = self.state()
         state.select(self.recording.recording_id)
