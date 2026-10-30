@@ -182,3 +182,23 @@ Mumbai clip, 15 samples, motorcycles (heuristic counts; no ground truth):
 
 - Every change falls on UNREADABLE or NO_PLATE crops, where nothing can be verified.
   Enlarging adds no detail. No measurable benefit; no default change.
+
+## Phase 7: speed (code done; timing NOT measured)
+
+- **Fusion only on a new reading:** already the case. `CTCPlateReader.candidates()` caches
+  its result and the cache is cleared only by `add()` (a new reading) or `propose()`
+  (`edge/sentinel_edge/ctc_fusion.py`). No code change was made, to avoid a redundant
+  second cache.
+- **More CPU threads:** `SENTINEL_VEHICLE_THREADS` (vehicle detector, torch) and
+  `SENTINEL_PLATE_THREADS` (plate detector, ONNX). The default stays 2, the long-standing
+  hard-coded value; invalid values fail loudly (3 tests). OCR threads already follow the
+  existing `SENTINEL_CPU_THREADS` (default 4 in compose).
+- `tools/time_tracked_pipeline.py` times the same tracked pipeline as the service per
+  stage and fingerprints every output (tracks, plate boxes, candidates with scores,
+  acceptances) so two runs can be checked for identical results.
+- **Not measured:** the timing job (run A, defaults, then run B, 6/4/8 threads) was
+  stopped by Claude Code because the computer was critically low on memory. Its leftover
+  process inside the container was stopped too (container memory 2.7 GiB -> 1.4 GiB).
+  It was not restarted. So there are **no before/after times and no identical-output
+  check** for the thread settings; leave them at the default until measured.
+- Earlier observation (service, not this tool): the analysis used about one CPU core of 16.

@@ -123,10 +123,20 @@ def decode_yolo11(output, scale, left, top, shape, threshold=.25, with_confidenc
     return [boxes[int(index)] for index in np.asarray(kept).reshape(-1)]
 
 
+def configured_threads(variable, default=2):
+    """CPU threads for one model from an opt-in variable; the default is the long-standing value."""
+    import os
+    value = os.environ.get(variable, '').strip() or str(default)
+    if not value.isdigit() or not 1 <= int(value) <= 64:
+        raise ValueError(f'{variable} must be between 1 and 64')
+    return int(value)
+
+
 class PlateModel:
     def __init__(self, name, cache, device):
         import onnxruntime as ort
-        options = ort.SessionOptions(); options.intra_op_num_threads = 2; options.inter_op_num_threads = 1
+        options = ort.SessionOptions(); options.inter_op_num_threads = 1
+        options.intra_op_num_threads = configured_threads('SENTINEL_PLATE_THREADS')
         providers = ['CPUExecutionProvider'] if device == 'cpu' else ['CUDAExecutionProvider', 'CPUExecutionProvider']
         self.device = device
         if name.startswith('yolov9'):

@@ -4,7 +4,7 @@ import hashlib
 import json
 from pathlib import Path
 
-from .detector_comparison import PlateModel, decode_yolo11, letterbox
+from .detector_comparison import PlateModel, configured_threads, decode_yolo11, letterbox
 from .vision import _box_iou, associate_vehicle_tracks
 
 PROFILES = {
@@ -66,7 +66,7 @@ class VehicleTracker:
         if self.device == 'gpu' and not torch.cuda.is_available():
             raise RuntimeError('GPU requested but vehicle CUDA runtime is unavailable')
         from ultralytics import YOLO
-        torch.set_num_threads(2)
+        torch.set_num_threads(configured_threads('SENTINEL_VEHICLE_THREADS'))
         if name not in ('yolov8n', 'yolo26s', 'bmd'):
             raise ValueError('Unknown diagnostic vehicle model')
         path = (Path(training_root)/'runs/vehicle-bmd/weights/best.pt' if name == 'bmd'
@@ -174,7 +174,7 @@ class PlateDetector:
             if receipt['input_shape'] != [1,3,512,512] or receipt['output_shape'] != [1,5,5376]:
                 raise ValueError('Adapted plate export contract changed')
             options = ort.SessionOptions()
-            options.intra_op_num_threads = 2
+            options.intra_op_num_threads = configured_threads('SENTINEL_PLATE_THREADS')
             options.inter_op_num_threads = 1
             providers = (['CUDAExecutionProvider', 'CPUExecutionProvider']
                          if self.device == 'gpu' else ['CPUExecutionProvider'])
