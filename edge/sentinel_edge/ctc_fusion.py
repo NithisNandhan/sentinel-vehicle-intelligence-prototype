@@ -47,6 +47,74 @@ def greedy_text(rows, tokens):
     return ''.join(result).replace(' ', '').upper()
 
 
+def greedy_reading(rows, tokens):
+    """Greedy CTC characters with the peak probability of each character's run.
+
+    Spaces and non-alphanumeric tokens are dropped and case is folded, as in
+    `greedy_text`. Peaks are uncalibrated model scores, not correctness probabilities.
+    """
+    reading, previous = [], None
+    for row in rows:
+        index = max(range(len(row)), key=row.__getitem__)
+        if index and index == previous and reading and reading[-1][2] == index:
+            reading[-1] = (reading[-1][0], max(reading[-1][1], row[index]), index)
+        elif index and index != previous:
+            character = tokens[index].upper()
+            if character.isascii() and character.isalnum():
+                reading.append((character, row[index], index))
+        previous = index
+    return tuple((character, peak) for character, peak, _ in reading)
+
+
+def explain_vote(readings, weights=None):
+    """`position_vote` plus its reason: {'voted', 'reason', 'readings', 'lengths', 'voters'}.
+
+    Reasons: 'voted', 'no_readings', 'length_tie', 'too_few_same_length' (fewer than two
+    frames read the winning length) and 'position_tie'. Diagnostic only.
+    """
+    weights = [1.] * len(readings) if weights is None else list(weights)
+    by_length = {}
+    for reading, weight in zip(readings, weights):
+        if reading:
+            by_length[len(reading)] = by_length.get(len(reading), 0.) + weight
+    report = {'voted': None, 'readings': sum(bool(reading) for reading in readings),
+              'lengths': {length: sum(len(reading) == length for reading in readings) for length in sorted(by_length)},
+              'voters': 0}
+    if not by_length:
+        return dict(report, reason='no_readings')
+    ranked = sorted(by_length.items(), key=lambda item: -item[1])
+    if len(ranked) > 1 and math.isclose(ranked[0][1], ranked[1][1]):
+        return dict(report, reason='length_tie')
+    length = ranked[0][0]
+    voters = [(reading, weight) for reading, weight in zip(readings, weights) if len(reading) == length]
+    report['voters'] = len(voters)
+    if len(voters) < 2:
+        return dict(report, reason='too_few_same_length')
+    result = []
+    for position in range(length):
+        tally = {}
+        for reading, weight in voters:
+            character, peak = reading[position]
+            tally[character] = tally.get(character, 0.) + weight * peak
+        ordered = sorted(tally.values(), reverse=True)
+        if len(ordered) > 1 and math.isclose(ordered[0], ordered[1]):
+            return dict(report, reason='position_tie')
+        result.append(max(tally, key=tally.get))
+    return dict(report, voted=''.join(result), reason='voted')
+
+
+def position_vote(readings, weights=None):
+    """Per-character-position vote over frame readings, weighted by OCR confidence.
+
+    `readings` holds one `greedy_reading` per original frame. Only frames that read the
+    most common length (by summed weight) vote, because a position only means the same
+    character slot when the lengths agree. Each vote counts `frame weight x character
+    peak`. Returns None, rather than guessing, when fewer than two frames share the
+    winning length, two lengths tie, or any position ties.
+    """
+    return explain_vote(readings, weights)['voted']
+
+
 def prefix_candidates(rows, tokens, *, beam_width=100, max_length=25):
     """Raw-token prefix beam: repeated characters need a blank or another token.
 
@@ -142,14 +210,75 @@ def sequence_score(rows, tokens, text):
 
 
 class CTCPlateReader:
-    def __init__(self, tokens, *, window=8, beam_width=100):
+    """Multi-frame CTC fusion for one vehicle.
+
+    Opt-in, both off by default (each leaves every acceptance threshold unchanged):
+    `validate_format` admits only candidates that pass `plate_format.check_plate`,
+    using its look-alike fix when exactly one is possible; `position_vote` adds the
+    per-position confidence-weighted vote of the frames' readings as one more
+    candidate. Every candidate, voted or not, is rescored against every original
+    frame and must pass the same `accepted()` gate.
+    """
+    def __init__(self, tokens, *, window=8, beam_width=100, validate_format=False, position_vote=False):
         if not 3 <= window <= 12 or not 1 <= beam_width <= 200:
             raise ValueError('Invalid CTC temporal bounds')
         self.tokens, self.beam_width = tuple(tokens), beam_width
+        self.validate_format, self.use_position_vote = bool(validate_format), bool(position_vote)
         self.samples = deque(maxlen=window)
+        self._readings = deque(maxlen=window)
         self._cache = None
         self._peaks = {}
         self._proposals = ()
+        self._proposals_verbatim = frozenset()
+
+    @property
+    def voted(self):
+        """The admitted per-position vote of the current frames, or None (setting off or no vote)."""
+        if not self.use_position_vote:
+            return None
+        return self.admit(position_vote(list(self._readings), [sample[4] for sample in self.samples]))
+
+    def vote_report(self):
+        """Why the vote did or did not add a candidate. Diagnostic only; never changes fusion.
+
+        `outcome` is 'setting_off', a no-vote reason from `explain_vote`, 'not_plate_format'
+        (the vote failed the format check), 'already_in_beam' (some frame's own beam held
+        it, so it adds nothing), 'dropped' (a frame gives it zero likelihood, so it cannot
+        be scored) or 'new_candidate'. `differs_from_top` compares it with the top
+        candidate the reader ranks without the vote.
+        """
+        if not self.use_position_vote:
+            return {'outcome': 'setting_off', 'readings': len(self.samples)}
+        report = explain_vote(list(self._readings), [sample[4] for sample in self.samples])
+        report['readings'] = len(self.samples)
+        voted = self.admit(report['voted']) if report['voted'] else None
+        report['admitted'] = voted
+        without = CTCPlateReader(self.tokens, beam_width=self.beam_width, validate_format=self.validate_format)
+        without.samples.extend(self.samples)
+        without.propose(self._proposals)
+        ranked = without.candidates()
+        report['top_without_vote'] = ranked[0].plate if ranked else None
+        if report['reason'] != 'voted':
+            report['outcome'] = report['reason']
+        elif voted is None:
+            report['outcome'] = 'not_plate_format'
+        elif any(self.admit(text) == voted for sample in self.samples for text, _ in sample[3]):
+            report['outcome'] = 'already_in_beam'
+        elif voted not in {candidate.plate for candidate in self.candidates()}:
+            report['outcome'] = 'dropped'
+        else:
+            report['outcome'] = 'new_candidate'
+        report['differs_from_top'] = bool(voted) and voted != report['top_without_vote']
+        return report
+
+    def admit(self, text):
+        """The plate text a candidate may enter fusion as, or None."""
+        if not isinstance(text, str):
+            return None
+        if self.validate_format:
+            from .plate_format import check_plate
+            return check_plate(text).plate
+        return text if indian_plate_format(text) else None
 
     @property
     def observation_count(self):
@@ -168,6 +297,7 @@ class CTCPlateReader:
             return False
         candidates = prefix_candidates(rows, self.tokens, beam_width=self.beam_width)
         self.samples.append((timestamp_ms, source_id, rows, candidates, quality))
+        self._readings.append(greedy_reading(rows, self.tokens) if self.use_position_vote else ())
         self._cache = None
         return True
 
@@ -177,8 +307,10 @@ class CTCPlateReader:
         All suggestions are rescored against the original-frame posteriors.
         Reserve at most 32 search slots, keeping the total search bounded.
         """
-        values = tuple(dict.fromkeys(text for text in candidates
-                                    if isinstance(text, str) and indian_plate_format(text)))[:32]
+        pairs = [(text, self.admit(text)) for text in candidates]
+        values = tuple(dict.fromkeys(admitted for _, admitted in pairs if admitted))[:32]
+        self._proposals_verbatim = frozenset(admitted for text, admitted in pairs
+                                             if admitted and admitted == text and admitted in values)
         if values != self._proposals:
             self._proposals = values
             self._cache = None
@@ -188,13 +320,25 @@ class CTCPlateReader:
             return self._cache
         # Union of independently generated frame hypotheses. A candidate is
         # rescored against every frame, not only frames that happened to emit it.
-        proposals = {}
+        proposals, verbatim = {}, set(self._proposals_verbatim)
         for _, _, _, candidates, _ in self.samples:
             for text, score in candidates:
-                if indian_plate_format(text):
-                    proposals[text] = max(proposals.get(text, NEG), score)
+                admitted = self.admit(text)
+                if admitted:
+                    proposals[admitted] = max(proposals.get(admitted, NEG), score)
+                    if admitted == text:
+                        verbatim.add(text)
         originals = sorted(proposals, key=lambda text: -proposals[text])
-        proposals = list(dict.fromkeys((*self._proposals, *originals)))[:200]
+        # The vote only suggests a candidate; it is scored exactly like the others.
+        voted = ()
+        if self.use_position_vote:
+            raw_vote = position_vote(list(self._readings), [sample[4] for sample in self.samples])
+            admitted = self.admit(raw_vote)
+            if admitted:
+                voted = (admitted,)
+                if admitted == raw_vote:
+                    verbatim.add(admitted)
+        proposals = list(dict.fromkeys((*voted, *self._proposals, *originals)))[:200]
         result, self._peaks = [], {}
         for text in proposals:
             likelihoods, peaks = [], []
@@ -214,7 +358,8 @@ class CTCPlateReader:
             result.append(PlateCandidate(text, sum(character_scores) / len(text), min(character_scores),
                                          sum(weight * value for weight, value in zip(weights, likelihoods))
                                          / denominator, len(self.samples),
-                                         indian_plate_format(text)))
+                                         indian_plate_format(text),
+                                         self.validate_format and text not in verbatim))
             self._peaks[text] = peaks
         self._cache = sorted(result, key=lambda candidate: (-candidate.log_score, candidate.plate))[:200]
         return self._cache

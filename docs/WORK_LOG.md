@@ -274,3 +274,40 @@ polled every 3 s.
   The defaults in `compose.yaml` stay off. They apply once the recorded-analysis
   container is recreated.
 - Edge tests: 420 passed, 2 skipped (422 collected).
+
+## Plate reading: format validator and position vote (2026-10-31, afternoon)
+
+Full write-up, earlier-work summary and what is needed next: `docs/OCR_NEXT_STEPS.md`.
+
+- `SENTINEL_PLATE_FORMAT_VALIDATOR` (`edge/sentinel_edge/plate_format.py`, 21 tests) and
+  `SENTINEL_POSITION_VOTE` (`position_vote` in `ctc_fusion.py`, 12 tests). Both off by
+  default and not turned on locally. The 3-frame rule and every threshold are unchanged.
+- `tools/replay_plate_tracks.py` (3 tests) replays the saved Mumbai probe through fusion with
+  each setting. It took 52 min on one core.
+- Result on the 50 draft labels: the validator cut greedy readings on non-plates from 14 to 0
+  and on unreadable crops from 34 to 11, keeping both readable crops. In fusion every setting
+  accepted the same single correct reading. The vote changed nothing. **0 human-checked
+  labels, 1 readable plate: unproven.**
+
+## Display changes (2026-10-31, afternoon; user request, not behind a setting)
+
+- Dashboard "Recent readings" lists only tracks that have a reading; tracks showing
+  "No complete reading" are left out. The run summary still counts all recent tracks.
+- Frame vehicle tag is `CAR #12` (type and track number only); the detector score is no
+  longer drawn. Plates with no complete reading get no call-out on the frame.
+- The dashboard image was rebuilt and the analysis service restarted (after the replay).
+
+## Follow-ups: vote diagnosis and format-adjusted mark (2026-10-31, evening)
+
+- **Vote:** `tools/explain_position_vote.py` and `CTCPlateReader.vote_report()` log, per
+  vehicle, the readings, whether the vote differed from the best reading and why it was or
+  was not added. On the Mumbai clip it is **not a bug**. 15 of 33 tracks never reach 3
+  readings. In 106 fusion steps: 27 had no vote (length tie), 40 votes were not a plate
+  format, 38 were already in a frame's beam, and 1 was a new candidate that was not accepted.
+  Details: `docs/OCR_NEXT_STEPS.md`.
+- **Format-adjusted mark:** readings the validator corrected or created carry
+  `format_adjusted`. They show "FORMAT-ADJUSTED, UNVERIFIED" in the frame call-out, a gate
+  reason in the Inspector, and notes in the replay tool's outputs. Tests show such a reading
+  is rejected by the unchanged frame gate and by the 3-frame rule.
+- Both settings stay off by default. Mumbai plate text was removed from the doc and the tests
+  (synthetic plates instead), keeping to this log's earlier rule.

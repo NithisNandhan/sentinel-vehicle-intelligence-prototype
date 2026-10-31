@@ -61,6 +61,9 @@ class TrackedOCR:
             self.crop_bank = CropBank(max_bytes=32*1024*1024, max_frames=8, max_tracks=32,
                                       retain_best=True, max_age_ms=gap_ms)
 
+    def _new_reader(self):
+        return CTCPlateReader(self.ocr.tokens, **self.options.reader_options())
+
     def _read(self, crop, posterior_cache):
         """CTC rows for one crop, shared within the original frame through the cache."""
         source = hashlib.sha256(crop.tobytes()).hexdigest()
@@ -127,7 +130,7 @@ class TrackedOCR:
         # its OCR evidence even on such misses, not only on the next plate hit.
         for key, history in self.histories.items():
             if history.reader.samples and pts_ms-history.reader.samples[-1][0] > self.gap_ms:
-                history.reader = CTCPlateReader(self.ocr.tokens)
+                history.reader = self._new_reader()
                 history.reconstruction = None
                 if self.crop_bank is not None:
                     self.crop_bank.drop(key)
@@ -151,7 +154,7 @@ class TrackedOCR:
                     del self.histories[oldest]
                     if self.crop_bank is not None:
                         self.crop_bank.drop(oldest)
-                state = self.histories[track.track_id] = History(CTCPlateReader(self.ocr.tokens),box,track.vehicle_class,pts_ms)
+                state = self.histories[track.track_id] = History(self._new_reader(),box,track.vehicle_class,pts_ms)
                 if self.reconstruction_enabled:
                     from .live_reconstruction import ReconstructionState
                     state.reconstruction = ReconstructionState()
@@ -200,14 +203,14 @@ class TrackedOCR:
             state.plate_detections += 1
             center = ((local[0]+local[2])/(2*region.shape[1]),(local[1]+local[3])/(2*region.shape[0]))
             if state.plate_center and sum((a-b)**2 for a,b in zip(center,state.plate_center)) > .12:
-                state.reader = CTCPlateReader(self.ocr.tokens)
+                state.reader = self._new_reader()
                 state.reconstruction = None
                 if self.crop_bank is not None:
                     self.crop_bank.drop(track.track_id)
                 self.metrics['plate_region_resets'] += 1
             state.plate_center = center
             if state.reader.samples and pts_ms-state.reader.samples[-1][0] > self.gap_ms:
-                state.reader = CTCPlateReader(self.ocr.tokens)
+                state.reader = self._new_reader()
                 state.reconstruction = None
                 if self.crop_bank is not None:
                     self.crop_bank.drop(track.track_id)
@@ -265,7 +268,8 @@ class TrackedOCR:
             global_box = (local[0]+state.box[0],local[1]+state.box[1],local[2]+state.box[0],local[3]+state.box[1])
             displays.append({'box':global_box,'crop':crop,'observations':count,'ocr_status':status,
                 'masked_plate':mask_plate(candidates[0].plate) if candidates else None,
-                'candidate_count':len(candidates),'track_id':track.track_id})
+                'candidate_count':len(candidates),'track_id':track.track_id,
+                'format_adjusted':bool(candidates and candidates[0].format_adjusted)})
         self.offset += len(selection) if self.roi_budget is None else self.roi_budget
         self.last_sample = displays[-1] if displays else None
         return displays

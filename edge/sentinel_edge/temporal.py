@@ -44,6 +44,9 @@ class PlateCandidate:
     log_score: float
     observations: int
     format_name: str
+    # True when look-alike characters were swapped to fit the plate format
+    # (SENTINEL_PLATE_FORMAT_VALIDATOR): no frame read this exact text. Unverified.
+    format_adjusted: bool = False
 
 
 class TemporalPlateReader:

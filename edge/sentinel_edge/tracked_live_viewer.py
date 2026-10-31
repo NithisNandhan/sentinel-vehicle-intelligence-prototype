@@ -96,7 +96,8 @@ def observe_tracked(config,camera,model,detector,vehicle,state,stop, *, debug=Fa
                 draw_vehicle(view,track,scale,shown.get(track.track_id))
             for display in displays:
                 draw_plate_callout(view,boxes.get(display['track_id'],display['box']),display['box'],display['crop'],
-                                   shown[display['track_id']],display['ocr_status'],display['observations'],scale)
+                                   shown[display['track_id']],display['ocr_status'],display['observations'],scale,
+                                   format_adjusted=display.get('format_adjusted',False))
             if displays:
                 selected = max(displays,key=lambda d:d['observations'])
                 crop = selected['crop']

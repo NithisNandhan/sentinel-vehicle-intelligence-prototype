@@ -12,10 +12,21 @@ class PlateOptions:
     reject_non_plates: bool = False
     # Read two-line plates row by row instead of squeezing both rows into one line.
     two_line: bool = False
+    # Admit only readings that fit the Indian registration format (plate_format.py),
+    # fixing look-alike characters only where the letter/digit position decides it.
+    format_validator: bool = False
+    # Add the per-position, confidence-weighted vote of the frames' readings as a candidate.
+    position_vote: bool = False
 
     @classmethod
     def from_env(cls, environ=None):
         environ = os.environ if environ is None else environ
         flag = lambda name: environ.get(name, '').strip().lower() == 'true'
         return cls(reject_non_plates=flag('SENTINEL_REJECT_NON_PLATES'),
-                   two_line=flag('SENTINEL_TWO_LINE_PLATES'))
+                   two_line=flag('SENTINEL_TWO_LINE_PLATES'),
+                   format_validator=flag('SENTINEL_PLATE_FORMAT_VALIDATOR'),
+                   position_vote=flag('SENTINEL_POSITION_VOTE'))
+
+    def reader_options(self):
+        """Keyword arguments for CTCPlateReader."""
+        return dict(validate_format=self.format_validator, position_vote=self.position_vote)

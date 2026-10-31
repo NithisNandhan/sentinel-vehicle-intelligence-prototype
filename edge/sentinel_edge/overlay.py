@@ -1,6 +1,7 @@
 """Drawn call-outs for the analysed frame: each vehicle gets corner brackets
-with its class and detector score and, where a plate was found, its native
-crop is enlarged beside the vehicle with the current reading. Display only:
+with its class and track number and, where a plate was found, its native
+crop is enlarged beside the vehicle with the current reading (plates with no
+complete reading get no call-out). Display only:
 nothing here feeds recognition or acceptance, and an enlarged crop adds no
 information.
 """
@@ -10,8 +11,9 @@ STATES = {
     'accepted by model — NOT verified': ('ACCEPTED - unverified', GREEN),
     'uncertain': ('UNCERTAIN', AMBER),
     'collecting distinct frames': ('READING', GREY),
-    'no complete candidate': ('NO COMPLETE READING', GREY),
 }
+# Plates in this state get no call-out at all: nothing useful to show on the frame.
+HIDDEN_STATES = frozenset({'no complete candidate'})
 CLASS_NAMES = {1: 'BICYCLE', 2: 'CAR', 3: 'MOTORCYCLE', 5: 'BUS', 7: 'TRUCK'}
 LABEL_TEXT = .6  # Text at 60% of its first size; half was judged too small to read at 720p.
 
@@ -39,10 +41,10 @@ def _banner(view, text, origin, colour, scale):
 
 
 def draw_vehicle(view, track, scale, reading=None):
-    """Corner brackets and a tag such as `CAR 39% #5 | ANPR: <reading>`.
+    """Corner brackets and a tag such as `CAR #5 | ANPR: <reading>`.
 
-    The percentage is the vehicle detector's own score for the box, not the
-    chance that a plate reading is right.
+    Only the vehicle type and track number are shown; the detector's box score is
+    left off the frame.
     """
     import cv2
     x1, y1, x2, y2 = (int(v) for v in track.box)
@@ -52,9 +54,6 @@ def draw_vehicle(view, track, scale, reading=None):
         cv2.line(view, (cx, cy), (cx + dx * arm, cy), GREEN, thickness, cv2.LINE_AA)
         cv2.line(view, (cx, cy), (cx, cy + dy * arm), GREEN, thickness, cv2.LINE_AA)
     label = CLASS_NAMES.get(getattr(track, 'vehicle_class', None), 'VEHICLE')
-    confidence = getattr(track, 'confidence', None)
-    if confidence is not None:
-        label += f' {round(float(confidence) * 100)}%'
     label += f' #{track.track_id}'
     if reading:
         label += f' | ANPR: {reading}'
@@ -64,10 +63,19 @@ def draw_vehicle(view, track, scale, reading=None):
     _banner(view, label, (x2 - width - round(12 * scale), y1 + thickness), GREEN, size)
 
 
-def draw_plate_callout(view, vehicle_box, plate_box, crop, reading, status, observations, scale):
-    """Box the plate and pop its enlarged crop out above the vehicle with the reading."""
+def draw_plate_callout(view, vehicle_box, plate_box, crop, reading, status, observations, scale,
+                       format_adjusted=False):
+    """Box the plate and pop its enlarged crop out above the vehicle with the reading.
+
+    `format_adjusted` adds FORMAT-ADJUSTED, UNVERIFIED: the shown reading was made by the
+    opt-in format validator swapping look-alike characters, not read as-is by any frame.
+    """
     import cv2
+    if status in HIDDEN_STATES:
+        return
     label, colour = STATES.get(status, (str(status).upper()[:28], GREY))
+    if format_adjusted and reading:
+        label += ' - FORMAT-ADJUSTED, UNVERIFIED'
     thickness = thickness_for(scale)
     plate = tuple(int(v) for v in plate_box)
     cv2.rectangle(view, plate[:2], plate[2:], colour, thickness)

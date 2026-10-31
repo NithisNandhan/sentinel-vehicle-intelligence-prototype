@@ -12,6 +12,22 @@ class OverlayTests(unittest.TestCase):
         self.assertEqual(scale_for(np.zeros((480, 640, 3), np.uint8)), 1.)
         self.assertEqual(scale_for(np.zeros((2160, 3840, 3), np.uint8)), 3.)
 
+    def test_vehicle_tag_shows_type_and_track_only(self):
+        from unittest.mock import patch
+        view = np.zeros((480, 640, 3), np.uint8)
+        track = SimpleNamespace(track_id='12', box=(100, 100, 400, 300), vehicle_class=2, confidence=.28)
+        with patch('sentinel_edge.overlay._banner') as banner:
+            draw_vehicle(view, track, scale_for(view))
+            draw_vehicle(view, track, scale_for(view), reading='MH12AB1234')
+        self.assertEqual([call.args[1] for call in banner.call_args_list],
+                         ['CAR #12', 'CAR #12 | ANPR: MH12AB1234'])
+
+    def test_no_callout_for_a_plate_without_a_complete_reading(self):
+        view = np.full((480, 640, 3), 60, np.uint8)
+        draw_plate_callout(view, (100, 100, 400, 300), (150, 250, 300, 280), np.full((30, 150, 3), 255, np.uint8),
+                           None, 'no complete candidate', 4, scale_for(view))
+        self.assertTrue((view == 60).all())
+
     def test_callout_draws_inside_any_frame_and_changes_only_the_copy(self):
         crop = np.full((30, 120, 3), 200, np.uint8)
         for shape, vehicle, plate in (((1080, 1920, 3), (400, 300, 900, 800), (560, 650, 680, 680)),
