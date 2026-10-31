@@ -124,3 +124,34 @@ merge and a car that must not get a second ID.
 5. Re-run the Phase 7 timing when the computer has free memory (close other programs):
    `tools/time_tracked_pipeline.py` with default threads, then with more, and compare
    `outputs_sha256`.
+
+## Phase 7 timing (measured 2026-10-31)
+
+Mumbai clip (`new video.mp4`, 4K, 15 samples at 500 ms), `tools/time_tracked_pipeline.py`
+in the recorded-analysis container, CPU, OCR threads 4 (`SENTINEL_CPU_THREADS`, unchanged).
+One run at a time, nothing else analysing. Peak memory is the pipeline process's VmHWM,
+polled every 3 s.
+
+| Run | Vehicle / plate threads | Total analysis | Per analysed frame (mean / median) | Load | Peak memory | `outputs_sha256` |
+| --- | --- | --- | --- | --- | --- | --- |
+| A | 2 / 2 (default, unset) | 912.1 s | 60.8 s / 70.3 s | 21.0 s | 1.65 GB | `d072ed016a7940ab31d885133844d5ba6c8ae56f55188535db21eef7cc7f2dfa` |
+| B | 4 / 4 | 891.5 s | 59.4 s / 68.2 s | 20.9 s | 1.65 GB | `d072ed016a7940ab31d885133844d5ba6c8ae56f55188535db21eef7cc7f2dfa` |
+
+| Stage | A (s) | B (s) | Change |
+| --- | --- | --- | --- |
+| Vehicle detector | 7.7 | 8.1 | +5.2% |
+| Plate detector | 51.7 | 42.4 | -18.0% |
+| OCR | 89.6 | 86.1 | -3.9% |
+| Reconstruction | 57.4 | 56.4 | -1.7% |
+| Fusion | 695.1 | 687.5 | -1.1% |
+
+- **Identical outputs:** same `outputs_sha256`, and all pipeline metrics match (271 vehicle
+  boxes, 505 plate detector calls, 165 OCR calls, 48 reconstructed windows).
+- **Speed:** the whole run is 2.3% faster with 4 threads, about the same size as the
+  run-to-run noise in stages the setting does not touch (OCR -3.9%, fusion -1.1%). Only the
+  plate detector clearly gains (-9.3 s). One run each, so no spread is known.
+- **Where the time goes:** fusion is 76% of analysis time; both detectors together are
+  6.5%. More detector threads cannot make this pipeline much faster.
+- Default stays 2. 4 threads is safe (same results) but gains little; not tested above 4.
+- Lowest free host RAM: 1.49 GB during run A, 3.39 GB during run B. No run was stopped.
+- Raw per-sample timings and outputs stay local (they contain plate text).
