@@ -157,6 +157,24 @@ class VehicleTrackerTests(unittest.TestCase):
                           ).track(np.zeros((8, 8, 3), np.uint8))
         self.assertEqual([t.track_id for t in tracks], ['1'])
 
+    def test_a_minimum_height_keeps_unconfirmed_vehicles_only_on_tall_frames(self):
+        confirmed, held_back = [(1, (100, 300, 300, 420), CAR, .9)], [((500, 100, 560, 230), MOTORCYCLE, .4)]
+        for height, expected in ((720, 1), (2159, 1), (2160, 2)):
+            tracker = _tracker(True, confirmed, held_back)
+            tracker.unconfirmed_min_height = 2160
+            self.assertEqual(len(tracker.track(np.zeros((height, 8, 3), np.uint8))), expected)
+
+    def test_the_minimum_height_setting_defaults_to_every_height_and_fails_loudly(self):
+        from unittest.mock import patch
+        from sentinel_edge.experimental_detectors import unconfirmed_min_height
+        for value, expected in (('', 0), ('2160', 2160)):
+            with patch.dict('os.environ', {'SENTINEL_KEEP_UNCONFIRMED_MIN_HEIGHT': value}):
+                self.assertEqual(unconfirmed_min_height(), expected)
+        for value in ('4k', '-1', '99999'):
+            with patch.dict('os.environ', {'SENTINEL_KEEP_UNCONFIRMED_MIN_HEIGHT': value}):
+                with self.assertRaises(ValueError):
+                    unconfirmed_min_height()
+
 
 if __name__ == '__main__':
     unittest.main()

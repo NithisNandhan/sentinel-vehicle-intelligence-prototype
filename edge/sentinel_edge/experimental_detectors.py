@@ -56,12 +56,22 @@ class VehicleTrack:
     confidence: float | None = None
 
 
+def unconfirmed_min_height():
+    """Frame height below which unconfirmed vehicles are not kept (2160 = 4K only); 0 keeps every height."""
+    import os
+    value = os.environ.get('SENTINEL_KEEP_UNCONFIRMED_MIN_HEIGHT', '').strip() or '0'
+    if not value.isdigit() or int(value) > 8640:
+        raise ValueError('SENTINEL_KEEP_UNCONFIRMED_MIN_HEIGHT must be between 0 and 8640')
+    return int(value)
+
+
 class VehicleTracker:
     def __init__(self, name, cache, training_root, *, device='cpu', keep_unconfirmed=False):
         self.device = _execution_device(device)
         # Opt-in: ByteTrack hides a new track until it matches twice. Between 500 ms
         # samples a motorcycle often moves farther than its own width, so it never does.
         self.aliases = {} if keep_unconfirmed else None
+        self.unconfirmed_min_height = unconfirmed_min_height()
         import torch
         if self.device == 'gpu' and not torch.cuda.is_available():
             raise RuntimeError('GPU requested but vehicle CUDA runtime is unavailable')
@@ -114,6 +124,8 @@ class VehicleTracker:
             detections.append((str(int(identity.item())) if identity is not None else None,
                                coords,coarse))
         aliases = getattr(self, 'aliases', None)
+        if aliases is not None and image.shape[0] < getattr(self, 'unconfirmed_min_height', 0):
+            aliases = None  # Below the opt-in height (e.g. 720p): plain ByteTrack, as before.
         if aliases is not None:
             detections += self._unconfirmed(detections, scores)
         tracks,self.previous_tracks,self.next_detection_id = associate_vehicle_tracks(

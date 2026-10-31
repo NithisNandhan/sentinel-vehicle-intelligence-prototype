@@ -259,3 +259,18 @@ polled every 3 s.
 - Default stays 2. 4 threads is safe (same results) but gains little; not tested above 4.
 - Lowest free host RAM: 1.49 GB during run A, 3.39 GB during run B. No run was stopped.
 - Raw per-sample timings and outputs stay local (they contain plate text).
+
+## Labels and settings (2026-10-31, after Phase 7)
+
+- **Smaller frame text:** vehicle tags (`CAR 28% #12 | ANPR: ...`), the plate reading and
+  its status line are drawn at 60% of their former size (`LABEL_TEXT` in
+  `edge/sentinel_edge/overlay.py`). The enlarged plate crop is unchanged. At 720p the
+  plate reading stays legible; the vehicle tag and status line are about 6 px tall.
+- **Unconfirmed vehicles on 4K only:** new `SENTINEL_KEEP_UNCONFIRMED_MIN_HEIGHT`
+  (default 0 = every height, so behaviour is unchanged unless set). With 2160, frames
+  shorter than 4K (e.g. `video-project-2.mp4`, 720p) use plain ByteTrack. 2 edge tests.
+- **Turned on locally** in `.env` (not in Git): `SENTINEL_REJECT_NON_PLATES=true`,
+  `SENTINEL_KEEP_UNCONFIRMED_VEHICLES=true`, `SENTINEL_KEEP_UNCONFIRMED_MIN_HEIGHT=2160`.
+  The defaults in `compose.yaml` stay off. They apply once the recorded-analysis
+  container is recreated.
+- Edge tests: 420 passed, 2 skipped (422 collected).

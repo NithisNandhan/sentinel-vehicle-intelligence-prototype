@@ -13,6 +13,7 @@ STATES = {
     'no complete candidate': ('NO COMPLETE READING', GREY),
 }
 CLASS_NAMES = {1: 'BICYCLE', 2: 'CAR', 3: 'MOTORCYCLE', 5: 'BUS', 7: 'TRUCK'}
+LABEL_TEXT = .6  # Text at 60% of its first size; half was judged too small to read at 720p.
 
 
 def scale_for(image):
@@ -58,9 +59,9 @@ def draw_vehicle(view, track, scale, reading=None):
     if reading:
         label += f' | ANPR: {reading}'
     # Inside the top-right corner, clear of the plate call-out drawn above the left side.
-    import cv2 as _cv2
-    (width, _), _ = _cv2.getTextSize(label, _cv2.FONT_HERSHEY_SIMPLEX, .55 * scale * .8, max(1, round(1.4 * scale * .8)))
-    _banner(view, label, (x2 - width - round(12 * scale), y1 + thickness), GREEN, scale * .8)
+    size = scale * .8 * LABEL_TEXT
+    (width, _), _ = cv2.getTextSize(label, cv2.FONT_HERSHEY_SIMPLEX, .55 * size, max(1, round(1.4 * size)))
+    _banner(view, label, (x2 - width - round(12 * scale), y1 + thickness), GREEN, size)
 
 
 def draw_plate_callout(view, vehicle_box, plate_box, crop, reading, status, observations, scale):
@@ -88,6 +89,6 @@ def draw_plate_callout(view, vehicle_box, plate_box, crop, reading, status, obse
     cv2.line(view, (x + shown.shape[1] // 2, y + shown.shape[0] + border),
              ((plate[0] + plate[2]) // 2, plate[1]), colour, max(1, round(scale)), cv2.LINE_AA)
     text = reading if reading else 'no reading yet'
-    _, _, _, used = _banner(view, text, (x - border, y + shown.shape[0] + border), WHITE, scale * 1.35)
+    _, _, _, used = _banner(view, text, (x - border, y + shown.shape[0] + border), WHITE, scale * 1.35 * LABEL_TEXT)
     _banner(view, f'{label} - {observations} frame{"s" if observations != 1 else ""}',
-            (x - border, y + shown.shape[0] + border + used), colour, scale * .8)
+            (x - border, y + shown.shape[0] + border + used), colour, scale * .8 * LABEL_TEXT)
