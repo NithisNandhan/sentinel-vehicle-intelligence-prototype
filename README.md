@@ -1,212 +1,201 @@
-# Sentinel Vehicle Intelligence Prototype
+# Sentinel Vehicle Intelligence
 
-## Current interface — Paper teal unified dashboard
+Sentinel turns permitted traffic recordings into an inspectable vehicle-analysis workflow: follow a vehicle, examine the plate evidence, and review watchlist alerts in one dashboard.
 
-The current product is a **single local dashboard** for downloaded CCTV recordings,
-plate recognition, watchlist management and operator alerts. Open
-<http://127.0.0.1:5173/>; no manual operator unlock is required. Model diagnostics
-are in the selected track's Inspector, not a second dashboard. Maps, routes,
-regional statistics and live-catalogue navigation are outside this version.
+The current prototype combines **Analyse, Alerts, and Watchlist** with a per-track recognition Inspector. It supports CPU processing and an optional NVIDIA GPU path. Opening the dashboard does not start video analysis; the operator chooses a recording and starts the shared session explicitly.
 
-See [unified dashboard setup and boundaries](docs/UNIFIED_DASHBOARD.md).
-Historical sections below describe earlier iterations; current setup and access
-instructions in that guide supersede the old dual-interface/unlock directions.
+**Status:** the recorded-video pipeline and unified dashboard are implemented, with documented interface, integration, and runtime checks. Reliable recognition across varied CCTV scenes remains under evaluation. This is a trusted local-computer prototype, not a finished public surveillance service.
 
-## Teammate handoff — 7 October 2026
+## Architecture
 
-Start with [the complete handoff guide](docs/TEAMMATE_HANDOFF.md). The repository
-contains the current source, tests, documentation and submission artifacts.
-Fine-tuned models, runtime caches, training/benchmark data, saved central events,
-SQLite snapshots and demonstration videos are distributed as checksum-verified
-assets in the private [handoff release](https://github.com/NithisNandhan/sentinel-vehicle-intelligence-prototype/releases/tag/handoff-2026-10-07).
-**A repository ZIP alone does not include these large assets.** No credentials
-are included. The next development direction is permitted downloaded CCTV
-footage, not Sentinel live access; the recorded-source adapter is now implemented.
+```mermaid
+flowchart TD
+    A[Permitted recording and checksum receipt] --> B[Read-only video decoding]
+    B --> C[Vehicle detection and ByteTrack tracking]
+    C --> D[Plate localisation and neural OCR]
+    D --> E[Per-track multi-frame evidence and acceptance gates]
+    E --> F[Accepted sighting and SQLite outbox]
+    F --> G[FastAPI ingestion and deduplication]
+    G --> H[PostgreSQL and keyed watchlist matching]
+    H --> I[Central alerts and operator audit history]
+    B --> J[Single React dashboard]
+    E --> K[Recorded-only recognition Inspector]
+    K --> J
+    I --> J
+```
 
-The [project status and completion report](output/pdf/Sentinel_Project_Status_and_Next_Steps.pdf)
-records completed features, model experiments, measured results, limitations and
-the prioritised remaining work as of 8 October 2026. An
-[editable version](docs/PROJECT_STATUS_AND_NEXT_STEPS.md) is also available.
+The Inspector exposes crops, alternative readings, reconstruction, and acceptance reasons. A model-accepted reading is not independently verified ground truth; an uncertain candidate is not a confirmed central watchlist match. Reconstruction is derived from existing frames, not an additional observation.
 
-## Recorded footage (added 10 October 2026)
+## Dashboard
 
-The shared session can now analyse a permitted local video file on CPU, with
-no Sentinel credentials: `scripts/start-recorded-analysis.ps1`. Footage is
-labelled `recorded` in every interface, event and report, never `live`. See
-[recorded footage](docs/RECORDED_VIDEO.md) for receipts, controls, labels and
-measurement, and [BUILD_INSTRUCTIONS.md](BUILD_INSTRUCTIONS.md) with
-[task-reports/](task-reports/) for what is built, tested and still unproven.
-**No recognition accuracy has been measured on recorded footage yet**; the
-code is covered by tests that use a mocked recogniser.
+![Sentinel Analyse view using explicitly labelled synthetic UI-test data](docs/media/sentinel-analyse.png)
 
-## Earlier dual-interface architecture (superseded)
+These screenshots show the current interface with **synthetic test fixtures**. The example images, plates, and counts demonstrate the UI, not recognition performance on real footage.
 
-Use `scripts/start-dual-interfaces.ps1` for the operator dashboard at
-http://127.0.0.1:5173/ and protected engineering console at
-http://127.0.0.1:7780/. They share one explicitly started recognition session.
-See [dual-interface usage and evidence](docs/DUAL_INTERFACES.md) for privacy,
-model scope, camera fallback and measured limitations. This does not claim
-verified live plate recognition or replace the separate production worker.
+| Area | What the operator can do |
+| --- | --- |
+| Analyse | Choose a registered recording; explicitly start, pause, resume, or stop analysis; inspect sampled frames and vehicle tracks |
+| Recognition Inspector | Examine native crops, per-frame character evidence, ranked alternatives, acceptance reasons, reconstruction, and runtime details |
+| Watchlist | Add and search entries; edit reason/severity; deactivate or reactivate entries while preserving alert history |
+| Alerts | Review central matches; acknowledge, resolve, or mark a false positive; inspect the action history |
 
-This repository contains a two-camera demonstration of a regional vehicle-intelligence system. It has an **online** mode for authorised Sentinel feeds and an **offline** mode that sends clearly labelled synthetic events through the same central alert workflow. The 80,000-camera figure in the source brief is an architectural target, not measured capacity of this prototype.
+<details>
+<summary>More dashboard views: recognition Inspector and Watchlist</summary>
 
-The system does not perform face recognition. Genuine camera frames, crops, clips, and plaintext number plates are not persisted. Offline demonstration imagery is synthetic.
+### Per-track evidence
 
-The GPU OCR adaptation and its measured limitations are documented in
-[DEEP_OCR_ADAPTATION.md](docs/DEEP_OCR_ADAPTATION.md). The adapted checkpoint is
-used in the opt-in shared engineering pipeline; the separate production worker
-is unchanged. Improvement on the small licensed diagnostic does not establish
-live accuracy. Local results: <http://127.0.0.1:7777/indian-corpus-summary.html>.
+![Recognition Inspector showing synthetic crop and acceptance-check examples](docs/media/sentinel-inspector.png)
 
-The isolated eight-model detection comparison, dataset audit and fine-tuning
-results are documented in [DETECTOR_COMPARISON.md](docs/DETECTOR_COMPARISON.md)
-and [DETECTOR_DATASETS.md](docs/DETECTOR_DATASETS.md). Improved coverage does not
-establish plate-text accuracy; experimental checkpoints are not live defaults.
+### Watchlist management
 
-## Before starting
+![Watchlist showing masked synthetic entries and reversible deactivation](docs/media/sentinel-watchlist.png)
 
-- Windows with WSL2, Docker Desktop, hardware virtualization, and enough free memory for the database, dashboard, media gateway, and AI worker. The online worker needs a working NVIDIA GPU container or the native Windows fallback.
-- The NVIDIA Windows driver. Do **not** install a separate NVIDIA Linux display driver in WSL2.
-- For online mode, a Sentinel account authorised for the live feeds. Enter credentials only in the local `.env` file. Never commit that file or paste passwords into issues or chat.
-- For measured OCR accuracy, a permitted labelled set of plate crops. The synthetic demonstration is not an accuracy benchmark.
+</details>
 
-WSL2 and Docker Desktop are now installed on the development laptop. For a different machine, see the official [WSL installation guide](https://learn.microsoft.com/windows/wsl/install) and [Docker Desktop installation guide](https://docs.docker.com/desktop/setup/install/windows-install/). Installation may require administrator privileges and a restart.
+One shared recognition session continues across dashboard navigation. Full image/candidate evidence is opt-in and restricted to permitted recordings. See the [current dashboard guide](docs/UNIFIED_DASHBOARD.md).
 
-## Local setup
+## Results and current evidence
 
-From PowerShell in this folder:
+| Work | Recorded result | Scope |
+| --- | --- | --- |
+| Unified dashboard validation, 30 October 2026 | 103 backend tests, 31 frontend tests, 87 focused worker tests, and 15 browser workflow checks passed; one worker test skipped | Interface, access controls, and session behavior; browser checks use synthetic fixtures |
+| Bounded CPU/GPU comparison, 15 October 2026 | Three sampled frames took 13.592 seconds on CPU and 4.573 seconds on GPU, a 2.97× aggregate inference speedup | One permitted Polish-plate clip on an RTX 3050 Laptop GPU; not full-video FPS or end-to-end latency |
+| Experimental Indian OCR output-layer adaptation | Whole-plate exact reads remained 9/10 before and after adaptation; character errors fell from 2/92 to 1/92 | Ten held-out still-image registrations for this pilot, not general CCTV accuracy |
+
+The completed GPU replay accepted **zero identifiers** on that foreign-plate clip. The OCR pilot's temporal acceptance result also remained unchanged: 13 correct accepts, no wrong accepts, and 8 abstentions across 21 degraded conditions from **one vehicle passage**. These conditions are not 21 independent vehicles.
+
+Sources: [dashboard validation](docs/UNIFIED_DASHBOARD_VALIDATION.md) · [CPU/GPU measurements](docs/RECORDED_GPU_VALIDATION.md) · [OCR adaptation pilot](docs/OCR_FINETUNING.md).
+
+The interface overhaul did not change model weights or acceptance thresholds. Software tests, a running GPU, and model confidence scores do not establish recognition accuracy. Broader independently labelled footage is still needed to measure correct accepts, wrong accepts, abstentions, coverage, and full-video runtime.
+
+## Run the recorded-video dashboard
+
+Requirements: **Git, Windows PowerShell, Docker Desktop with Linux containers/WSL2, and Python 3.11+** for recording registration. Start Docker Desktop first. CPU mode does not require an NVIDIA GPU or Sentinel portal credentials.
+
+### 1. Clone and initialise local settings
 
 ```powershell
+git clone https://github.com/NithisNandhan/sentinel-vehicle-intelligence-prototype.git
+cd sentinel-vehicle-intelligence-prototype
 .\scripts\check-prereqs.ps1
 .\scripts\init-env.ps1
-docker compose --profile offline up --build
 ```
 
-Run these commands in the same PowerShell window. On a per-user Docker Desktop installation, `check-prereqs.ps1` can add the existing Docker command and credential-helper folder to that window's PATH without changing Windows settings. Start Docker Desktop first if the engine is not running.
+The initialisation script generates local database, service, and HMAC keys in the ignored `.env` file. Keep these keys server-side and preserve an existing `.env`; the browser does not need a manually entered operator key.
 
-Open <http://localhost:5173>. The operator key is in the uncommitted `.env` file as `OPERATOR_API_KEY`; enter it in the dashboard unlock field. The demo injector and operator actions require that key. API documentation is at <http://localhost:8000/docs>.
+### 2. Restore the model/runtime assets on a fresh installation
 
-Online mode requires the registered Sentinel email and access password in `.env`. The adapter signs in through the portal form when the catalogue redirects to sign-in and keeps the resulting session cookie in memory only. `SENTINEL_COOKIE` remains an optional local override; normally leave it blank. YOLOv8n and FastALPR weights are downloaded automatically into persistent Docker volumes. The current user-selected pair is `CAMERA_IDS=cam17,cam01`:
+**A clone does not include the recognition models or prepared OCR runtime.** The recorded worker does not download them automatically. Follow the [handoff asset guide](docs/TEAMMATE_HANDOFF.md) and use the published [handoff release](https://github.com/NithisNandhan/sentinel-vehicle-intelligence-prototype/releases/tag/handoff-2026-10-07).
 
-For direct RTSP access, the adapter first reads `cameras.json`, preserving any supplied stream URLs. For catalogue IDs without URLs, it uses the documented `rtsp://103.250.160.189:8554/stream/<id>` and `https://cctv.corp8.cloud/<id>/index.m3u8` patterns. It percent-encodes credentials and adds them only to `SENTINEL_RTSP_HOST` (default `103.250.160.189`), never to unrelated hosts.
+For the selected restore below, download **every manifest and matching multipart file** for these four bundles into `data/handoff-assets/`:
+
+- `model-cache`
+- `alpr-cache`
+- `saved-events`
+- `presentation-assets`
+
+The restore script requires the last two bundles as well, even when training and benchmark data are skipped. It verifies archive hashes and uses non-overwrite guards. Use a fresh installation; do not apply this restore over an existing populated database. If the model volumes and local configuration are already restored, skip this step.
 
 ```powershell
-docker compose --profile online run --no-deps --rm edge-worker python -m sentinel_edge prepare-models
-docker compose --profile online up --build
+.\scripts\restore-teammate-handoff.ps1 -AssetsPath .\data\handoff-assets -SkipTraining -SkipBenchmarks
 ```
 
-If Docker cannot expose the GPU to the AI container, start the central services and CPU media relay with `docker compose --profile native up --build`, then run the edge package on Windows with the same `.env` keys and `CENTRAL_API_URL=http://localhost:8000`, `MEDIA_RELAY_BASE_URL=rtsp://localhost:8554`. The native worker setup is documented in `edge/README.md`.
+The restore imports historical metadata into the empty database. Newly generated HMAC keys do not match the archived keyed identifiers: old alerts remain viewable, but new plaintext inputs cannot reproduce those historical identifiers. Add your own permitted test entries for a new run.
 
-Only two cameras are selected for AI processing. The worker tries the newer public-grid `/cameras.json` catalogue first. If it is unavailable, only an explicitly configured approved pair may use the documented URL patterns as a temporary prototype fallback (current `cam17,cam01`; previously approved `cam01,cam02` and `cam19,cam26` remain supported). A valid catalogue that omits a selected camera still rejects that selection. Online mode does not start without Sentinel credentials. Avoid starting both online and offline profiles together, since that mixes synthetic and live activity.
+The release captures an older system snapshot. Some handoff text and restore completion messages describe the earlier two-interface/unlock workflow; use the single-dashboard instructions below for the current interface.
 
-The local `.env` is now pinned to CAM17 and CAM01 (`cam17,cam01`) as requested on 27 September: CAM17 for the user's stationary-vehicle test scene and CAM01 for moving traffic. The shared analysis camera list prioritises this pair; the full authorised catalogue remains searchable. Location names come from the catalogue, not guessed labels. The offline simulator has its own synthetic route and does not use `CAMERA_IDS`. Historical validation below concerns earlier selections, not new-camera accuracy.
+### 3. Register footage you have permission to use
 
-Access update on 2026-09-26: the updated credentials successfully sign in, `/cameras.json` returns 30 cameras, and CAM01/CAM02 decode over RTSP/TCP and authenticated HLS. Docker subsequently recovered, and a three-minute concurrent live GPU test ran approximately five sampled inference calls per second on each camera. Vehicle detection works in this sample, but FastALPR produced no confirmed plates; number-plate recognition is not yet accepted. See `VALIDATION.md` for timing, crop diagnostics and remaining gates. No footage was retained.
-
-Stop the current profile with `docker compose --profile offline down` or `docker compose --profile online down`. The database and outbox use persistent Docker volumes; `down` does not erase them.
-
-## Services
-
-| Service | Responsibility |
-| --- | --- |
-| `database` | PostgreSQL/PostGIS camera, sighting, alert, and report data |
-| `api` | FastAPI ingestion, watchlist matching, operator API, WebSockets |
-| `dashboard` | React operator console at localhost:5173 |
-| `mediamtx` | On-demand live media gateway; recording disabled |
-| `stream-adapter` | Online FFmpeg relay and codec adaptation |
-| `stream-adapter-cpu` | Relay for the native Windows AI-worker fallback |
-| `catalogue-gateway` | Authenticated full-catalogue search and temporary previews in online mode |
-| `catalogue-gateway-cpu` | The same search/preview service for the native-worker fallback |
-| `edge-worker` | Online vehicle detection, tracking, plate OCR, durable outbox |
-| `demo-simulator` | Offline synthetic sightings and health events |
-
-The worker writes sightings to its SQLite outbox before sending them. The API deduplicates on event UUID. Operator actions have an audit trail. All timestamps are stored in UTC and displayed in India time.
-
-## Find any authorised camera
-
-After unlocking the dashboard, the home page can search the authorised Sentinel catalogue by ID, camera name, or place name. Results are paged and include offline cameras, which cannot be previewed. Opening a live result starts a temporary MediaMTX preview; it does not change the two AI-monitored feeds. At most two temporary previews run at once, and idle previews stop after one minute. Source URLs and Sentinel credentials stay in the internal gateway, not in catalogue search responses.
-
-The catalogue gateway is available only in the online or native profile. `/cameras.json` must return authorised JSON. A sign-in redirect triggers one normal form-login attempt, with bounded retries and same-origin redirects only. If access still fails, the dashboard shows catalogue unavailable; it never scrapes portal cards or presents two monitored cameras as the full catalogue. The offline demonstration remains usable without catalogue search.
-
-## Privacy and evidence
-
-Live processing only stores masked plate text, a keyed HMAC identifier, confidence, camera, time, model version, and health metadata. The HMAC key must match between edge and API; `scripts/init-env.ps1` generates it once in `.env`. Route search accepts a plate in the operator interface, hashes it for the query, and discards the plaintext. The demonstration watchlist uses synthetic plates only.
-
-Synthetic events and any demonstration image are marked `synthetic` in the API and dashboard. A synthetic alert proves delivery and operator handling, not OCR accuracy. Performance and accuracy claims require recorded measurements.
-
-## Acceptance gates
-
-1. Offline: a synthetic match appears in the alert queue, can be acknowledged and resolved, and appears in the incident report.
-2. Durability: after interrupting the API, the outbox retains events and drains after recovery without duplicates.
-3. Online: two live feeds remain connected and processed for fifteen minutes, with health visible in the dashboard.
-4. Privacy: no genuine frame or plaintext plate is written to the database, outbox, logs, or browser bundle.
-5. Measurement: OCR accuracy, event latency, and load results are reported from actual test output only.
-
-The online gates cannot be claimed until Sentinel credentials, camera availability, Docker/WSL2, and GPU access are validated on the presentation machine.
-Measured results and remaining gates are recorded in [VALIDATION.md](VALIDATION.md).
-
-## Multi-frame plate recognition
-
-The live worker now combines pretrained deep-learning plate OCR with per-vehicle, character-level temporal fusion. It keeps up to twelve OCR probability matrices in memory, ranks bounded alternatives, and only sends a sighting when multi-observation evidence passes the acceptance gates. Uncertain alternatives are not watchlist alerts. This does not restore invisible characters or imply 90% plate accuracy. See [methodology and limitations](docs/MULTIFRAME_RECOGNITION.md) and the measured live comparison in [VALIDATION.md](VALIDATION.md).
-
-## Local verification
-
-The selected-detector integration now adds per-vehicle ByteTrack OCR histories
-to the opt-in viewer, whose launcher defaults to general YOLO26s plus the parent
-plate detector. Automatic full-scene processing correctly read one permitted
-Indian development plate across three original frames; new CAM14/CAM17 live
-probes still produced no accepted reading. Production defaults remain unchanged.
-See [integration and measured boundaries](docs/DETECTOR_OCR_INTEGRATION.md) and
-the [local result viewer](http://127.0.0.1:7777/detector-summary.html).
-
-To watch the models work on an authorised catalogue camera (with the configured
-retained as difficult baselines), run
-`.\scripts\start-live-detection-viewer.ps1` and open
-http://127.0.0.1:7780/. This opt-in, local-only diagnostic shows aligned vehicle
-and possible-plate boxes, native crops and masked multi-frame OCR status without
-recording footage or changing production alerts. See
-[live detection viewer](docs/LIVE_DETECTION_VIEWER.md) for prerequisites,
-privacy boundaries and interpretation.
-
-The opt-in multi-frame degradation benchmark separates localization and OCR
-failures on explicitly licensed, labelled input. Its initial one-vehicle pilot
-does not establish general accuracy or live timing. PARSeq is research-only;
-production remains CCT-S. See [benchmark methodology](docs/DEGRADATION_BENCHMARK.md).
-
-An opt-in hybrid prototype now adds native crop windows, checked ECC/RAFT
-reconstruction, optional NAFNet deblurring and sequence-aware PARSeq fusion. Its
-separate local benchmark viewer shows uncertain ranked alternatives and processed
-images. It has **not** demonstrated correct accepted readings or been promoted to
-live mode. See [implementation, reproduction and measured limits](docs/HYBRID_RECOGNITION.md).
-
-The separate Indian-specific Awiros OCR comparison has now recognised one
-licensed development plate across three native frames. It correctly accepted
-11 of 21 degraded variants, versus zero for the existing CCT/PARSeq readers;
-these are copies of one passage, not general accuracy. It is benchmark-only,
-CPU-speed limited and has not been further fine-tuned or deployed live. See
-[model selection and measured boundaries](docs/OCR_MODEL_SELECTION.md).
-
-The follow-up experimental comparison adds quality-weighted frame selection,
-checked reconstruction/deblurring and automatic plate crops. Its best variant
-accepted 13 of the same 21 one-vehicle conditions, with no wrong accepted reading
-in this small test. The initially proposed HF corpus contained no training files;
-GPU/live validation remains pending. See
-[measured improvements and the stopping point](docs/OCR_IMPROVEMENTS.md).
-
-An actual 48-registration Indian-data pilot then adapted the OCR output layer:
-held-out whole-plate accuracy stayed 9/10 and the temporal acceptance boundary
-did not improve. See [measured adaptation](docs/OCR_FINETUNING.md). The subsequent
-[larger corpus preparation and source audit](docs/INDIAN_OCR_CORPUS.md) acquires
-and merges permitted candidate data, keeps synthetic/publisher/reviewed tiers
-separate and protects existing evaluation registrations. Dataset availability
-is not proof of better OCR; deeper adaptation and fresh reviewed evaluation
-remain separate steps.
-
-With the offline profile running and Python 3.11+ available on the host, execute the synthetic API workflow check:
+Place your video in `data/recordings/`, then record its real source and permission basis:
 
 ```powershell
-python .\scripts\smoke-test.py
+python tools/register_recording.py data/recordings/junction.mp4 `
+  --source "ACTUAL SOURCE URL OR DESCRIPTION" `
+  --licence "ACTUAL LICENCE" `
+  --permission "ACTUAL BASIS FOR YOUR PERMISSION" `
+  --title "Junction recording"
 ```
 
-It creates a new, labelled synthetic alert, repeats its event ID to verify deduplication, acknowledges and resolves the alert, and checks route and report endpoints. To measure delivery to the dashboard's WebSocket, run `node .\scripts\measure-alert-latency.mjs`; this is not browser-render or live-OCR latency. A short local ingestion benchmark is available with `python .\scripts\load-test.py --seconds 10 --rate 5`; only run longer tests against disposable demo data. None of these checks establishes live OCR accuracy.
+Replace those placeholders with genuine details. The sidecar receipt records a SHA256 checksum. Files without a valid receipt are not offered for analysis, and a changed video is refused. Footage is not bundled with the source repository.
 
+### 4. Start the services and choose a recording
+
+```powershell
+# Optional, for transient image/full-candidate inspection of permitted recordings:
+$env:DASHBOARD_RECORDED_EVIDENCE = 'true'
+.\scripts\start-recorded-analysis.ps1 -Device cpu
+```
+
+Open **http://127.0.0.1:5173/**, select your registered recording, and press **Start analysis**. There is no manual unlock step. Omit `-SkipBuild` on the first launch; use it only when the required images are already built.
+
+For a compatible NVIDIA setup, replace `-Device cpu` with `-Device gpu`. GPU mode validates actual model execution before switching the service and refuses unavailable GPU providers. CPU decoding, reconstruction, and other work can still limit overall speed.
+
+Use the dashboard's **Stop** control to end the analysis session. To stop the recorded worker container:
+
+```powershell
+docker compose --profile recorded stop recorded-analysis
+```
+
+## Tests and verification
+
+The counts above are the archived validation record, not tests rerun by opening this README. For backend and frontend checks on a development machine, use Python 3.11+ and a Node version supported by the frontend tooling; the recorded validation used Node 22.12+ on the 22 LTS line or Node 24 LTS.
+
+From the repository root in PowerShell:
+
+```powershell
+python -m venv .venv
+.venv/Scripts/python.exe -m pip install -r backend/requirements-dev.txt
+$env:PYTEST_DISABLE_PLUGIN_AUTOLOAD = '1'
+$env:PYTHONPATH = 'backend'
+.venv/Scripts/python.exe -m pytest backend/tests -q -p no:cacheprovider
+.venv/Scripts/python.exe tools/generate_unified_contract.py --check
+cd frontend
+npm ci
+npm run build
+npm test
+```
+
+Worker model checks and browser fixture tests have additional runtime requirements. Their commands, fixtures, skip reason, and deployed-service checks are in [the validation guide](docs/UNIFIED_DASHBOARD_VALIDATION.md). These checks do not require treating model output as ground truth.
+
+## Remaining work
+
+- Evaluate varied, independently labelled recordings with vehicle/scene separation and a frozen held-out split.
+- Measure full-video runtime, wrong accepted readings, abstentions, and vehicle/plate coverage; improve the stage supported by that evidence.
+- Address the rejected-event retry behavior, which can block the delivery queue when the central API rejects an event.
+- Extend recorded-session health reporting and complete a fresh end-to-end release/handoff check.
+
+The current dashboard processes one recording at a time. Maps, route search, regional statistics, and live-catalogue navigation are outside this interface. Historical live-camera adapters remain in the repository but are not part of this quick start. No production-scale or general live-recognition claim is made.
+
+## Privacy and access
+
+Recorded footage stays in the user-managed input directory, mounted read-only. The analysis does not copy or re-encode it to disk. Frames, crops, and full candidates are transient, recorded-only diagnostic evidence; central events use masked plate displays and keyed identifiers. Retention of the original video remains the user's responsibility.
+
+The dashboard uses automatic trusted-local sessions with HTTP-only same-site cookies and CSRF-protected mutations. Keep published ports on loopback. This is not individual-user authentication or a LAN/public deployment configuration.
+
+## Contributions
+
+**Nithis Nandhan E** implemented the majority of the Sentinel project. Collaborative work and changes are retained in the [repository history](https://github.com/NithisNandhan/sentinel-vehicle-intelligence-prototype/commits/main/).
+
+## Repository guide
+
+```text
+backend/       FastAPI, database models, watchlist, alerts and local access
+edge/          Recorded source, detection, tracking, OCR and delivery outbox
+frontend/      React dashboard, shared session controls and Inspector
+contracts/     Generated browser types and JSON Schema
+scripts/       Environment setup, restore and recorded-worker launch
+tools/         Recording registration, evaluation and verification
+docs/          Current guides, model experiments and historical reports
+```
+
+- **[Unified dashboard](docs/UNIFIED_DASHBOARD.md):** current interface and access behavior.
+- **[Recorded footage](docs/RECORDED_VIDEO.md):** receipt format, labels, evaluation, and session semantics. Use the results section above for subsequent recorded measurements.
+- **[Dashboard validation](docs/UNIFIED_DASHBOARD_VALIDATION.md):** archived tests and implementation limits.
+- **[Model/data audit](docs/DETECTOR_DATASETS.md):** detector sources, licences, and evidence tiers.
+- **[Historical engineering validation](VALIDATION.md):** earlier live/diagnostic measurements; these do not define the current dashboard's scope.
+
+Older task reports, `CURRENT_STATUS.md`, handoff notes, and demonstration videos are dated records of earlier iterations. They do not override the current dashboard guide or this recorded-mode setup. Model weights and source datasets retain their respective licences and attribution requirements.
+
+## Tools
+
+Python · PyTorch · PaddlePaddle · ONNX Runtime · OpenCV · Ultralytics/ByteTrack · PyAV/FFmpeg · FastAPI · SQLAlchemy · PostgreSQL/PostGIS · SQLite · React · TypeScript · Vite · Docker
