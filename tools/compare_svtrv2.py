@@ -23,7 +23,7 @@ def normalise(text):
 
 def validate_samples(document, root, split):
     selected = [row for row in document["samples"] if row["split"] == split]
-    if not 1 <= len(selected) <= 100:
+    if not 1 <= len(selected) <= 250:
         raise ValueError("A bounded existing holdout is required")
     seen, labels = set(), set()
     for row in selected:
@@ -56,8 +56,8 @@ def run(args):
     import numpy as np
     document = json.loads(args.manifest.read_text(encoding="utf-8"))
     samples = validate_samples(document, args.manifest.parent, args.split)
-    sequence = json.loads(args.sequence.read_text(encoding="utf-8-sig"))
-    if sequence["dataset"].get("license") != "CC-BY-4.0" or sequence["dataset"].get("permitted_use") != "noncommercial_benchmark":
+    sequence = json.loads(args.sequence.read_text(encoding="utf-8-sig")) if args.sequence else {"passages": []}
+    if args.sequence and (sequence["dataset"].get("license") != "CC-BY-4.0" or sequence["dataset"].get("permitted_use") != "noncommercial_benchmark"):
         raise ValueError("Explicit licensed sequence permission required")
     begin = time.perf_counter()
     if args.backend == "svtrv2":
@@ -90,7 +90,7 @@ def run(args):
         results.append({"id": row["id"], "crop_path": row["crop_path"], "crop_sha256": row["crop_sha256"],
                         "label_tier": row["label_tier"], "expected": truth, "raw_reading": raw,
                         "reading": reading, "exact": reading == truth, "character_errors": edit_distance(reading, truth),
-                        "native_shape": list(image.shape[:2]), "ocr_ms": round(elapsed, 3)})
+                        "native_shape": list(image.shape[:2]), "source_group": row.get("source_group"), "ocr_ms": round(elapsed, 3)})
         durations.append(elapsed)
     sequence_results = []
     for passage in sequence["passages"]:
@@ -133,7 +133,7 @@ def run(args):
             else reader.paddle.device.cuda.max_memory_allocated())
     total_chars = sum(len(row["expected"]) for row in results)
     report = {"schema_version": 1, "model": model, "device": "gpu", "loading_ms": round(loading_ms, 2),
-              "manifest_sha256": digest(args.manifest), "sequence_manifest_sha256": digest(args.sequence),
+              "manifest_sha256": digest(args.manifest), "sequence_manifest_sha256": digest(args.sequence) if args.sequence else None,
               "split": args.split, "evaluation_caveat": document["evaluation_caveat"],
               "stills_are_not_temporal_observations": True, "production_promoted": False,
               "summary": {"samples": len(results), "exact": sum(row["exact"] for row in results),
@@ -153,7 +153,7 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--backend", choices=("svtrv2", "awiros-parent", "awiros-adapted"), required=True)
     parser.add_argument("--manifest", type=Path, required=True)
-    parser.add_argument("--sequence", type=Path, required=True)
+    parser.add_argument("--sequence", type=Path, help="Optional distinct-frame passage; omit for still-only external tests")
     parser.add_argument("--split", choices=("test", "validation"), default="test")
     parser.add_argument("--svtr-root", type=Path, default=Path("/research"))
     parser.add_argument("--awiros-cache", type=Path, default=Path("/models/experiments/awiros"))

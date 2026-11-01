@@ -9,6 +9,11 @@ It scored 15/31 exact stills versus 28/31 for adapted Awiros. The current decisi
 is to retain adapted Awiros; see `SVTRV2_COMPARISON_2026-10-31.md`. The shortlist
 below records the research rationale before that experiment, not a measured win.
 
+A later separate-source 200-registration evaluation scored adapted Awiros 137/200,
+original Awiros 121/200 and SVTRv2-B 117/200. SVTRv2-B recovered 16 adapted-model
+misses there. See `EXTERNAL_OCR_EVALUATION_2026-11-01.md` for the stronger source
+separation, label/pretraining limitations and updated next steps.
+
 ## Recommendation
 
 Retain the untouched Awiros parent and our adapted Awiros checkpoint as baselines.
