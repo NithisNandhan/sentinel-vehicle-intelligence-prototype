@@ -30,11 +30,11 @@ export function useRecognitionSession(enabled: boolean) {
       try {
         const view = await getRecognitionEvidence(modeRef.current);
         if (alive.current && before === generation.current) {
-          setEvidence(view?.session_id === next.session_id ? view : null);
+          setEvidence(previous => view?.session_id === next.session_id ? view : previous?.session_id === next.session_id ? previous : null);
           setEvidenceError('');
         }
       } catch (failure) {
-        if (alive.current && before === generation.current) { setEvidence(null); setEvidenceError((failure as Error).message); }
+        if (alive.current && before === generation.current) { setEvidence(previous => previous?.session_id === next.session_id ? previous : null); setEvidenceError((failure as Error).message); }
       }
     } catch (failure) {
       if (alive.current && before === generation.current) { setEvidence(null); setError((failure as Error).message); }
