@@ -6,8 +6,9 @@ import { useRecognitionSession } from './useRecognitionSession';
 import Inspector, { imageData } from './Inspector';
 import DetailSheet from './DetailSheet';
 import WatchlistPage from './WatchlistPage';
+import ReviewPage from './ReviewPage';
 
-type Page = 'analyse' | 'alerts' | 'watchlist';
+type Page = 'analyse' | 'alerts' | 'watchlist' | 'review';
 const title = (value: string) => value.replaceAll('_', ' ').replace(/^./, c => c.toUpperCase());
 
 function AlertsPage({ alerts, error, refresh }: { alerts: Alert[]; error: string; refresh: () => Promise<void> }) {
@@ -98,7 +99,7 @@ export default function App() {
   const deviceNotice = (current: RecognitionStatus | null) => current?.model_profile ? `${current.model_profile}${device ? ` · ${device} OCR` : ''}` : 'Runtime not loaded';
 
   return <div className="app-shell">
-    <header className="app-header"><button className="brand" aria-label="Sentinel home" onClick={() => setPage('analyse')}><span className="brand-symbol"><Activity size={20} strokeWidth={1.6} /></span>Sentinel</button><nav aria-label="Main navigation">{(['analyse', 'alerts', 'watchlist'] as Page[]).map(value => <button key={value} aria-current={page === value ? 'page' : undefined} className={page === value ? 'active' : ''} onClick={() => setPage(value)}>{title(value)}{value === 'alerts' && activeAlerts > 0 && <span className="nav-count">{activeAlerts}</span>}</button>)}</nav><div className="header-meta"><span className={`connection ${ready && !alertError ? '' : 'disconnected'}`}>{ready && !alertError ? <Wifi size={14} /> : <WifiOff size={14} />}{!ready ? 'Connecting' : alertError ? 'Reconnecting' : liveUpdates ? 'Service connected' : 'Connected · polling'}</span><details className="settings"><summary aria-label="Application settings"><Settings size={18} /></summary><div className="settings-panel"><strong>Local single-user mode</strong><p>One shared analysis session. No operator key is stored in this browser.</p><p>Recordings are processed only after you start analysis. Technical runtime details are in the Inspector.</p></div></details></div></header>
+    <header className="app-header"><button className="brand" aria-label="Sentinel home" onClick={() => setPage('analyse')}><span className="brand-symbol"><Activity size={20} strokeWidth={1.6} /></span>Sentinel</button><nav aria-label="Main navigation">{(['analyse', 'alerts', 'watchlist', 'review'] as Page[]).map(value => <button key={value} aria-current={page === value ? 'page' : undefined} className={page === value ? 'active' : ''} onClick={() => setPage(value)}>{title(value)}{value === 'alerts' && activeAlerts > 0 && <span className="nav-count">{activeAlerts}</span>}</button>)}</nav><div className="header-meta"><span className={`connection ${ready && !alertError ? '' : 'disconnected'}`}>{ready && !alertError ? <Wifi size={14} /> : <WifiOff size={14} />}{!ready ? 'Connecting' : alertError ? 'Reconnecting' : liveUpdates ? 'Service connected' : 'Connected · polling'}</span><details className="settings"><summary aria-label="Application settings"><Settings size={18} /></summary><div className="settings-panel"><strong>Local single-user mode</strong><p>One shared analysis session. No operator key is stored in this browser.</p><p>Recordings are processed only after you start analysis. Technical runtime details are in the Inspector.</p></div></details></div></header>
     <main className="app-content">
       {!ready ? <div className="setup-state"><Activity size={28} /><h1>{bootError ? 'Local service unavailable' : 'Connecting to Sentinel'}</h1><p>{bootError || 'Preparing the local dashboard session…'}</p>{bootError && <button className="button primary" onClick={() => setAttempt(attempt + 1)}><RefreshCw size={16} /> Retry connection</button>}</div> : <>
         {page !== 'alerts' && alertError && <div className="notice warning" role="alert">Alert updates unavailable: {alertError} Analysis may still be available; central matches cannot be refreshed.</div>}
@@ -120,6 +121,7 @@ export default function App() {
         </div>
         {page === 'alerts' && <AlertsPage alerts={alerts} error={alertError} refresh={refreshAlerts} />}
         {page === 'watchlist' && <WatchlistPage />}
+        {page === 'review' && <ReviewPage />}
       </>}
     </main><footer className="app-footer"><span>Sentinel · local vehicle intelligence</span><span>Recorded footage is not live camera evidence.</span></footer>
     {inspect && <Inspector sessionId={inspect.sessionId} trackId={inspect.trackId} onClose={() => setInspect(null)} />}

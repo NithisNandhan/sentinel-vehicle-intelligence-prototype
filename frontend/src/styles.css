@@ -13,3 +13,21 @@
 .entry-form>.form-field{display:flex;flex-direction:column;gap:8px;font-size:12px;font-weight:500}
 .table-scroll{position:relative}
 @media(max-width:640px){.page-heading>div{min-width:0}.page-heading>.button{flex-shrink:0}.table-scroll{max-width:100%}.section-heading{min-width:0}.section-heading>*{min-width:0}}
+
+/* Review workflow */
+.pattern { display: inline-flex; gap: 2px; font-family: var(--mono, ui-monospace, monospace); font-weight: 600; }
+.pattern .cell { min-width: 1.15em; padding: 1px 2px; text-align: center; border-radius: 3px; border: 1px solid transparent; }
+.pattern .cell.unknown { border-color: currentColor; opacity: .85; }
+.pattern .cell.hidden { opacity: .45; }
+.review-gate { max-width: 520px; margin: 48px auto; padding: 24px; display: grid; gap: 12px; }
+.review-gate form, .review-actions { display: grid; gap: 8px; }
+.review-summary { display: flex; gap: 12px; align-items: center; flex-wrap: wrap; margin-bottom: 12px; font-size: 1.25rem; }
+.review-frame { max-width: 100%; border-radius: 6px; }
+.review-crops { display: flex; gap: 12px; flex-wrap: wrap; margin: 12px 0; }
+.review-crops img { image-rendering: pixelated; max-width: 100%; }
+.character-table { width: 100%; border-collapse: collapse; font-size: .875rem; }
+.character-table th, .character-table td { text-align: left; padding: 4px 6px; border-bottom: 1px solid rgba(127,127,127,.25); }
+.character-table tr.unknown td { font-style: italic; }
+.review-list { display: grid; gap: 8px; margin-top: 12px; }
+.button-row { display: flex; gap: 8px; flex-wrap: wrap; }
+.audit { padding-left: 1.25rem; }

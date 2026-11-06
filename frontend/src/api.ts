@@ -207,7 +207,7 @@ function unwrapList<T>(value: unknown, keys: string[]): T[] {
   return [];
 }
 
-async function request<T>(path: string, init?: RequestInit, protectedRequest = false, retried = false): Promise<T> {
+export async function request<T>(path: string, init?: RequestInit, protectedRequest = false, retried = false): Promise<T> {
   const headers = new Headers(init?.headers);
   if (init?.body) headers.set('Content-Type', 'application/json');
   if (protectedRequest) {
