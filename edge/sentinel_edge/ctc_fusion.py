@@ -284,6 +284,24 @@ class CTCPlateReader:
     def observation_count(self):
         return len(self.samples)
 
+    def frame_readings(self):
+        """Greedy (character, peak) reading of each retained frame, oldest first. Diagnostic."""
+        return [greedy_reading(rows, self.tokens) for _, _, rows, _, _ in self.samples]
+
+    def frame_weights(self):
+        return [sample[4] for sample in self.samples]
+
+    def character_evidence(self, text):
+        """Per-frame best-path character peaks for `text`, as used by `accepted()`.
+
+        Peaks are uncalibrated model scores. A frame that cannot produce `text`
+        at all contributes an empty tuple.
+        """
+        self.candidates()  # Refresh the cache so peaks always describe the current frames.
+        if text not in self._peaks:
+            self._peaks[text] = [sequence_score(rows, self.tokens, text)[1] for _, _, rows, _, _ in self.samples]
+        return self._peaks[text]
+
     def add(self, rows, *, timestamp_ms, source_id, quality=1.0):
         validate_ctc(rows, self.tokens)
         if (not isinstance(timestamp_ms, int) or isinstance(timestamp_ms, bool) or timestamp_ms < 0

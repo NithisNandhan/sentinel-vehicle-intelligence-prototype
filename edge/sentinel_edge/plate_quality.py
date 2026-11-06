@@ -84,3 +84,42 @@ def deskew_view(image):
     matrix[1, 2] += (oh - h) / 2.
     view = cv2.warpAffine(image, matrix, (ow, oh), borderMode=cv2.BORDER_REPLICATE)
     return view, angle
+
+
+def quality_indicators(image):
+    """Separately reported image-quality indicators for one native crop.
+
+    These describe the evidence for operators, reviewers and evaluation slices
+    (blur, glare, contrast, size, angle). They are heuristics, never OCR
+    confidence, and nothing here restores or invents detail.
+    """
+    import cv2
+    import numpy as np
+    if image.ndim != 3 or image.shape[2] != 3 or image.dtype != np.uint8 or not image.size:
+        raise ValueError('Nonempty native BGR crop required')
+    gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
+    h, w = gray.shape
+    sharpness = float(cv2.Laplacian(gray, cv2.CV_64F).var())
+    _, angle = deskew_view(image) if min(h, w) >= 12 else (None, None)
+    return {
+        'height_px': int(h), 'width_px': int(w),
+        'sharpness': round(sharpness, 1),
+        'contrast': round(float(gray.std()), 1),
+        'glare_fraction': round(float((gray > 247).mean()), 3),
+        'dark_fraction': round(float((gray < 8).mean()), 3),
+        'mean_brightness': round(float(gray.mean()), 1),
+        'angle_deg': None if angle is None else round(float(angle), 1),
+        'blurred': sharpness < BLUR_SHARPNESS,
+        'low_contrast': float(gray.std()) < LOW_CONTRAST,
+        'glare': float((gray > 247).mean()) > GLARE_FRACTION,
+        'low_light': float(gray.mean()) < LOW_LIGHT_BRIGHTNESS,
+        'tilted': angle is not None and abs(angle) >= TILT_DEGREES,
+    }
+
+
+# Slice thresholds for reporting only. They are not acceptance thresholds.
+BLUR_SHARPNESS = 60.
+LOW_CONTRAST = 18.
+GLARE_FRACTION = .15
+LOW_LIGHT_BRIGHTNESS = 45.
+TILT_DEGREES = 8.

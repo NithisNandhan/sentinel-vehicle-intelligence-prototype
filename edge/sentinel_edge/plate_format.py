@@ -90,3 +90,88 @@ def check_plate(text: str) -> FormatResult:
     if len(found) > 1:
         return FormatResult('ambiguous', None)
     return FormatResult('corrected', found[0], best)
+
+
+# ---------------------------------------------------------------------------
+# Strict policy and partial patterns (result states, docs/FEATURE_DECISIONS.md)
+#
+# The automatic acceptance path never applies the look-alike fix above: a reading
+# that would need a swap is reported as `lookalike` and goes to review instead.
+# Patterns use '?' for an unknown position. Format rules may *narrow* which
+# completions are possible (for bounded watchlist candidate search), but never
+# choose a character that the camera did not support.
+# ---------------------------------------------------------------------------
+
+UNKNOWN = '?'
+LETTERS = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ'
+DIGITS = '0123456789'
+
+
+def strict_status(text: str) -> str:
+    """'valid', 'lookalike' (only a look-alike swap would fit: review, never fix),
+    'ambiguous' (several swaps fit) or 'invalid'. Never changes the text."""
+    result = check_plate(text)
+    if result.status == 'valid':
+        return 'valid'
+    if result.status == 'corrected':
+        return 'lookalike'
+    return result.status
+
+
+class TooManyCompletions(ValueError):
+    pass
+
+
+def _templates(length):
+    from .temporal import _PLATE_PATTERNS
+    return [pattern for pattern in _PLATE_PATTERNS if len(pattern) == length]
+
+
+def completions(pattern: str, *, limit: int = 20000):
+    """Every format-valid plate that agrees with `pattern` at its known positions.
+
+    Raises TooManyCompletions above `limit` so callers cannot drift into an
+    unbounded search. The known characters are never altered.
+    """
+    import itertools as _itertools
+    if (not isinstance(pattern, str) or not pattern or not pattern.isascii()
+            or any(not (c.isalnum() and c == c.upper()) and c != UNKNOWN for c in pattern)):
+        raise ValueError('Pattern is capitals, digits and ? only')
+    if not 1 <= limit <= 200000:
+        raise ValueError('Bounded completion limit required')
+    unknown = [i for i, c in enumerate(pattern) if c == UNKNOWN]
+    if not unknown:
+        return [pattern] if is_valid_plate(pattern) else []
+    found = {}
+    for template in _templates(len(pattern)):
+        if any(c != UNKNOWN and not _fits(c, t) for c, t in zip(pattern, template)):
+            continue
+        choices = [LETTERS if template[i] == 'L' else DIGITS if template[i] == 'D' else template[i] for i in unknown]
+        total = 1
+        for option in choices:
+            total *= len(option)
+        if total > limit * 4:
+            raise TooManyCompletions('Too many unknown positions to search safely')
+        for fill in _itertools.product(*choices):
+            characters = list(pattern)
+            for i, c in zip(unknown, fill):
+                characters[i] = c
+            text = ''.join(characters)
+            if text not in found and is_valid_plate(text):
+                found[text] = None
+                if len(found) > limit:
+                    raise TooManyCompletions('Too many format-valid completions')
+    return list(found)
+
+
+def _fits(character, token):
+    return ('A' <= character <= 'Z' if token == 'L' else
+            '0' <= character <= '9' if token == 'D' else character == token)
+
+
+def pattern_compatible(pattern: str) -> bool:
+    """True when at least one valid Indian plate agrees with the known positions."""
+    try:
+        return bool(completions(pattern, limit=200000))
+    except TooManyCompletions:
+        return True
