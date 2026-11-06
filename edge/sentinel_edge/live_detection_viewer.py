@@ -545,7 +545,20 @@ def serve(config, cache, checkpoint, port=7780, lifetime=1800, bind_host='127.0.
         if config is None or not detector_profile:
             raise ValueError('Delivery requires a configured tracked detector profile')
         from .shared_delivery import SharedDelivery
-        delivery = SharedDelivery(config, detector_profile)
+        from .plate_options import PlateOptions
+        options = PlateOptions.from_env()
+        evidence = snapshot = None
+        if options.result_states and os.getenv('SENTINEL_REVIEW_EVIDENCE', '').strip().lower() == 'true':
+            from .evidence_store import EvidenceStore
+            evidence = EvidenceStore(ttl_seconds=int(os.getenv('SENTINEL_REVIEW_EVIDENCE_TTL_SECONDS', '7200')))
+        if options.partial_watchlist:
+            from .api import CentralClient
+            from .watchlist_snapshot import WatchlistSnapshot
+            snapshot_client = CentralClient(config.central_api_url, config.edge_api_key, None,
+                                            edge_id=config.edge_id+'-shared')
+            snapshot = WatchlistSnapshot(snapshot_client,
+                                         max_age_seconds=int(os.getenv('SENTINEL_WATCHLIST_SNAPSHOT_MAX_AGE', '900')))
+        delivery = SharedDelivery(config, detector_profile, options=options, evidence=evidence, snapshot=snapshot)
         delivery.start(shutdown)
 
     class Handler(BaseHTTPRequestHandler):
@@ -611,6 +624,18 @@ def serve(config, cache, checkpoint, port=7780, lifetime=1800, bind_host='127.0.
                     self.reply(404, b'{}')
                 else:
                     self.reply(200, json.dumps(body).encode())
+            elif path == '/internal/review-evidence':
+                # Review evidence for one partial passage, for the operator-only review
+                # proxy. Opt-in (SENTINEL_REVIEW_EVIDENCE); memory only; expires.
+                query = parse_qs(parsed.query, keep_blank_values=True)
+                store = getattr(delivery, 'evidence', None) if delivery is not None else None
+                if set(query) != {'ref'} or len(query['ref']) != 1:
+                    self.reply(400, b'{"error":"Invalid evidence reference"}'); return
+                record = store.get(query['ref'][0]) if store is not None else None
+                if record is None:
+                    self.reply(404, b'{"error":"Evidence expired or unavailable"}')
+                else:
+                    self.reply(200, json.dumps(record, allow_nan=False).encode())
             elif path == '/internal/status':
                 snapshot = state.operator_snapshot()
                 snapshot['model_profile'] = detector_profile or 'legacy'
