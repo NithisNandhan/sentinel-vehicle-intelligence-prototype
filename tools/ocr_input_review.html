@@ -1,0 +1,123 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Sentinel · OCR crop review</title>
+<style>
+:root{--paper:#f7f8f5;--card:#fff;--ink:#172b29;--muted:#536762;--line:#dce5df;--teal:#0f766e;--soft:#e7f3ef;--warn:#965315;--bad:#a32d35;--zoom:2;font-family:Inter,Segoe UI,system-ui,sans-serif;color:var(--ink);background:var(--paper)}
+*{box-sizing:border-box}body{margin:0}button,input,select{font:inherit}button,select{cursor:pointer}button:focus-visible,input:focus-visible,select:focus-visible,summary:focus-visible,a:focus-visible{outline:3px solid #0f766e;outline-offset:3px}button{min-height:38px;border:1px solid var(--line);border-radius:8px;background:#fff;padding:7px 12px;color:var(--ink)}button:hover{background:var(--soft)}button:disabled{opacity:.45;cursor:default}header{padding:20px 4%;border-bottom:1px solid var(--line);display:flex;gap:20px;align-items:center;justify-content:space-between;background:white}.brand{font-size:12px;letter-spacing:2px;color:var(--teal);font-weight:750}h1{font-size:23px;font-weight:650;margin:6px 0}h2{font-size:18px;margin:0}h3{font-size:14px;margin:0 0 9px}.sub,.muted{color:var(--muted);font-size:13px;line-height:1.55}a{color:var(--teal)}main{max-width:1560px;margin:auto;padding:25px 4%}.summary{display:flex;flex-wrap:wrap;gap:12px;margin-bottom:18px}.stat{padding:11px 17px;background:white;border:1px solid var(--line);border-radius:10px;min-width:150px}.stat strong{font-size:22px;display:block;margin-bottom:2px}.stat span{color:var(--muted);font-size:12px}.note{font-size:13px;line-height:1.65;border-left:3px solid var(--teal);background:var(--soft);padding:12px 16px;border-radius:0 8px 8px 0;margin-bottom:21px}.workspace{display:grid;grid-template-columns:180px minmax(0,1fr);gap:22px}.sidebar{align-self:start;position:sticky;top:16px}.sidebar label{display:block;font-size:12px;font-weight:600;margin:0 0 7px}select,input{width:100%;background:#fff;border:1px solid var(--line);border-radius:8px;padding:9px;color:var(--ink);min-height:38px}.list{display:grid;gap:5px;margin-top:12px;max-height:65vh;overflow:auto;padding:3px}.sample{text-align:left;display:flex;justify-content:space-between;align-items:center;gap:7px}.sample small{font-size:11px;color:var(--muted)}.sample[aria-current=true]{background:var(--soft);border-color:var(--teal);box-shadow:inset 3px 0 var(--teal)}.dot{width:7px;height:7px;border-radius:50%;background:var(--muted);display:inline-block;margin-right:6px}.dot.good{background:var(--teal)}.dot.bad{background:var(--bad)}.toolbar{display:flex;align-items:center;justify-content:space-between;gap:14px;flex-wrap:wrap;margin-bottom:15px}.controls{display:flex;align-items:center;gap:7px}.controls select{width:auto}.reference{background:white;border:1px solid var(--line);border-radius:11px;padding:14px 17px;margin-bottom:16px;display:flex;align-items:center;justify-content:space-between;gap:14px;flex-wrap:wrap}.mono{font-family:ui-monospace,SFMono-Regular,Consolas,monospace}.reference .plate{font-size:22px;letter-spacing:2px}.badge{font-size:12px;border-radius:6px;background:var(--soft);padding:5px 8px;color:var(--teal);display:inline-block}.badge.bad{color:var(--bad);background:#fbecef}.badge.neutral{color:var(--muted);background:#edf0ec}.comparison{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:16px}.panel{background:var(--card);border:1px solid var(--line);border-radius:12px;min-width:0;overflow:hidden}.panel-head{padding:18px 18px 14px;border-bottom:1px solid var(--line);display:flex;justify-content:space-between;gap:10px;align-items:flex-start}.panel-head p{margin:5px 0 0}.images{padding:15px 18px 6px}.image-label{display:flex;justify-content:space-between;gap:8px;font-size:12px;margin-bottom:8px}.image-label span{color:var(--muted)}.image-box{background:#eef0ed;border:1px solid var(--line);border-radius:8px;padding:14px;overflow:auto;min-height:100px;display:flex;align-items:center;margin-bottom:15px}.image-box img{display:block;max-width:none;height:auto;flex:none;image-rendering:pixelated}.tensor-box{background:#e6ebe6}.strip{display:flex;height:5px;overflow:hidden;border-radius:4px;background:#171b19;margin-top:-7px;margin-bottom:7px}.strip span{background:#5cafa2}.reading{padding:15px 18px;border-top:1px solid var(--line);border-bottom:1px solid var(--line);background:#fbfcfa}.reading-label{display:flex;align-items:center;justify-content:space-between;font-size:12px;color:var(--muted);margin-bottom:8px;gap:12px}.prediction{display:flex;flex-wrap:wrap;gap:4px;margin:9px 0 12px}.glyph{background:white;border:1px solid var(--line);border-radius:5px;padding:7px 6px 5px;min-width:30px;text-align:center}.glyph b{font:600 19px ui-monospace,Consolas,monospace;display:block}.glyph small{font-size:10px;color:var(--muted);display:block;margin-top:4px}.glyph.wrong{border-color:#d9a0a4;background:#fff6f5}.plate-score{display:flex;flex-wrap:wrap;gap:16px;font-size:12px;color:var(--muted)}.plate-score strong{font-size:15px;color:var(--ink)}.table-wrap{overflow:auto;margin:0 18px 16px}table{width:100%;border-collapse:collapse;text-align:left;font-size:12px}th{font-size:10px;letter-spacing:.4px;color:var(--muted);font-weight:650;text-transform:uppercase;white-space:nowrap}th,td{padding:10px 7px;border-bottom:1px solid var(--line);vertical-align:top}th:first-child,td:first-child{padding-left:0}td strong{font:600 15px ui-monospace,Consolas,monospace}.miss{color:var(--bad);font-weight:600}.correct{color:var(--teal)}.alternatives{min-width:120px;font-size:11px;line-height:1.7;color:var(--muted)}.alternatives b{color:var(--ink);font-family:Consolas,monospace}details{padding:14px 18px;border-top:1px solid var(--line);font-size:12px}summary{cursor:pointer;min-height:25px;font-weight:600}details p{line-height:1.65;color:var(--muted)}details .table-wrap{margin:9px 0 0}details table{font-size:11px}.technical{margin-top:18px;background:white;border:1px solid var(--line);border-radius:10px}.technical code{overflow-wrap:anywhere}.empty{padding:25px;color:var(--muted)}footer{margin-top:20px;font-size:11px;color:var(--muted);line-height:1.7}.sr-only{position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap;border:0}
+@media(max-width:1000px){.workspace{grid-template-columns:150px minmax(0,1fr)}.comparison{grid-template-columns:1fr}.sidebar{top:10px}.summary .stat{flex:1;min-width:130px}}
+@media(max-width:600px){header{align-items:flex-start;padding:16px 5%;flex-direction:column;gap:7px}main{padding:18px 5%}.workspace{display:block}.sidebar{position:static;margin-bottom:17px}.list{display:flex;max-height:none;overflow:auto;padding-bottom:8px}.sample{min-width:112px}.toolbar{gap:10px}.toolbar .controls{flex-wrap:wrap}h1{font-size:21px}.stat{padding:10px 12px}.reference .plate{font-size:18px}.panel-head,.images,.reading{padding-left:13px;padding-right:13px}.table-wrap{margin-left:13px;margin-right:13px}}
+</style>
+</head>
+<body>
+<header><div><div class="brand">SENTINEL / MODEL REVIEW</div><h1>What the OCR actually sees</h1><div class="sub">Compare crop preparation, predicted characters and the model’s alternatives.</div></div><a href="http://127.0.0.1:5173/">Open operator dashboard ↗</a></header>
+<main>
+<section id="summary" class="summary" aria-label="Review summary"></section>
+<div class="note"><strong>How to read the scores.</strong> Character scores are the model’s support at a selected OCR step, with uppercase and lowercase scores combined. The whole-plate score is their mean. A score of 95% does not establish that a plate is correct. Missing characters have no assigned confidence.</div>
+<div class="workspace"><aside class="sidebar" aria-label="Crop selection"><label for="filter">Show crops</label><select id="filter"><option value="all">All crops</option><option value="wrong">Corrected OCR misses</option><option value="correct">Corrected OCR matches</option><option value="unreadable">Human-unreadable</option></select><div id="list" class="list"></div></aside>
+<section aria-label="Selected plate review"><div class="toolbar"><div><h2 id="selected-title"></h2><div id="selected-meta" class="sub"></div></div><div class="controls"><button id="previous" aria-label="Previous crop">← Previous</button><button id="next" aria-label="Next crop">Next →</button><label for="zoom" class="sr-only">Image display magnification</label><select id="zoom"><option value="1">View 1×</option><option value="2" selected>View 2×</option><option value="4">View 4×</option></select></div></div>
+<div class="reference"><div><div class="sub">Your manual transcription</div><div id="expected" class="mono plate"></div></div><span id="human-status" class="badge"></span></div>
+<div class="comparison"><article id="native" class="panel" aria-label="Original manual crop results"></article><article id="corrected" class="panel" aria-label="Corrected crop results"></article></div>
+<details class="technical"><summary>How this review was generated</summary><p id="method"></p><p id="score-method"></p><p id="provenance"></p><p>Character positions below are aligned to your transcription after OCR runs. Your label is never supplied to the recogniser or used to select a reading. Alternatives are model scores at the selected timestep. Those steps describe the OCR sequence, not literal character boxes in the image.</p><p>These are independently processed crop images. This page shows no multi-frame fusion or watchlist acceptance. The corrected crops include manual geometry and layout adjustments from our earlier review.</p><a href="review.json" download>Download this review’s images and model outputs</a></details>
+</section></div><p id="announcement" class="sr-only" role="status" aria-live="polite"></p>
+<footer>Private local review · Mumbai recording crop set · This small development set measures these prepared crops only. Different video sources are needed to measure generalisation.</footer>
+</main>
+<script id="review-data" type="application/json">__REVIEW_DATA__</script>
+<script>
+'use strict';
+const data = JSON.parse(document.getElementById('review-data').textContent);
+const $ = id => document.getElementById(id);
+const escape = value => String(value ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+const percent = value => value == null ? '—' : (100 * value).toFixed(1) + '%';
+const time = value => (value / 1000).toFixed(2) + ' s';
+let selected = data.cases[0].id;
+const readable = data.cases.filter(c => c.human_readable);
+$('summary').innerHTML = [['Crops reviewed', data.cases.length], ['Human-readable', readable.length], ['Original crop exact', readable.filter(c => c.native.comparison.exact).length + ' / ' + readable.length], ['Corrected crop exact', readable.filter(c => c.corrected.comparison.exact).length + ' / ' + readable.length]].map(([label, value]) => `<div class="stat"><strong>${escape(value)}</strong><span>${escape(label)}</span></div>`).join('');
+$('method').textContent = data.preprocessing;
+$('score-method').textContent = data.score_definition;
+$('provenance').textContent = `${data.model} · ${data.device.toUpperCase()} · generated ${data.generated_at}. Checkpoint SHA-256 ${data.checkpoint_sha256}. Review manifest SHA-256 ${data.review_manifest_sha256}.`;
+function visibleCases() { return data.cases.filter(c => { switch ($('filter').value) {
+    case 'wrong': return c.human_readable && !c.corrected.comparison.exact;
+    case 'correct': return c.human_readable && c.corrected.comparison.exact;
+    case 'unreadable': return !c.human_readable;
+    default: return true;
+} }); }
+function comparisonRows(view, expected) {
+    if (!expected)
+        return view.characters.map((char, i) => ({ position: i + 1, expected: null, observed: char, support: null, extra: false }));
+    const rows = view.comparison.aligned.map(row => ({ position: row.position, expected: row.expected, observed: row.observed_index === null ? null : view.characters[row.observed_index], support: row.expected_support, extra: false }));
+    for (const index of view.comparison.extra_indices)
+        rows.push({ position: '+', expected: null, observed: view.characters[index], support: null, extra: true });
+    return rows;
+}
+function altText(choices) { return choices.map(c => `<b>${escape(c.character)}</b> ${percent(c.score)}`).join(' · '); }
+function panel(key, title, caption, item) {
+    const view = item[key], expected = item.expected;
+    const verdict = !item.human_readable ? 'Unverified reading' : view.comparison.exact ? 'Exact match' : 'Different from label';
+    const tone = !item.human_readable ? 'neutral' : view.comparison.exact ? '' : 'bad';
+    const rows = comparisonRows(view, expected);
+    const wrongIndices = new Set(rows.filter(r => r.observed && r.expected !== r.observed.character).map(r => r.observed));
+    return `<div class="panel-head"><div><h3>${escape(title)}</h3><p class="sub">${escape(caption)}</p></div><span class="badge ${tone}">${verdict}</span></div>
+  <div class="images"><div class="image-label"><strong>Crop before OCR preprocessing</strong><span>${view.source_width} × ${view.source_height} px</span></div><div class="image-box"><img alt="${escape(title)} before preprocessing" src="${view.crop}" style="width:calc(${view.source_width}px * var(--zoom))"></div>
+  <div class="image-label"><strong>Exact padded model input</strong><span>320 × 48 px</span></div><div class="image-box tensor-box"><img alt="${escape(title)} exact padded OCR input" src="${view.model_input}" style="width:calc(320px * var(--zoom))"></div><div class="strip" aria-hidden="true"><span style="width:${100 * view.content_width / 320}%"></span></div><div class="sub">${view.content_width} px of resized content + ${view.padding_width} px of right padding. Viewable copy is reversed from the actual normalised tensor.</div></div>
+  <div class="reading"><div class="reading-label"><span>OCR reading</span><span>${view.characters.length} emitted characters</span></div><div class="prediction" aria-label="OCR reading ${escape(view.reading || 'empty')}">${view.characters.length ? view.characters.map(c => `<div class="glyph ${expected && wrongIndices.has(c) ? 'wrong' : ''}"><b>${escape(c.character)}</b><small>${percent(c.score)}</small></div>`).join('') : '<span class="muted">No text emitted</span>'}</div><div class="plate-score"><span>Whole-plate model score <strong>${percent(view.plate_score)}</strong></span><span>Weakest character <strong>${percent(view.minimum_score)}</strong></span></div></div>
+  <div class="table-wrap"><table><caption class="sr-only">${escape(title)} character comparison</caption><thead><tr><th>Position</th><th>Your label</th><th>OCR</th><th>OCR score</th><th>Label support</th><th>Other model choices</th></tr></thead><tbody>${rows.map(r => `<tr><td>${r.position}</td><td><strong>${escape(r.expected || '—')}</strong></td><td class="${!r.observed || r.expected && r.expected !== r.observed.character ? 'miss' : 'correct'}">${r.observed ? `<strong>${escape(r.observed.character)}</strong>${r.extra ? ' extra' : ''}` : 'Missing'}</td><td>${percent(r.observed?.score)}</td><td>${percent(r.support)}</td><td class="alternatives">${r.observed ? altText(r.observed.alternatives) : 'No aligned emission'}</td></tr>`).join('')}</tbody></table></div>
+  <details><summary>Five candidate readings</summary><p>${expected ? (view.comparison.expected_in_candidates ? 'Your transcription appears in these candidates.' : 'Your transcription does not appear in these five candidates.') : 'This crop has no readable human transcription.'} These come from an unfiltered CTC beam search.</p><table><thead><tr><th>Reading</th><th>Beam log score</th></tr></thead><tbody>${view.candidates.map(c => `<tr><td class="mono">${escape(c.reading)}</td><td>${c.log_score.toFixed(3)}</td></tr>`).join('')}</tbody></table></details>
+  <details><summary>OCR sequence steps and blank scores</summary><p>The blank symbol means “emit no new character here”. It is part of the OCR sequence. The alternatives below are not additional observations.</p><div class="table-wrap"><table><thead><tr><th>Step</th><th>Blank</th><th>Top character scores</th></tr></thead><tbody>${view.timesteps.map((step, i) => `<tr><td>${i}</td><td>${percent(step.blank)}</td><td class="alternatives">${altText(Object.entries(step.scores).sort((a, b) => b[1] - a[1]).slice(0, 3).map(([character, score]) => ({ character, score })))}</td></tr>`).join('')}</tbody></table></div></details>
+  <details><summary>Input tensor details</summary><p>Shape ${escape(view.tensor_shape.join(' × '))}, float32 BGR. Values range from ${view.tensor_min.toFixed(3)} to ${view.tensor_max.toFixed(3)}. Padding is black in the viewable copy and −1 in the normalised tensor. Magnification changes only this display.</p></details>`;
+}
+function render() {
+    const cases = visibleCases();
+    if (!cases.some(c => c.id === selected) && cases.length)
+        selected = cases[0].id;
+    $('list').innerHTML = cases.length ? cases.map(c => `<button class="sample" data-id="${escape(c.id)}" aria-current="${c.id === selected}" aria-label="Crop ${escape(c.id)}, ${!c.human_readable ? 'human-unreadable' : c.corrected.comparison.exact ? 'corrected OCR matches' : 'corrected OCR misses'}"><span><i class="dot ${!c.human_readable ? '' : c.corrected.comparison.exact ? 'good' : 'bad'}" aria-hidden="true"></i>Crop ${escape(c.id)}</span><small>${time(c.position_ms)}</small></button>`).join('') : '<p class="muted">No crops match this filter.</p>';
+    const item = cases.find(c => c.id === selected);
+    if (!item) {
+        $('selected-title').textContent = 'No matching crops';
+        $('native').innerHTML = '';
+        $('corrected').innerHTML = '';
+        $('expected').textContent = '—';
+        $('human-status').textContent = '';
+        $('selected-meta').textContent = '';
+        $('previous').disabled = true;
+        $('next').disabled = true;
+        return;
+    }
+    $('selected-title').textContent = `Crop ${item.id}`;
+    $('selected-meta').textContent = `Video position ${time(item.position_ms)} · ${cases.findIndex(c => c.id === selected) + 1} of ${cases.length} in this view`;
+    $('expected').textContent = item.expected || 'Unreadable';
+    $('human-status').textContent = item.human_readable ? 'Human-labelled reference' : 'No reliable human reading';
+    $('human-status').className = 'badge ' + (item.human_readable ? '' : 'neutral');
+    $('native').innerHTML = panel('native', 'Original manual crop', 'As cropped from the recording', item);
+    $('corrected').innerHTML = panel('corrected', 'Corrected crop', item.changed ? 'Earlier manual geometry / layout correction' : 'No additional crop correction for this sample', item);
+    const index = cases.findIndex(c => c.id === selected);
+    $('previous').disabled = index === 0;
+    $('next').disabled = index === cases.length - 1;
+    $('announcement').textContent = `Crop ${item.id} selected. ${item.human_readable ? 'Corrected OCR ' + (item.corrected.comparison.exact ? 'matches' : 'differs from') + ' your label.' : 'No readable human label.'}`;
+}
+function move(offset) { const cases = visibleCases(), index = cases.findIndex(c => c.id === selected), next = cases[index + offset]; if (next) {
+    selected = next.id;
+    render();
+} }
+$('list').addEventListener('click', event => { const button = event.target.closest('button[data-id]'); if (button) {
+    selected = button.dataset.id;
+    render();
+    $('list').querySelector(`[data-id="${CSS.escape(selected)}"]`)?.focus();
+} });
+$('filter').addEventListener('change', render);
+$('zoom').addEventListener('change', () => document.documentElement.style.setProperty('--zoom', $('zoom').value));
+$('previous').addEventListener('click', () => move(-1));
+$('next').addEventListener('click', () => move(1));
+document.addEventListener('keydown', event => { if (['INPUT', 'SELECT', 'TEXTAREA', 'BUTTON', 'SUMMARY'].includes(event.target.tagName) || event.altKey || event.ctrlKey || event.metaKey)
+    return; if (event.key === 'ArrowLeft') {
+    event.preventDefault();
+    move(-1);
+} if (event.key === 'ArrowRight') {
+    event.preventDefault();
+    move(1);
+} });
+render();
+</script>
+</body>
+</html>
