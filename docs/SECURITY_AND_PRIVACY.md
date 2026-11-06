@@ -86,3 +86,8 @@ fingerprint matching**, so it is a deliberate event, not routine.
 7. No automated secret scanning of history was run beyond the repository's `tools/check_handoff_secrets.py` conventions.
 8. Hash-chaining / tamper-evidence of the audit table is not implemented; database administrators can edit it.
 9. Backup/restore of the new tables is not covered by the handoff tooling.
+10. **The existing watchlist-flag path is not covered by the new expiry.** `tracked_live_viewer.fetch_watchlist` still
+    loads the (now fingerprint-only) snapshot once into `PassedVehicles.watchlist` for the whole session, with no expiry
+    or revocation handling. Expiry/revocation apply to the new `WatchlistSnapshot` (partial leads) only. With partial
+    matching off, that session-lifetime set is the only snapshot copy on the edge. Not changed, to avoid altering
+    existing dashboard behaviour; it should be migrated to `WatchlistSnapshot` in a follow-up.

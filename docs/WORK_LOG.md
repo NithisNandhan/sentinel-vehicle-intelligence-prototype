@@ -311,3 +311,36 @@ Full write-up, earlier-work summary and what is needed next: `docs/OCR_NEXT_STEP
   is rejected by the unchanged frame gate and by the 3-frame rule.
 - Both settings stay off by default. Mumbai plate text was removed from the doc and the tests
   (synthetic plates instead), keeping to this log's earlier rule.
+
+---
+
+# Master execution log: result states, review, evaluation (branch `claude/vibrant-shannon-v8c0p4`)
+
+Entries below are appended to the earlier plate-pipeline log above; nothing above was edited. Dates 2026-11-06.
+Nothing is pushed. Documents of record: `SENTINEL_BASELINE.md`, `IMPLEMENTATION_STATUS.md`, `RELEASE_READINESS.md`.
+
+| Step | What was done | Verified by |
+| --- | --- | --- |
+| Phase 0 | Fetched remotes; fast-forwarded the feature branch to the teammate snapshot `8b8ff91` (which already merges `work/plate-pipeline`, the tracker and UI branches); audited edge, backend, frontend, contracts, compose, evaluation tools and prior documents; recorded hardware (4 vCPU, no GPU, no weights) and baseline tests | edge 505+2 failed, backend 105, frontend 36, tools 26 |
+| Result states | `result_state.py`, `layout.py`, strict format status, bounded completions, quality indicators; CTC evidence accessors | 20 tests. Found and closed a hole: the unchanged `accepted()` gate confirms a candidate one character shorter than every frame read; regression test shows baseline still does, candidate does not |
+| Passages and profiles | `passages.py`, `TrackedOCR` integration (one outcome per passage, re-association, near-duplicate guard, evidence capture, gating), `SENTINEL_PROFILE` baseline/candidate/candidate-gpu | 11 tests; baseline emits nothing |
+| Veto and proposals | `secondary_veto.py` (disabled) with evaluation; `plate_proposals.py` budgeted pool | 6 tests |
+| Edge contract | schema 2.0 events, delivery, outbox dead letters, `X-Edge-Id`, watchlist snapshot with expiry, partial leads, in-memory evidence store | 12 tests |
+| Backend | `recognition_results`/`review_decisions`, migration 0004, ingestion, reviewer-gated review API, retention, revocation, minimal snapshot | 10 tests; PostgreSQL 16 run and migration up/down |
+| Frontend | Review page, reviewer-token handling, helpers | 4 tests, tsc, build |
+| Evaluation | three-state scoring, label schema 1.1, validation, ledger, gates, stats; existing `evaluate_recorded.py` extended (not duplicated) | 12 + existing 17 tests |
+| Calibration | stricter-only versioned thresholds, risk-coverage, ECE, LOROCV | 4 tests. First draft of one test asserted 0 held-out errors; the code correctly reported 1 (the only error sat in the held-out recording), so the test was corrected, not the code |
+| Replay | `seeded_watchlist_replay.py`, `shadow_compare.py` | 3 tests; reports above |
+| Docs | the twelve required documents | — |
+
+## Issues found along the way (kept for the record)
+
+- Wilson lower bound for 30/50 is 0.4618 (not the 0.4623 I first typed); a partial with a wrong length over-counted wrong characters beyond its known ones — fixed in `score_states`.
+- `PlateOptions` earlier accepted only `== 'true'`; new parser keeps that tolerance (`yes` is ignored, not an error) so existing tests and deployments behave identically.
+- The pre-existing "watchlisted vehicle" flag keeps a session-lifetime snapshot copy (documented as risk 10).
+- Pre-existing failing tests documented, not fixed (`TEST_REPORT.md`).
+
+## Not done / blocked (see `RELEASE_READINESS.md`)
+
+Real-model evaluations and shadow run, sealed Set A and human labels, GPU/CPU benchmarks, tracker comparison, ONNX parity,
+perspective correction, browser verification of the Review page, licence sign-off, per-device credentials.
