@@ -153,6 +153,24 @@ def build(args):
               "preprocessing": "BGR input, aspect-ratio resize to height 48 (width capped at 320), right zero padding, values / 127.5 - 1, NCHW float32.",
               "score_definition": "Mean of emitted-character scores. Each score sums upper/lowercase token posteriors at the peak raw-token timestep in its greedy CTC run. Uncalibrated.",
               "cases": cases}
+    refinement_path = getattr(args, "refinement_report", None)
+    if refinement_path:
+        refinement = load(refinement_path)
+        if refinement["checkpoint_sha256"] != report["checkpoint_sha256"]:
+            raise ValueError("Retry report uses a different OCR checkpoint")
+        if refinement["manifest_hashes"]["manual"] != file_hash(corrected_path):
+            raise ValueError("Retry report uses different corrected crops")
+        selected = refinement["datasets"]["mumbai_manual"]
+        by_id = {row["id"]: row for row in selected["results"]}
+        for case in cases:
+            case["reference_uncertain"] = case["id"] in refinement["excluded_uncertain_manual_ids"]
+            if case["id"] in by_id:
+                row = by_id[case["id"]]
+                if row["baseline"] != case["corrected"]["reading"] or row["expected"] != case["expected"]:
+                    raise ValueError("Retry report does not match fresh baseline inference")
+                case["refinement"] = row
+        report["refinement_summary"] = {k: v for k, v in selected.items() if k != "results"}
+        report["refinement_report_sha256"] = file_hash(refinement_path)
     output = args.output.resolve()
     output.mkdir(parents=True, exist_ok=True)
     serialized = json.dumps(report, ensure_ascii=True, allow_nan=False)
@@ -172,4 +190,5 @@ if __name__ == "__main__":
     parser.add_argument("--output", required=True, type=Path)
     parser.add_argument("--cache", type=Path, default=Path("/models/experiments/awiros"))
     parser.add_argument("--device", choices=("cpu", "gpu"), default="gpu")
+    parser.add_argument("--refinement-report", type=Path)
     build(parser.parse_args())

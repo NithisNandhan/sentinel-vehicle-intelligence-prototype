@@ -32,14 +32,18 @@ const escape = value => String(value ?? '').replace(/[&<>"']/g, c => ({ '&': '&a
 const percent = value => value == null ? '—' : (100 * value).toFixed(1) + '%';
 const time = value => (value / 1000).toFixed(2) + ' s';
 let selected = data.cases[0].id;
-const readable = data.cases.filter(c => c.human_readable);
-$('summary').innerHTML = [['Crops reviewed', data.cases.length], ['Human-readable', readable.length], ['Original crop exact', readable.filter(c => c.native.comparison.exact).length + ' / ' + readable.length], ['Corrected crop exact', readable.filter(c => c.corrected.comparison.exact).length + ' / ' + readable.length]].map(([label, value]) => `<div class="stat"><strong>${escape(value)}</strong><span>${escape(label)}</span></div>`).join('');
+const readable = data.cases.filter(c => c.human_readable && !c.reference_uncertain);
+const summaryStats = [['Crops reviewed', data.cases.length], ['Scored readable', readable.length], ['Original crop exact', readable.filter(c => c.native.comparison.exact).length + ' / ' + readable.length], ['Corrected crop exact', readable.filter(c => c.corrected.comparison.exact).length + ' / ' + readable.length]];
+if (data.refinement_summary) {
+    summaryStats.push(['Retry suggestions exact', data.refinement_summary.refined_exact + ' / ' + data.refinement_summary.samples]);
+}
+$('summary').innerHTML = summaryStats.map(([label, value]) => `<div class="stat"><strong>${escape(value)}</strong><span>${escape(label)}</span></div>`).join('');
 $('method').textContent = data.preprocessing;
 $('score-method').textContent = data.score_definition;
 $('provenance').textContent = `${data.model} · ${data.device.toUpperCase()} · generated ${data.generated_at}. Checkpoint SHA-256 ${data.checkpoint_sha256}. Review manifest SHA-256 ${data.review_manifest_sha256}.`;
 function visibleCases() { return data.cases.filter(c => { switch ($('filter').value) {
-    case 'wrong': return c.human_readable && !c.corrected.comparison.exact;
-    case 'correct': return c.human_readable && c.corrected.comparison.exact;
+    case 'wrong': return c.human_readable && !c.reference_uncertain && !c.corrected.comparison.exact;
+    case 'correct': return c.human_readable && !c.reference_uncertain && c.corrected.comparison.exact;
     case 'unreadable': return !c.human_readable;
     default: return true;
 } }); }
@@ -53,16 +57,16 @@ function comparisonRows(view, expected) {
 }
 function altText(choices) { return choices.map(c => `<b>${escape(c.character)}</b> ${percent(c.score)}`).join(' · '); }
 function panel(key, title, caption, item) {
-    const view = item[key], expected = item.expected;
-    const verdict = !item.human_readable ? 'Unverified reading' : view.comparison.exact ? 'Exact match' : 'Different from label';
-    const tone = !item.human_readable ? 'neutral' : view.comparison.exact ? '' : 'bad';
+    const view = item[key], expected = item.reference_uncertain ? null : item.expected;
+    const verdict = item.reference_uncertain ? 'Reference uncertain' : !item.human_readable ? 'Unverified reading' : view.comparison.exact ? 'Exact match' : 'Different from label';
+    const tone = !item.human_readable || item.reference_uncertain ? 'neutral' : view.comparison.exact ? '' : 'bad';
     const rows = comparisonRows(view, expected);
     const wrongIndices = new Set(rows.filter(r => r.observed && r.expected !== r.observed.character).map(r => r.observed));
     return `<div class="panel-head"><div><h3>${escape(title)}</h3><p class="sub">${escape(caption)}</p></div><span class="badge ${tone}">${verdict}</span></div>
   <div class="images"><div class="image-label"><strong>Crop before OCR preprocessing</strong><span>${view.source_width} × ${view.source_height} px</span></div><div class="image-box"><img alt="${escape(title)} before preprocessing" src="${view.crop}" style="width:calc(${view.source_width}px * var(--zoom))"></div>
   <div class="image-label"><strong>Exact padded model input</strong><span>320 × 48 px</span></div><div class="image-box tensor-box"><img alt="${escape(title)} exact padded OCR input" src="${view.model_input}" style="width:calc(320px * var(--zoom))"></div><div class="strip" aria-hidden="true"><span style="width:${100 * view.content_width / 320}%"></span></div><div class="sub">${view.content_width} px of resized content + ${view.padding_width} px of right padding. Viewable copy is reversed from the actual normalised tensor.</div></div>
   <div class="reading"><div class="reading-label"><span>OCR reading</span><span>${view.characters.length} emitted characters</span></div><div class="prediction" aria-label="OCR reading ${escape(view.reading || 'empty')}">${view.characters.length ? view.characters.map(c => `<div class="glyph ${expected && wrongIndices.has(c) ? 'wrong' : ''}"><b>${escape(c.character)}</b><small>${percent(c.score)}</small></div>`).join('') : '<span class="muted">No text emitted</span>'}</div><div class="plate-score"><span>Whole-plate model score <strong>${percent(view.plate_score)}</strong></span><span>Weakest character <strong>${percent(view.minimum_score)}</strong></span></div></div>
-  <div class="table-wrap"><table><caption class="sr-only">${escape(title)} character comparison</caption><thead><tr><th>Position</th><th>Your label</th><th>OCR</th><th>OCR score</th><th>Label support</th><th>Other model choices</th></tr></thead><tbody>${rows.map(r => `<tr><td>${r.position}</td><td><strong>${escape(r.expected || '—')}</strong></td><td class="${!r.observed || r.expected && r.expected !== r.observed.character ? 'miss' : 'correct'}">${r.observed ? `<strong>${escape(r.observed.character)}</strong>${r.extra ? ' extra' : ''}` : 'Missing'}</td><td>${percent(r.observed?.score)}</td><td>${percent(r.support)}</td><td class="alternatives">${r.observed ? altText(r.observed.alternatives) : 'No aligned emission'}</td></tr>`).join('')}</tbody></table></div>
+  <div class="table-wrap"><table><caption class="sr-only">${escape(title)} character comparison</caption><thead><tr><th>Position</th><th>Your label</th><th>OCR</th><th>OCR score</th><th>Label support</th><th>Other model choices</th></tr></thead><tbody>${rows.map(r => `<tr><td>${r.position}</td><td><strong>${escape(r.expected || '—')}</strong></td><td class="${r.extra ? 'miss' : !r.expected ? '' : !r.observed || r.expected !== r.observed.character ? 'miss' : 'correct'}">${r.observed ? `<strong>${escape(r.observed.character)}</strong>${r.extra ? ' extra' : ''}` : 'Missing'}</td><td>${percent(r.observed?.score)}</td><td>${percent(r.support)}</td><td class="alternatives">${r.observed ? altText(r.observed.alternatives) : 'No aligned emission'}</td></tr>`).join('')}</tbody></table></div>
   <details><summary>Five candidate readings</summary><p>${expected ? (view.comparison.expected_in_candidates ? 'Your transcription appears in these candidates.' : 'Your transcription does not appear in these five candidates.') : 'This crop has no readable human transcription.'} These come from an unfiltered CTC beam search.</p><table><thead><tr><th>Reading</th><th>Beam log score</th></tr></thead><tbody>${view.candidates.map(c => `<tr><td class="mono">${escape(c.reading)}</td><td>${c.log_score.toFixed(3)}</td></tr>`).join('')}</tbody></table></details>
   <details><summary>OCR sequence steps and blank scores</summary><p>The blank symbol means “emit no new character here”. It is part of the OCR sequence. The alternatives below are not additional observations.</p><div class="table-wrap"><table><thead><tr><th>Step</th><th>Blank</th><th>Top character scores</th></tr></thead><tbody>${view.timesteps.map((step, i) => `<tr><td>${i}</td><td>${percent(step.blank)}</td><td class="alternatives">${altText(Object.entries(step.scores).sort((a, b) => b[1] - a[1]).slice(0, 3).map(([character, score]) => ({ character, score })))}</td></tr>`).join('')}</tbody></table></div></details>
   <details><summary>Input tensor details</summary><p>Shape ${escape(view.tensor_shape.join(' × '))}, float32 BGR. Values range from ${view.tensor_min.toFixed(3)} to ${view.tensor_max.toFixed(3)}. Padding is black in the viewable copy and −1 in the normalised tensor. Magnification changes only this display.</p></details>`;
@@ -71,7 +75,7 @@ function render() {
     const cases = visibleCases();
     if (!cases.some(c => c.id === selected) && cases.length)
         selected = cases[0].id;
-    $('list').innerHTML = cases.length ? cases.map(c => `<button class="sample" data-id="${escape(c.id)}" aria-current="${c.id === selected}" aria-label="Crop ${escape(c.id)}, ${!c.human_readable ? 'human-unreadable' : c.corrected.comparison.exact ? 'corrected OCR matches' : 'corrected OCR misses'}"><span><i class="dot ${!c.human_readable ? '' : c.corrected.comparison.exact ? 'good' : 'bad'}" aria-hidden="true"></i>Crop ${escape(c.id)}</span><small>${time(c.position_ms)}</small></button>`).join('') : '<p class="muted">No crops match this filter.</p>';
+    $('list').innerHTML = cases.length ? cases.map(c => `<button class="sample" data-id="${escape(c.id)}" aria-current="${c.id === selected}" aria-label="Crop ${escape(c.id)}, ${c.reference_uncertain ? 'reference uncertain' : !c.human_readable ? 'human-unreadable' : c.corrected.comparison.exact ? 'corrected OCR matches' : 'corrected OCR misses'}"><span><i class="dot ${!c.human_readable || c.reference_uncertain ? '' : c.corrected.comparison.exact ? 'good' : 'bad'}" aria-hidden="true"></i>Crop ${escape(c.id)}</span><small>${time(c.position_ms)}</small></button>`).join('') : '<p class="muted">No crops match this filter.</p>';
     const item = cases.find(c => c.id === selected);
     if (!item) {
         $('selected-title').textContent = 'No matching crops';
@@ -87,10 +91,19 @@ function render() {
     $('selected-title').textContent = `Crop ${item.id}`;
     $('selected-meta').textContent = `Video position ${time(item.position_ms)} · ${cases.findIndex(c => c.id === selected) + 1} of ${cases.length} in this view`;
     $('expected').textContent = item.expected || 'Unreadable';
-    $('human-status').textContent = item.human_readable ? 'Human-labelled reference' : 'No reliable human reading';
-    $('human-status').className = 'badge ' + (item.human_readable ? '' : 'neutral');
+    $('human-status').textContent = item.reference_uncertain ? 'Reference uncertain · excluded from scores' : item.human_readable ? 'Human-labelled reference' : 'No reliable human reading';
+    $('human-status').className = 'badge ' + (item.human_readable && !item.reference_uncertain ? '' : 'neutral');
     $('native').innerHTML = panel('native', 'Original manual crop', 'As cropped from the recording', item);
     $('corrected').innerHTML = panel('corrected', 'Corrected crop', item.changed ? 'Earlier manual geometry / layout correction' : 'No additional crop correction for this sample', item);
+    if (item.refinement) {
+        const retry = item.refinement;
+        const section = document.createElement('section');
+        section.className = 'reading retry-note';
+        section.setAttribute('aria-label', 'Same-image crop retry');
+        const views = retry.views || [];
+        section.innerHTML = `<h3>Same-image crop retry</h3><p class="mono retry-reading">${escape(retry.reading || 'No reading')}</p><p class="sub">${retry.changed ? 'Margin and contrast views agree, with support in the original image.' : 'Original reading retained by the selection rule.'}</p>${views.length ? `<p class="sub">Margin view weakest character ${percent(views[0].minimum)} · Contrast view weakest character ${percent(views[1].minimum)}</p>` : ''}<p class="sub">Unconfirmed suggestion · ${retry.independent_observations_added} extra independent observations. The character table shows the original OCR evidence.</p>`;
+        $('corrected').querySelector('.reading').insertAdjacentElement('afterend', section);
+    }
     const index = cases.findIndex(c => c.id === selected);
     $('previous').disabled = index === 0;
     $('next').disabled = index === cases.length - 1;
