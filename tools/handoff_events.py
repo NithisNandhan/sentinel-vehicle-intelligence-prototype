@@ -7,6 +7,7 @@ Restore refuses to replace a populated central database.
 from __future__ import annotations
 
 import argparse
+from contextlib import closing
 import json
 import os
 import re
@@ -100,7 +101,7 @@ def export_outboxes(output, sources):
                         break
                 else:
                     raise ValueError('SQLite source remained busy; no inconsistent snapshot exported')
-                with sqlite3.connect(copied) as original, sqlite3.connect(destination) as backup:
+                with closing(sqlite3.connect(copied)) as original, closing(sqlite3.connect(destination)) as backup, backup:
                     original.backup(backup)
                     tables = {row[0] for row in backup.execute("SELECT name FROM sqlite_master WHERE type='table'")}
                     count = 0
@@ -147,10 +148,10 @@ def restore_outbox(snapshot, destination):
     # These are finalized SQLite backup snapshots, not active databases. WAL
     # mode may persist in the header even though all pages are in this file.
     # Immutable reads avoid creating WAL/SHM files on read-only Docker mounts.
-    with sqlite3.connect(f'file:{snapshot.as_posix()}?mode=ro&immutable=1', uri=True) as source:
+    with closing(sqlite3.connect(f'file:{snapshot.as_posix()}?mode=ro&immutable=1', uri=True)) as source:
         if source.execute('PRAGMA integrity_check').fetchone()[0] != 'ok':
             raise ValueError('SQLite snapshot failed its integrity check')
-        with sqlite3.connect(destination) as target:
+        with closing(sqlite3.connect(destination)) as target, target:
             source.backup(target)
     print('Restored SQLite snapshot without replacing an existing database.', flush=True)
 

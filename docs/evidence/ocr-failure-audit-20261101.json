@@ -1,0 +1,17 @@
+{
+  "reviewer": "AI visual review of all 63 native-crop failure contact-sheet entries",
+  "not_independent_human_truth": true,
+  "source_manifest_sha256": "048703fed7286d96de50abe02d312d4648e477dbe794dc4df8abcff1520fc1ba",
+  "reference_labels_changed": false,
+  "score_corrections_applied": false,
+  "categories_are_diagnostic_hypotheses_not_verified_root_causes": true,
+  "categories": [
+    {"name": "two_line_layout", "numbers": [7, 10, 20, 21, 33, 44], "note": "Visible two-line layout; full-crop reader misses or substitutes characters."},
+    {"name": "reference_or_transcription_review", "numbers": [4, 19, 29, 30, 38, 46, 48, 54, 55, 56, 60, 63], "note": "Possible publisher transcription or confusable-character issue. Entry 4 visibly supports the OCR reading rather than the XML reference. All need independent human adjudication; this does not mean all 12 references are wrong."},
+    {"name": "occluded_or_clipped", "numbers": [18, 58], "note": "Objects cover characters or the plate extends beyond the crop. Missing pixels cannot be established by OCR certainty."},
+    {"name": "light_text_on_red_special_layout", "numbers": [35, 52, 61], "note": "Light lettering and special/transit-style layout are outside the usual dark-on-light single row."},
+    {"name": "extra_or_missing_characters", "numbers": [6, 23, 36, 42, 45, 49, 62], "note": "Largely legible glyphs but inserted, repeated or omitted characters; decoding/layout analysis is warranted."},
+    {"name": "perspective_or_rotation", "numbers": [2, 11, 14, 17, 25, 28, 37, 39], "note": "Oblique or rotated view; not proof that affine deskew alone will fix recognition."},
+    {"name": "small_or_blurred_glyphs", "numbers": [1, 3, 5, 8, 9, 12, 13, 15, 16, 22, 24, 26, 27, 31, 32, 34, 40, 41, 43, 47, 50, 51, 53, 57, 59], "note": "Small, blurred or low-contrast characters requiring individual readability review; not a claim every example is unreadable."}
+  ]
+}

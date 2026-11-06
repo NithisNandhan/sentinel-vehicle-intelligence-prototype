@@ -1,0 +1,150 @@
+{
+  "parent_sha256": "f9f1264e0c115a239ca6d6700a74ceffab17168b75dafc6c169c232012c68e47",
+  "current_sha256": "c2ba896d994b174071c95ace0f5ffc8a61cec3fc6eecce8f0bc5feb7dec4456d",
+  "development_manifest_sha256": "89fe372395b5ceb6c8aabd1ed24bca9274137485a6ecce1c190cc0a0c8ee37d0",
+  "development": [
+    {
+      "factors": [
+        1.0,
+        1.0
+      ],
+      "samples": 37,
+      "exact": 29,
+      "character_errors": 42
+    },
+    {
+      "factors": [
+        0.0,
+        0.0
+      ],
+      "samples": 37,
+      "exact": 24,
+      "character_errors": 60,
+      "recovered": 0,
+      "regressed": 5
+    },
+    {
+      "factors": [
+        0.5,
+        0.5
+      ],
+      "samples": 37,
+      "exact": 24,
+      "character_errors": 50,
+      "recovered": 0,
+      "regressed": 5
+    },
+    {
+      "factors": [
+        0.75,
+        0.75
+      ],
+      "samples": 37,
+      "exact": 26,
+      "character_errors": 46,
+      "recovered": 0,
+      "regressed": 3
+    },
+    {
+      "factors": [
+        1.25,
+        1.25
+      ],
+      "samples": 37,
+      "exact": 29,
+      "character_errors": 41,
+      "recovered": 0,
+      "regressed": 0
+    },
+    {
+      "factors": [
+        1.5,
+        1.5
+      ],
+      "samples": 37,
+      "exact": 29,
+      "character_errors": 42,
+      "recovered": 0,
+      "regressed": 0
+    },
+    {
+      "factors": [
+        0.75,
+        1.0
+      ],
+      "samples": 37,
+      "exact": 29,
+      "character_errors": 42,
+      "recovered": 0,
+      "regressed": 0
+    },
+    {
+      "factors": [
+        1.25,
+        1.0
+      ],
+      "samples": 37,
+      "exact": 29,
+      "character_errors": 42,
+      "recovered": 0,
+      "regressed": 0
+    },
+    {
+      "factors": [
+        1.0,
+        0.75
+      ],
+      "samples": 37,
+      "exact": 26,
+      "character_errors": 46,
+      "recovered": 0,
+      "regressed": 3
+    },
+    {
+      "factors": [
+        1.0,
+        1.25
+      ],
+      "samples": 37,
+      "exact": 29,
+      "character_errors": 41,
+      "recovered": 0,
+      "regressed": 0
+    }
+  ],
+  "selected": {
+    "factors": [
+      1.25,
+      1.25
+    ],
+    "samples": 37,
+    "exact": 29,
+    "character_errors": 41,
+    "recovered": 0,
+    "regressed": 0
+  },
+  "production_promoted": false,
+  "previously_scored_external_diagnostic": {
+    "manifest_sha256": "048703fed7286d96de50abe02d312d4648e477dbe794dc4df8abcff1520fc1ba",
+    "current": {
+      "factors": [
+        1.0,
+        1.0
+      ],
+      "samples": 200,
+      "exact": 137,
+      "character_errors": 135
+    },
+    "candidate": {
+      "factors": [
+        1.25,
+        1.25
+      ],
+      "samples": 200,
+      "exact": 135,
+      "character_errors": 136
+    },
+    "recovered": 3,
+    "regressed": 5
+  }
+}

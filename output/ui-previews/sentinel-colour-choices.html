@@ -1,0 +1,117 @@
+<style>
+#sentinel-colours { --choice-ink:light-dark(#18202b,#eef1f7); --choice-muted:light-dark(#606b7b,#b0bac8); --choice-line:light-dark(#dce0e6,#414954); color:var(--choice-ink); font-family:system-ui,sans-serif; color-scheme:light dark; }
+#sentinel-colours * { box-sizing:border-box; }
+#sentinel-colours .palette-options { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:12px; margin-bottom:20px; padding-right:98px; }
+#sentinel-colours .palette-choice { font:inherit; color:var(--choice-ink); background:transparent; border:1px solid var(--choice-line); border-radius:10px; padding:12px; text-align:left; min-width:0; }
+#sentinel-colours .palette-choice[aria-pressed="true"] { outline:2px solid var(--choice-ink); outline-offset:2px; }
+#sentinel-colours .choice-name { display:block; font-weight:500; margin-bottom:8px; }
+#sentinel-colours .swatches { display:flex; height:32px; border-radius:5px; overflow:hidden; }
+#sentinel-colours .swatches span { flex:1; }
+#sentinel-colours .choice-hex { display:block; margin-top:7px; color:var(--choice-muted); font:12px ui-monospace,Consolas,monospace; }
+#sentinel-colours .selection { display:flex; justify-content:space-between; align-items:center; gap:12px; flex-wrap:wrap; margin-bottom:12px; }
+#sentinel-colours .selection strong { font-weight:500; }
+#sentinel-colours .selection span { color:var(--choice-muted); font-size:12px; }
+#sentinel-colours .mock { --s-bg:#f7f8fa; --s-panel:#ffffff; --s-text:#111827; --s-muted:#596579; --s-line:#dce1e8; --s-accent:#2563eb; --s-on-accent:#ffffff; --s-good:#166534; --s-warn:#92400e; --s-danger:#b91c1c; background:var(--s-bg); color:var(--s-text); border:1px solid var(--s-line); border-radius:12px; overflow:hidden; font-size:14px; line-height:1.5; color-scheme:light; }
+#sentinel-colours .mock button { font:inherit; }
+#sentinel-colours .app-head { display:flex; align-items:center; gap:24px; padding:16px 22px; background:var(--s-panel); border-bottom:1px solid var(--s-line); }
+#sentinel-colours .brand { font-weight:500; letter-spacing:.04em; }
+#sentinel-colours .app-nav { display:flex; align-items:center; gap:20px; }
+#sentinel-colours .nav-item { border:0; background:none; color:var(--s-muted); padding:3px 0; }
+#sentinel-colours .nav-item.active { color:var(--s-accent); font-weight:500; }
+#sentinel-colours .connection { margin-left:auto; color:var(--s-muted); font-size:12px; }
+#sentinel-colours .work { padding:22px; }
+#sentinel-colours .toolbar { display:flex; align-items:center; gap:12px; flex-wrap:wrap; margin-bottom:18px; }
+#sentinel-colours .recording { background:var(--s-panel); border:1px solid var(--s-line); border-radius:6px; padding:9px 12px; color:var(--s-text); min-width:0; flex:1; }
+#sentinel-colours .start { border:0; border-radius:6px; padding:10px 20px; background:var(--s-accent); color:var(--s-on-accent); font-weight:500; }
+#sentinel-colours .workspace { display:grid; grid-template-columns:minmax(0,1.45fr) minmax(270px,1fr); gap:20px; }
+#sentinel-colours .frame-head { display:flex; justify-content:space-between; gap:8px; margin-bottom:9px; color:var(--s-muted); font-size:12px; }
+#sentinel-colours .scene { position:relative; aspect-ratio:16 / 10; min-height:190px; background:#26303a; overflow:hidden; border-radius:7px; color:#f2f4f7; }
+#sentinel-colours .road { position:absolute; inset:0 17%; background:#3e4852; transform:skewX(-12deg); }
+#sentinel-colours .lane { position:absolute; top:0; bottom:0; left:50%; width:3px; background:repeating-linear-gradient(to bottom,#aab0b7 0 24px,transparent 24px 49px); opacity:.65; }
+#sentinel-colours .car { position:absolute; width:13%; height:25%; background:#d7dce2; border-radius:8px; box-shadow:inset 0 10px 0 #c0c7d0,inset 0 -13px 0 #a1abb7; }
+#sentinel-colours .car.one { left:34%; top:44%; transform:rotate(4deg); }
+#sentinel-colours .car.two { left:58%; top:12%; width:10%; height:21%; background:#818d99; }
+#sentinel-colours .bounding { position:absolute; inset:-9px; border:1px solid #a3e0bc; border-radius:2px; }
+#sentinel-colours .plate-mark { position:absolute; bottom:4px; left:24%; width:52%; height:5px; background:#f4f1dc; border:1px solid #e2bf7a; }
+#sentinel-colours .scene-label { position:absolute; bottom:10px; left:12px; background:#16202bd9; padding:4px 7px; border-radius:4px; font-size:12px; }
+#sentinel-colours .progress-track { height:4px; margin-top:12px; background:var(--s-line); border-radius:4px; overflow:hidden; }
+#sentinel-colours .progress-mark { width:44%; height:100%; background:var(--s-accent); }
+#sentinel-colours .position { margin-top:7px; display:flex; justify-content:space-between; color:var(--s-muted); font-size:12px; }
+#sentinel-colours .results { background:var(--s-panel); border:1px solid var(--s-line); border-radius:7px; min-width:0; }
+#sentinel-colours .results-head { display:flex; justify-content:space-between; padding:13px 15px; border-bottom:1px solid var(--s-line); font-weight:500; }
+#sentinel-colours .results-head small { font-size:12px; color:var(--s-muted); font-weight:400; }
+#sentinel-colours .result { padding:14px 15px; border-bottom:1px solid var(--s-line); }
+#sentinel-colours .result:last-child { border-bottom:0; }
+#sentinel-colours .result-line { display:flex; justify-content:space-between; gap:10px; align-items:center; }
+#sentinel-colours .plate { font:500 16px ui-monospace,Consolas,monospace; letter-spacing:.02em; }
+#sentinel-colours .stamp { color:var(--s-muted); font-size:12px; }
+#sentinel-colours .result-status { display:flex; align-items:center; gap:6px; margin-top:6px; font-size:12px; }
+#sentinel-colours .result-status i { width:6px; height:6px; background:currentColor; border-radius:50%; flex:0 0 6px; }
+#sentinel-colours .match { color:var(--s-danger); }
+#sentinel-colours .uncertain { color:var(--s-warn); }
+#sentinel-colours .accepted { color:var(--s-good); }
+#sentinel-colours .unreadable { color:var(--s-muted); }
+#sentinel-colours .status-key { display:flex; gap:18px; flex-wrap:wrap; padding:13px 22px; border-top:1px solid var(--s-line); background:var(--s-panel); font-size:12px; }
+#sentinel-colours .status-key span:last-child { margin-left:auto; color:var(--s-muted); }
+#sentinel-colours .token-row { display:grid; grid-template-columns:repeat(5,minmax(0,1fr)); gap:12px; margin-top:16px; }
+#sentinel-colours .token-swatch { height:36px; border-radius:5px; border:1px solid var(--choice-line); margin-bottom:6px; }
+#sentinel-colours .token-label { font-size:12px; color:var(--choice-muted); }
+#sentinel-colours .token-value { font:12px ui-monospace,Consolas,monospace; }
+@media(max-width:720px) { #sentinel-colours .palette-options { grid-template-columns:repeat(2,minmax(0,1fr)); padding-right:0; padding-top:48px; } #sentinel-colours .workspace { grid-template-columns:1fr; } #sentinel-colours .app-head { gap:16px; padding:14px; flex-wrap:wrap; } #sentinel-colours .app-nav { gap:13px; } #sentinel-colours .connection { margin-left:0; width:100%; } #sentinel-colours .work { padding:14px; } #sentinel-colours .token-row { grid-template-columns:repeat(3,minmax(0,1fr)); } #sentinel-colours .status-key { padding:12px 14px; gap:12px; } #sentinel-colours .status-key span:last-child { margin-left:0; width:100%; } }
+@media(pointer:coarse) { #sentinel-colours button { min-height:44px; } }
+</style>
+<div id="sentinel-colours">
+  <div class="palette-options" role="group" aria-label="Dashboard colour palettes"></div>
+  <div class="selection"><strong id="sentinel-colour-name">Cloud blue</strong><span>Same layout · different colours</span></div>
+  <section class="mock" aria-label="Sentinel colour preview">
+    <header class="app-head"><span class="brand">SENTINEL</span><div class="app-nav"><span class="nav-item active">Analyse</span><span class="nav-item">Alerts</span><span class="nav-item">Watchlist</span></div><span class="connection">Recorded footage · sample</span></header>
+    <div class="work"><div class="toolbar"><div class="recording">Junction recording.mp4</div><button type="button" class="start cursor-interaction" aria-label="Preview analysis button colour">Start analysis</button></div>
+      <div class="workspace"><div><div class="frame-head"><span>Analysed frame</span><span>00:18</span></div><div class="scene" role="img" aria-label="Illustrative road with two vehicle boxes, not actual CCTV footage"><div class="road"></div><div class="lane"></div><div class="car one"><span class="bounding"></span><span class="plate-mark"></span></div><div class="car two"><span class="bounding"></span></div><span class="scene-label">Illustrative scene</span></div><div class="progress-track"><div class="progress-mark"></div></div><div class="position"><span>00:18 / 00:41</span><span>Paused</span></div></div>
+        <section class="results" aria-label="Example plate readings"><div class="results-head">Plate readings <small>Synthetic examples</small></div><div class="result"><div class="result-line"><span class="plate">GJ01AB1234</span><span class="stamp">00:18</span></div><div class="result-status match"><i></i>Watchlist match</div></div><div class="result"><div class="result-line"><span class="plate">GJ01AX?482</span><span class="stamp">00:15</span></div><div class="result-status uncertain"><i></i>Uncertain · needs review</div></div><div class="result"><div class="result-line"><span class="plate">GJ05CD7621</span><span class="stamp">00:11</span></div><div class="result-status accepted"><i></i>Accepted by model</div></div><div class="result"><div class="result-line"><span class="plate">—</span><span class="stamp">00:08</span></div><div class="result-status unreadable"><i></i>Unreadable</div></div></section>
+      </div>
+    </div><div class="status-key"><span class="accepted">Accepted</span><span class="uncertain">Uncertain</span><span class="match">Watchlist match</span><span>Design preview only</span></div>
+  </section>
+  <div class="token-row" aria-label="Selected palette values"></div>
+  <div id="sentinel-colour-status" class="sr-only" aria-live="polite"></div>
+</div>
+<script>
+(() => {
+  const root=document.getElementById('sentinel-colours');
+  const palettes=[
+    {name:'Cloud blue',bg:'#F7F8FA',panel:'#FFFFFF',text:'#111827',muted:'#596579',line:'#DCE1E8',accent:'#2563EB',on:'#FFFFFF',good:'#166534',warn:'#92400E',danger:'#B91C1C'},
+    {name:'Paper teal',bg:'#F6F5F1',panel:'#FFFDF9',text:'#242925',muted:'#626B65',line:'#DEDFD8',accent:'#0F766E',on:'#FFFFFF',good:'#166534',warn:'#92400E',danger:'#B91C1C'},
+    {name:'Stone monochrome',bg:'#F5F5F4',panel:'#FFFFFF',text:'#1C1917',muted:'#66615D',line:'#E7E5E4',accent:'#292524',on:'#FFFFFF',good:'#166534',warn:'#92400E',danger:'#B91C1C'},
+    {name:'Graphite blue',bg:'#11151B',panel:'#191F28',text:'#F3F4F6',muted:'#A4AFBF',line:'#303947',accent:'#80B4FF',on:'#0C1B32',good:'#8BE3B8',warn:'#F4C36E',danger:'#FF9B9B'},
+    {name:'Midnight teal',bg:'#0B1520',panel:'#122331',text:'#E5EDF4',muted:'#A2B6C7',line:'#29404F',accent:'#4FD1C5',on:'#062B2A',good:'#8BE3B8',warn:'#F4C36E',danger:'#FF9B9B'},
+    {name:'Slate indigo',bg:'#F3F5FA',panel:'#FFFFFF',text:'#172033',muted:'#5D697F',line:'#DDE3EF',accent:'#4F46E5',on:'#FFFFFF',good:'#166534',warn:'#92400E',danger:'#B91C1C'}
+  ];
+  const saved=window.openai?.widgetState?.modelContent;
+  let selected=palettes.find(p=>p.name===saved?.palette)||palettes[0];
+  const custom={accent:selected.accent};
+  const validHex=v=>typeof v==='string'&&/^#[0-9a-f]{6}$/i.test(v);
+  if(validHex(saved?.accent))custom.accent=saved.accent;
+  const options=root.querySelector('.palette-options');
+  function remember(){ const p=window.openai?.setWidgetState?.({modelContent:{palette:selected.name,accent:custom.accent},privateContent:null}); if(p?.catch)p.catch(()=>{}); }
+  palettes.forEach(p=>{
+    const b=document.createElement('button');b.type='button';b.className='palette-choice cursor-interaction';b.dataset.palette=p.name;b.setAttribute('aria-pressed',String(p.name===selected.name));
+    const name=document.createElement('span');name.className='choice-name';name.textContent=p.name;
+    const swatches=document.createElement('span');swatches.className='swatches';swatches.setAttribute('aria-hidden','true');
+    [p.bg,p.panel,p.text,p.accent,p.danger].forEach(c=>{const s=document.createElement('span');s.style.backgroundColor=c;swatches.append(s);});
+    const hex=document.createElement('span');hex.className='choice-hex';hex.textContent=p.accent;
+    b.append(name,swatches,hex);b.addEventListener('click',()=>{selected=p;custom.accent=p.accent;render(true);remember();});options.append(b);
+  });
+  function render(announce=false){
+    const mock=root.querySelector('.mock');
+    const values={bg:selected.bg,panel:selected.panel,text:selected.text,muted:selected.muted,line:selected.line,accent:custom.accent,'on-accent':selected.on,good:selected.good,warn:selected.warn,danger:selected.danger};
+    Object.entries(values).forEach(([k,v])=>mock.style.setProperty('--s-'+k,v));
+    root.querySelector('#sentinel-colour-name').textContent=selected.name;
+    options.querySelectorAll('button').forEach(b=>b.setAttribute('aria-pressed',String(b.dataset.palette===selected.name)));
+    const tokens=root.querySelector('.token-row');tokens.replaceChildren();
+    [['Background',selected.bg],['Surface',selected.panel],['Text',selected.text],['Accent',custom.accent],['Alert',selected.danger]].forEach(([label,value])=>{const cell=document.createElement('div');const swatch=document.createElement('div');swatch.className='token-swatch';swatch.style.backgroundColor=value;const title=document.createElement('div');title.className='token-label';title.textContent=label;const code=document.createElement('div');code.className='token-value';code.textContent=value;cell.append(swatch,title,code);tokens.append(cell);});
+    if(announce)root.querySelector('#sentinel-colour-status').textContent=selected.name+' selected.';
+  }
+  render();
+  window.addEventListener('openai:set_globals',event=>{const next=event.detail?.globals?.widgetState?.modelContent;const p=palettes.find(x=>x.name===next?.palette);if(p){selected=p;custom.accent=validHex(next.accent)?next.accent:p.accent;render();}});
+  if(globalThis.Tweak){const tweak=new Tweak({container:root.querySelector('.mock'),onChange:()=>{render();remember();}});tweak.addColorPicker(custom,'accent',{label:'Accent colour',reference:'--s-accent'});}
+})();
+</script>

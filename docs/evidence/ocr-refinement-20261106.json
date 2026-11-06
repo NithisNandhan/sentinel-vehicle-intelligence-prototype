@@ -1,0 +1,97 @@
+{
+  "scope": "Development and previously examined regression evidence. Same-image retry suggestions are not independently confirmed sightings.",
+  "serving_checkpoint_sha256": "c2ba896d994b174071c95ace0f5ffc8a61cec3fc6eecce8f0bc5feb7dec4456d",
+  "policy": {
+    "retry_minimum_character": 0.8,
+    "maximum_original_log_gap": 0.5,
+    "minimum_original_character": 0.2,
+    "minimum_view_mean": 0.85,
+    "minimum_view_character": 0.5,
+    "maximum_edits": 1
+  },
+  "policy_source_sha256": "b8cf5d6a81c4d5bfb4f01c62f45200ef564656439da6fe0094b268dac6cbca6a",
+  "excluded_uncertain_manual_ids": [
+    "21"
+  ],
+  "evaluation": {
+    "mumbai_manual": {
+      "samples": 18,
+      "baseline_exact": 14,
+      "refined_exact": 15,
+      "baseline_character_errors": 13,
+      "refined_character_errors": 12,
+      "recovered": 1,
+      "regressed": 0,
+      "changed": 1,
+      "extra_ocr_calls": 10
+    },
+    "corpus_validation": {
+      "samples": 37,
+      "baseline_exact": 29,
+      "refined_exact": 29,
+      "baseline_character_errors": 42,
+      "refined_character_errors": 42,
+      "recovered": 0,
+      "regressed": 0,
+      "changed": 0,
+      "extra_ocr_calls": 18
+    },
+    "external_regression": {
+      "samples": 200,
+      "baseline_exact": 137,
+      "refined_exact": 137,
+      "baseline_character_errors": 135,
+      "refined_character_errors": 133,
+      "recovered": 0,
+      "regressed": 0,
+      "changed": 2,
+      "extra_ocr_calls": 126
+    }
+  },
+  "style_training": {
+    "epochs": 4,
+    "steps": 400,
+    "trainable_parameters": 133864,
+    "best_validation_epoch": 0,
+    "validation_preferred": false,
+    "training_source_sha256": "2223465b76b1a2d440b04a3320f5140905703c91dfbbcf4b9df7f2cb6177b65e",
+    "augmentation_source_sha256": "30e17bc2468fa5622a660d4a29c9fdb0cf43d0d4ad8efc13825ecee2bcb77a65",
+    "evaluation": {
+      "mumbai_manual": {
+        "samples": 18,
+        "baseline_exact": 14,
+        "refined_exact": 15,
+        "baseline_character_errors": 13,
+        "refined_character_errors": 12,
+        "recovered": 1,
+        "regressed": 0,
+        "changed": 1,
+        "extra_ocr_calls": 10
+      },
+      "corpus_validation": {
+        "samples": 37,
+        "baseline_exact": 28,
+        "refined_exact": 28,
+        "baseline_character_errors": 46,
+        "refined_character_errors": 46,
+        "recovered": 0,
+        "regressed": 0,
+        "changed": 0,
+        "extra_ocr_calls": 18
+      },
+      "external_regression": {
+        "samples": 200,
+        "baseline_exact": 137,
+        "refined_exact": 137,
+        "baseline_character_errors": 134,
+        "refined_character_errors": 132,
+        "recovered": 0,
+        "regressed": 0,
+        "changed": 2,
+        "extra_ocr_calls": 138
+      }
+    },
+    "decision": "Rejected, weight file deleted after evaluation."
+  },
+  "deployment": "Serving model and acceptance rules retain their previous configuration. Retry implementation is available in the local crop-review workflow."
+}

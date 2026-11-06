@@ -1,0 +1,121 @@
+{
+  "schema_version": 1,
+  "production_promoted": false,
+  "decision": "retain_native_adapted_awiros",
+  "development_manifest_sha256": "89fe372395b5ceb6c8aabd1ed24bca9274137485a6ecce1c190cc0a0c8ee37d0",
+  "external_manifest_sha256": "048703fed7286d96de50abe02d312d4648e477dbe794dc4df8abcff1520fc1ba",
+  "development_report_sha256": "04103438b79e098ca6454134176f8beb9366caaa73a201730486e2775c84ebcc",
+  "checkpoint_sha256": "c2ba896d994b174071c95ace0f5ffc8a61cec3fc6eecce8f0bc5feb7dec4456d",
+  "experiment_module_sha256": "9b3c28963617ffb63fadab361d24156ee7db7b77939eb36eac508b9865889c87",
+  "development": {
+    "native": {
+      "samples": 37,
+      "exact": 29,
+      "character_errors": 42,
+      "median_ms": 18.648,
+      "p95_ms": 44.434,
+      "extra_ocr_calls": 0,
+      "recovered": 0,
+      "regressed": 0
+    },
+    "native_beam": {
+      "samples": 37,
+      "exact": 29,
+      "character_errors": 45,
+      "median_ms": 25.812,
+      "p95_ms": 50.644,
+      "extra_ocr_calls": 0,
+      "recovered": 0,
+      "regressed": 0
+    },
+    "padding": {
+      "samples": 37,
+      "exact": 26,
+      "character_errors": 52,
+      "median_ms": 41.1,
+      "p95_ms": 75.338,
+      "extra_ocr_calls": 37,
+      "recovered": 0,
+      "regressed": 3
+    },
+    "clahe": {
+      "samples": 37,
+      "exact": 28,
+      "character_errors": 48,
+      "median_ms": 43.235,
+      "p95_ms": 82.587,
+      "extra_ocr_calls": 37,
+      "recovered": 0,
+      "regressed": 1
+    },
+    "deskew": {
+      "samples": 37,
+      "exact": 27,
+      "character_errors": 46,
+      "median_ms": 28.301,
+      "p95_ms": 58.426,
+      "extra_ocr_calls": 11,
+      "recovered": 0,
+      "regressed": 2
+    },
+    "two_row": {
+      "samples": 37,
+      "exact": 28,
+      "character_errors": 51,
+      "median_ms": 22.143,
+      "p95_ms": 59.91,
+      "extra_ocr_calls": 6,
+      "recovered": 0,
+      "regressed": 1
+    },
+    "two_row_beam": {
+      "samples": 37,
+      "exact": 28,
+      "character_errors": 52,
+      "median_ms": 21.989,
+      "p95_ms": 67.725,
+      "extra_ocr_calls": 6,
+      "recovered": 0,
+      "regressed": 1
+    }
+  },
+  "paired_development": {
+    "samples": 37,
+    "agree": 19,
+    "agree_correct": 19,
+    "agree_wrong": 0,
+    "disagree": 18,
+    "awiros_only_correct": 10,
+    "svtr_only_correct": 1,
+    "both_wrong": 7
+  },
+  "paired_already_scored_external_diagnostic": {
+    "samples": 200,
+    "agree": 107,
+    "agree_correct": 101,
+    "agree_wrong": 6,
+    "disagree": 93,
+    "awiros_only_correct": 36,
+    "svtr_only_correct": 16,
+    "both_wrong": 47
+  },
+  "failure_review": {
+    "samples": 63,
+    "not_independent_human_truth": true,
+    "width_below_64": 22,
+    "height_below_16": 16,
+    "categories": {
+      "two_line_layout": 6,
+      "reference_or_transcription_review": 12,
+      "occluded_or_clipped": 2,
+      "light_text_on_red_special_layout": 3,
+      "extra_or_missing_characters": 7,
+      "perspective_or_rotation": 8,
+      "small_or_blurred_glyphs": 25
+    }
+  },
+  "unscored_reserve_sha256": "409d1d7f459425493bd36721f2c5bfd63220c24e3254736068d7544439847064",
+  "reserved_registrations_scored": 0,
+  "reference_labels_changed": false,
+  "caveat": "Development data previously used for adaptation; external failures AI-reviewed, not human-adjudicated. No new blind CCTV or full-video evaluation."
+}

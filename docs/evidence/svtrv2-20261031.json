@@ -1,0 +1,79 @@
+{
+  "evaluation_caveat": "AI visual review, publisher agreement and legacy reviews; not independent human test truth; pretraining overlap unknown",
+  "production_promoted": false,
+  "manifest_sha256": "89fe372395b5ceb6c8aabd1ed24bca9274137485a6ecce1c190cc0a0c8ee37d0",
+  "models": [
+    {
+      "model": {
+        "name": "awiros-parent",
+        "weights_sha256": "f9f1264e0c115a239ca6d6700a74ceffab17168b75dafc6c169c232012c68e47",
+        "preprocessing": "publisher-native-48x320"
+      },
+      "summary": {
+        "samples": 31,
+        "exact": 22,
+        "character_errors": 23,
+        "characters": 295,
+        "median_ocr_ms": 47.306,
+        "p95_ocr_ms": 64.216,
+        "framework_peak_allocated_mib": 155.3,
+        "memory_scope": "Framework allocation peak; excludes driver, other frameworks and whole application co-residency"
+      },
+      "sequence": {
+        "top1_exact": true,
+        "truth_rank": 1,
+        "correct_accepted": true,
+        "wrong_accepted": false
+      }
+    },
+    {
+      "model": {
+        "name": "awiros-adapted",
+        "weights_sha256": "c2ba896d994b174071c95ace0f5ffc8a61cec3fc6eecce8f0bc5feb7dec4456d",
+        "preprocessing": "publisher-native-48x320"
+      },
+      "summary": {
+        "samples": 31,
+        "exact": 28,
+        "character_errors": 13,
+        "characters": 295,
+        "median_ocr_ms": 51.599,
+        "p95_ocr_ms": 65.903,
+        "framework_peak_allocated_mib": 155.3,
+        "memory_scope": "Framework allocation peak; excludes driver, other frameworks and whole application co-residency"
+      },
+      "sequence": {
+        "top1_exact": true,
+        "truth_rank": 1,
+        "correct_accepted": true,
+        "wrong_accepted": false
+      }
+    },
+    {
+      "model": {
+        "name": "SVTRv2-B",
+        "source_revision": "1ccfc6ee6161f7133b192e16af3a9265273997ba",
+        "weights_sha256": "b65dd4675ef061a116390ba1590f538b69ab18795a55fd30a14bd98af1338f49",
+        "preprocessing": "publisher_cli",
+        "parameters": 19755551,
+        "omitted_auxiliary_training_keys": 29
+      },
+      "summary": {
+        "samples": 31,
+        "exact": 15,
+        "character_errors": 51,
+        "characters": 295,
+        "median_ocr_ms": 33.024,
+        "p95_ocr_ms": 56.322,
+        "framework_peak_allocated_mib": 91.67,
+        "memory_scope": "Framework allocation peak; excludes driver, other frameworks and whole application co-residency"
+      },
+      "sequence": {
+        "top1_exact": true,
+        "truth_rank": 1,
+        "correct_accepted": false,
+        "wrong_accepted": false
+      }
+    }
+  ]
+}

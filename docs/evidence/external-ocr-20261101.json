@@ -1,0 +1,238 @@
+{
+  "evaluation_caveat": "Separate publisher source with author XML references, not new independent human verification; public pretraining overlap unknown. Does not establish CCTV/video accuracy.",
+  "production_promoted": false,
+  "manifest_sha256": "048703fed7286d96de50abe02d312d4648e477dbe794dc4df8abcff1520fc1ba",
+  "models": [
+    {
+      "model": {
+        "name": "awiros-parent",
+        "weights_sha256": "f9f1264e0c115a239ca6d6700a74ceffab17168b75dafc6c169c232012c68e47",
+        "preprocessing": "publisher-native-48x320"
+      },
+      "summary": {
+        "samples": 200,
+        "exact": 121,
+        "character_errors": 173,
+        "characters": 1894,
+        "median_ocr_ms": 20.373,
+        "p95_ocr_ms": 34.388,
+        "framework_peak_allocated_mib": 155.3,
+        "memory_scope": "Framework allocation peak; excludes driver, other frameworks and whole application co-residency"
+      },
+      "sequence": null,
+      "by_source": {
+        "State-wise_OLX": {
+          "samples": 67,
+          "exact": 33
+        },
+        "google_images": {
+          "samples": 67,
+          "exact": 47
+        },
+        "video_images": {
+          "samples": 66,
+          "exact": 41
+        }
+      }
+    },
+    {
+      "model": {
+        "name": "awiros-adapted",
+        "weights_sha256": "c2ba896d994b174071c95ace0f5ffc8a61cec3fc6eecce8f0bc5feb7dec4456d",
+        "preprocessing": "publisher-native-48x320"
+      },
+      "summary": {
+        "samples": 200,
+        "exact": 137,
+        "character_errors": 135,
+        "characters": 1894,
+        "median_ocr_ms": 21.51,
+        "p95_ocr_ms": 33.206,
+        "framework_peak_allocated_mib": 155.3,
+        "memory_scope": "Framework allocation peak; excludes driver, other frameworks and whole application co-residency"
+      },
+      "sequence": null,
+      "by_source": {
+        "State-wise_OLX": {
+          "samples": 67,
+          "exact": 37
+        },
+        "google_images": {
+          "samples": 67,
+          "exact": 49
+        },
+        "video_images": {
+          "samples": 66,
+          "exact": 51
+        }
+      }
+    },
+    {
+      "model": {
+        "name": "SVTRv2-B",
+        "source_revision": "1ccfc6ee6161f7133b192e16af3a9265273997ba",
+        "weights_sha256": "b65dd4675ef061a116390ba1590f538b69ab18795a55fd30a14bd98af1338f49",
+        "preprocessing": "publisher_cli",
+        "parameters": 19755551,
+        "omitted_auxiliary_training_keys": 29
+      },
+      "summary": {
+        "samples": 200,
+        "exact": 117,
+        "character_errors": 177,
+        "characters": 1894,
+        "median_ocr_ms": 11.728,
+        "p95_ocr_ms": 25.53,
+        "framework_peak_allocated_mib": 94.81,
+        "memory_scope": "Framework allocation peak; excludes driver, other frameworks and whole application co-residency"
+      },
+      "sequence": null,
+      "by_source": {
+        "State-wise_OLX": {
+          "samples": 67,
+          "exact": 32
+        },
+        "google_images": {
+          "samples": 67,
+          "exact": 46
+        },
+        "video_images": {
+          "samples": 66,
+          "exact": 39
+        }
+      }
+    }
+  ],
+  "preparation": {
+    "manifest_sha256": "048703fed7286d96de50abe02d312d4648e477dbe794dc4df8abcff1520fc1ba",
+    "counts": {
+      "annotation_files": 1697,
+      "annotated_objects": 1692,
+      "eligible_distinct_registrations": 378,
+      "selected_test": 200
+    },
+    "exclusions": {
+      "seen_registration": 724,
+      "annotation_dimensions_mismatch": 4,
+      "missing_image": 1,
+      "perceptually_similar_to_training": 3,
+      "unsupported_reference": 1,
+      "repeated_registration": 586,
+      "reserved_unscored": 178
+    },
+    "source_groups": {
+      "State-wise_OLX": 67,
+      "google_images": 67,
+      "video_images": 66
+    },
+    "note": "Separate publisher source with author XML references, not new independent human verification; public pretraining overlap unknown. Does not establish CCTV/video accuracy."
+  },
+  "post_freeze_audit": {
+    "samples": 200,
+    "unique_registrations": 200,
+    "known_registration_overlap": 0,
+    "known_crop_pixel_overlap": 0,
+    "known_original_byte_overlap": 0,
+    "all_crop_hashes_match": true,
+    "manifest_sha256": "048703fed7286d96de50abe02d312d4648e477dbe794dc4df8abcff1520fc1ba"
+  },
+  "error_analysis": {
+    "slices": {
+      "awiros-parent": {
+        "width_below_32": {
+          "n": 0,
+          "exact": 0
+        },
+        "width_32_63": {
+          "n": 34,
+          "exact": 12
+        },
+        "width_64_127": {
+          "n": 68,
+          "exact": 44
+        },
+        "width_128_plus": {
+          "n": 98,
+          "exact": 65
+        },
+        "aspect_below_2_5": {
+          "n": 39,
+          "exact": 6
+        },
+        "aspect_at_least_2_5": {
+          "n": 161,
+          "exact": 115
+        }
+      },
+      "awiros-adapted": {
+        "width_below_32": {
+          "n": 0,
+          "exact": 0
+        },
+        "width_32_63": {
+          "n": 34,
+          "exact": 12
+        },
+        "width_64_127": {
+          "n": 68,
+          "exact": 49
+        },
+        "width_128_plus": {
+          "n": 98,
+          "exact": 76
+        },
+        "aspect_below_2_5": {
+          "n": 39,
+          "exact": 17
+        },
+        "aspect_at_least_2_5": {
+          "n": 161,
+          "exact": 120
+        }
+      },
+      "svtrv2": {
+        "width_below_32": {
+          "n": 0,
+          "exact": 0
+        },
+        "width_32_63": {
+          "n": 34,
+          "exact": 12
+        },
+        "width_64_127": {
+          "n": 68,
+          "exact": 44
+        },
+        "width_128_plus": {
+          "n": 98,
+          "exact": 61
+        },
+        "aspect_below_2_5": {
+          "n": 39,
+          "exact": 18
+        },
+        "aspect_at_least_2_5": {
+          "n": 161,
+          "exact": 99
+        }
+      }
+    },
+    "paired": {
+      "adapted_only_vs_svtr": 36,
+      "svtr_only_vs_adapted": 16,
+      "both_wrong_adapted_svtr": 47,
+      "adapted_improved_vs_parent": 17,
+      "adapted_regressed_vs_parent": 1
+    }
+  },
+  "dataset": {
+    "reference": "saisirishan/indian-vehicle-dataset",
+    "version": 1,
+    "source_url": "https://www.kaggle.com/datasets/saisirishan/indian-vehicle-dataset",
+    "attribution": "Sai Sirisha Nadiminti; Pranav Kant Gaur; Abhilash Bhardwaj",
+    "license": "CC-BY-NC-ND-4.0",
+    "purpose": "private_noncommercial_evaluation_only",
+    "archive_sha256": "bd7ea8e07f60fdd6fe35218184d75f3259f2a5005caa3dba6b6bfeba1d740b3c",
+    "pretraining_overlap": "unknown"
+  }
+}
