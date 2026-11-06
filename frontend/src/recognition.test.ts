@@ -1,8 +1,9 @@
 import { describe, expect, it } from 'vitest';
-import type { RecognitionStatus } from './api';
+import type { RecognitionEvidence, RecognitionStatus } from './api';
+import { imageData } from './Inspector';
 import {
-  failureMessage, formatVideoTime, recognitionCount, recognitionIsFresh, recognitionIsRunning, recognitionLabel,
-  recognitionTone, sessionLabel, sourceDescription, sourceLabel, staleLimit,
+  failureMessage, formatVideoTime, framePlaceholderTitle, retainEvidence, processingHeading, recognitionCount, recognitionIsFresh, recognitionIsRunning,
+  recognitionLabel, recognitionTone, sessionLabel, sourceDescription, sourceLabel, staleLimit,
 } from './recognition';
 
 const status: RecognitionStatus = {
@@ -34,6 +35,16 @@ describe('operator recognition presentation', () => {
     expect(recognitionIsFresh({ ...status, status: 'connecting' })).toBe(false);
     expect(recognitionIsFresh(null)).toBe(false);
   });
+  it('calls an idle session live only while the opt-in neutral label is off', () => {
+    const idle: RecognitionStatus = { ...status, status: 'paused', camera_id: null };
+    expect(processingHeading(idle, false)).toBe('SHARED LIVE PROCESSING');
+    expect(processingHeading(idle, true)).toBe('SHARED PROCESSING · NO SOURCE SELECTED');
+    expect(processingHeading(status, true)).toBe('SHARED LIVE PROCESSING');
+    expect(processingHeading(recording, true)).toBe('SHARED RECORDED PROCESSING');
+    expect(processingHeading(recording, false)).toBe('SHARED RECORDED PROCESSING');
+    expect(processingHeading(null)).toBe('SHARED LIVE PROCESSING');  // Off unless VITE_NEUTRAL_IDLE_LABEL=true.
+  });
+
   it('never presents recorded footage as a live source', () => {
     expect(sourceLabel('recorded')).toBe('RECORDED');
     expect(sourceLabel('synthetic')).toBe('SIMULATED');
@@ -87,5 +98,43 @@ describe('operator recognition presentation', () => {
     expect(recognitionCount(undefined)).toBe('—');
     expect(recognitionCount(-1)).toBe('—');
     expect(recognitionCount(Number.NaN)).toBe('—');
+  });
+});
+
+describe('frame retention while evidence polls fail', () => {
+  const evidence = (sessionId: string, frame: string | null = 'AAAA'): RecognitionEvidence => ({
+    source_mode: 'recorded', session_id: sessionId, video_position_ms: 1200, frame, vehicles: [],
+  } as RecognitionEvidence);
+  const processing: RecognitionStatus = { ...recording, status: 'processing', session_id: 'session-a' };
+
+  it('keeps the displayed frame when a later poll fails or returns nothing for the same session', () => {
+    const shown = retainEvidence(null, evidence('session-a'), 'session-a');
+    expect(imageData(shown?.frame, 'jpeg')).toBeDefined();
+    for (const gap of [undefined, null]) {
+      const kept = retainEvidence(shown, gap, 'session-a');
+      expect(kept).toBe(shown);
+      expect(imageData(kept?.frame, 'jpeg')).toBe(imageData(shown?.frame, 'jpeg'));
+    }
+  });
+
+  it('replaces the frame when a newer poll succeeds', () => {
+    const next = evidence('session-a', 'BBBB');
+    expect(retainEvidence(evidence('session-a'), next, 'session-a')).toBe(next);
+  });
+
+  it('never claims the frame is unavailable while a recording is being analysed', () => {
+    for (const status of [processing, { ...processing, status: 'connecting' as const }, null]) {
+      expect(framePlaceholderTitle(status as RecognitionStatus | null)).not.toMatch(/unavailable/i);
+    }
+    expect(framePlaceholderTitle(processing)).toBe('Waiting for analysis evidence');
+  });
+
+  it('clears a stale frame when the session changes', () => {
+    const old = evidence('session-a');
+    expect(retainEvidence(old, undefined, 'session-b')).toBeNull();
+    expect(retainEvidence(old, null, 'session-b')).toBeNull();
+    expect(retainEvidence(old, evidence('session-a', 'CCCC'), 'session-b')).toBeNull();
+    const fresh = evidence('session-b');
+    expect(retainEvidence(old, fresh, 'session-b')).toBe(fresh);
   });
 });

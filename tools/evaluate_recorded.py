@@ -26,8 +26,12 @@ def peak_memory_mb():
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     parser.add_argument('--labels', type=Path, required=True)
-    parser.add_argument('--split', choices=('development', 'validation', 'test'), required=True)
-    parser.add_argument('--final', action='store_true', help='Required for the test split: one run, after freezing settings')
+    parser.add_argument('--split', choices=('development', 'validation', 'test', 'sealed_a', 'sealed_b', 'sealed_c'), required=True)
+    parser.add_argument('--final', action='store_true', help='Required for a sealed split: scored after freezing settings')
+    parser.add_argument('--ledger', type=Path, default=Path('data/evaluation/sealed-ledger.json'),
+                        help='Append-only record of sealed-set openings (an opened set becomes development data)')
+    parser.add_argument('--allow-reopen', action='store_true',
+                        help='Re-run an already opened sealed set as DEVELOPMENT data; the report says it is no longer unseen')
     parser.add_argument('--recordings-dir', type=Path, required=True)
     parser.add_argument('--output', type=Path, required=True)
     parser.add_argument('--cache', type=Path, default=Path('/models/experiments/awiros'))
@@ -41,8 +45,14 @@ if __name__ == '__main__':
     parser.add_argument('--top-k', type=int, default=20)
     parser.add_argument('--commit', default=os.getenv('SENTINEL_COMMIT', ''), help='Source commit being evaluated')
     args = parser.parse_args()
-    if args.split == 'test' and not args.final:
-        parser.error('The test split is scored once, after freezing. Pass --final to confirm this is that run.')
+    sealed = args.split in ('test', 'sealed_a', 'sealed_b', 'sealed_c')
+    if sealed and not args.final:
+        parser.error('A sealed split is scored once, after freezing. Pass --final to confirm this is that run.')
+    from sentinel_edge.annotations import SealedLedger
+    ledger = SealedLedger(args.ledger)
+    already_opened = sealed and bool(ledger.opened(args.split, ''))
+    if already_opened and not args.allow_reopen:
+        parser.error(f'{args.split} was already opened. It is development data now; pass --allow-reopen to re-run it as such.')
     if args.output.exists():
         parser.error('The output file already exists; reports are never overwritten.')
     if not 1 <= args.top_k <= 200:
@@ -65,6 +75,16 @@ if __name__ == '__main__':
                           plate_recovery=args.plate_recovery)
     except LabelError as error:
         raise SystemExit(f'Evaluation stopped: {error}')
+    from sentinel_edge.annotations import manifest as label_manifest
+    from sentinel_edge.recorded_evaluation import release_gates
+    if sealed:
+        ledger.record(args.split, report['labels_sha256'], commit=args.commit or None, profile=report.get('profile'))
+    report['manifest'] = label_manifest(args.labels)
+    report['sealed'] = {'split_is_sealed': sealed, 'previously_opened': already_opened,
+                        'status': ('sealed, first opening' if sealed and not already_opened else
+                                   'previously opened: development data, not unseen' if sealed else 'development/validation')}
+    if report.get('states_totals'):
+        report['release_gates'] = release_gates(report['states_totals'], split=args.split, previously_opened=already_opened)
     report.update(generated_at=datetime.now(timezone.utc).isoformat().replace('+00:00', 'Z'),
                   commit=args.commit or None, models=model_identity(models[0], args.detector_profile,
                                                                   detector=models[1], vehicle_model=models[2]),
@@ -80,4 +100,9 @@ if __name__ == '__main__':
     totals = report['totals']
     print(json.dumps({key: totals[key] for key in ('passages', 'exact_read_coverage', 'wrong_reads', 'abstentions',
                                                    'accepted_precision', 'candidate_recall')}, indent=2))
+    if report.get('states_totals'):
+        states = report['states_totals']
+        print(json.dumps({'coverage': states['coverage'], 'accepted': states['accepted'], 'partial': states['partial'],
+                          'unreadable_rate': states['unreadable_rate'],
+                          'release_gates_passed': report.get('release_gates', {}).get('passed')}, indent=2))
     print(f'Report written: {args.output}')

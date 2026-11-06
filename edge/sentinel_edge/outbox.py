@@ -8,6 +8,9 @@ from contextlib import contextmanager
 from pathlib import Path
 
 
+ENDPOINTS = frozenset({"/v1/sightings", "/v1/health", "/v1/recognition-results"})
+
+
 class Outbox:
     def __init__(self, path: Path):
         self.path = Path(path)
@@ -20,6 +23,15 @@ class Outbox:
                 payload TEXT NOT NULL,
                 created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
             )""")
+            # Events the central API permanently rejected (e.g. 422). Kept, never
+            # silently dropped, so they can be inspected and re-queued after a fix.
+            db.execute("""CREATE TABLE IF NOT EXISTS dead_letters (
+                event_id TEXT PRIMARY KEY,
+                endpoint TEXT NOT NULL,
+                payload TEXT NOT NULL,
+                status INTEGER NOT NULL,
+                failed_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+            )""")
 
     @contextmanager
     def _connect(self):
@@ -31,7 +43,7 @@ class Outbox:
             db.close()
 
     def put(self, endpoint: str, payload: dict) -> None:
-        if endpoint not in {"/v1/sightings", "/v1/health"}:
+        if endpoint not in ENDPOINTS:
             raise ValueError("Unsupported outbox endpoint")
         event_id = payload["event_id"]
         body = json.dumps(payload, separators=(",", ":"), allow_nan=False)
@@ -53,3 +65,26 @@ class Outbox:
         with self._connect() as db:
             return int(db.execute("SELECT COUNT(*) FROM outbox").fetchone()[0])
 
+
+    def dead_letter(self, event_id: str, status: int) -> None:
+        """Move a permanently rejected event aside so it cannot block later events."""
+        with self._connect() as db:
+            row = db.execute("SELECT endpoint, payload FROM outbox WHERE event_id = ?", (event_id,)).fetchone()
+            if row is None:
+                return
+            db.execute("INSERT OR REPLACE INTO dead_letters(event_id, endpoint, payload, status) VALUES (?, ?, ?, ?)",
+                       (event_id, row[0], row[1], int(status)))
+            db.execute("DELETE FROM outbox WHERE event_id = ?", (event_id,))
+
+    def dead_letter_count(self) -> int:
+        with self._connect() as db:
+            return int(db.execute("SELECT COUNT(*) FROM dead_letters").fetchone()[0])
+
+    def requeue_dead_letters(self) -> int:
+        """Put every dead letter back in the queue (after the cause has been fixed)."""
+        with self._connect() as db:
+            rows = db.execute("SELECT event_id, endpoint, payload FROM dead_letters").fetchall()
+            for row in rows:
+                db.execute("INSERT OR IGNORE INTO outbox(event_id, endpoint, payload) VALUES (?, ?, ?)", row)
+            db.execute("DELETE FROM dead_letters")
+        return len(rows)

@@ -46,6 +46,9 @@ class LiveState:
         self.paused = threading.Event()
         self.start_ms = 0
         self.session_id = None
+        # Opt-in (SENTINEL_STRICT_PLAYBACK): refuse pause/resume on a finished run
+        # instead of silently doing nothing.
+        self.strict_playback = False
 
     def _selectable(self, camera_id):
         return camera_id in self.allowed_ids or camera_id in self.recordings
@@ -99,6 +102,8 @@ class LiveState:
                     raise ValueError('Seek position is outside the recording')
             else:
                 raise ValueError('Unknown playback action')
+            if self.strict_playback and action in ('pause', 'resume') and self.value.get('status') == 'completed':
+                raise ValueError('The run has finished; restart or seek to analyse again')
             self.last_heartbeat = self.clock()
             if action == 'pause':
                 if self.value.get('status') != 'completed':
@@ -280,7 +285,8 @@ def viewer_frames(config, camera, stop):
     raise TimeoutError('No live frames received; no media retained')
 
 
-def load_models(config, cache, checkpoint, *, detector_profile=None, training_root=None, device='gpu'):
+def load_models(config, cache, checkpoint, *, detector_profile=None, training_root=None, device='gpu',
+                keep_unconfirmed=False):
     # Paddle's isolated CUDA 12 libraries must initialize before importing
     # Torch/YOLO (the production image bundles a different CUDA/cuDNN version).
     import numpy as np
@@ -299,7 +305,7 @@ def load_models(config, cache, checkpoint, *, detector_profile=None, training_ro
         # Torch preloads its matching CUDA libraries before ONNX constructs a
         # CUDA session. Paddle's isolated runtime must still warm up first.
         tracker = VehicleTracker(vehicle, config.model_cache_dir,
-                                 training_root or Path('/training'), device=device)
+                                 training_root or Path('/training'), device=device, keep_unconfirmed=keep_unconfirmed)
         return reader, PlateDetector(plate, config.model_cache_dir, device=device), tracker
     from ultralytics import YOLO
     from .ocr_selection_benchmark import PlateDetectorExperiment
@@ -515,12 +521,14 @@ def configured_relay_cameras(config):
 def serve(config, cache, checkpoint, port=7780, lifetime=1800, bind_host='127.0.0.1',
           detector_profile=None, training_root=None, operator_key=None, deliver=False,
           configured_relays=False, plate_recovery=False, device='gpu',
-          recordings_dir=None, live_catalogue=True, paced=True, dashboard_evidence=False):
+          recordings_dir=None, live_catalogue=True, paced=True, dashboard_evidence=False,
+          keep_unconfirmed_vehicles=False):
     if device not in ('cpu', 'gpu'):
         raise ValueError('Explicit CPU/GPU device required')
     if recordings_dir is not None and not detector_profile:
         raise ValueError('Recorded analysis needs a tracked detector profile')
     state, shutdown = LiveState(), threading.Event()
+    state.strict_playback = os.getenv('SENTINEL_STRICT_PLAYBACK', '').lower() == 'true'
     identity = {}
     library = None
     recordings_view = {'recordings': [], 'rejected': []}
@@ -537,7 +545,20 @@ def serve(config, cache, checkpoint, port=7780, lifetime=1800, bind_host='127.0.
         if config is None or not detector_profile:
             raise ValueError('Delivery requires a configured tracked detector profile')
         from .shared_delivery import SharedDelivery
-        delivery = SharedDelivery(config, detector_profile)
+        from .plate_options import PlateOptions
+        options = PlateOptions.from_env()
+        evidence = snapshot = None
+        if options.result_states and os.getenv('SENTINEL_REVIEW_EVIDENCE', '').strip().lower() == 'true':
+            from .evidence_store import EvidenceStore
+            evidence = EvidenceStore(ttl_seconds=int(os.getenv('SENTINEL_REVIEW_EVIDENCE_TTL_SECONDS', '7200')))
+        if options.partial_watchlist:
+            from .api import CentralClient
+            from .watchlist_snapshot import WatchlistSnapshot
+            snapshot_client = CentralClient(config.central_api_url, config.edge_api_key, None,
+                                            edge_id=config.edge_id+'-shared')
+            snapshot = WatchlistSnapshot(snapshot_client,
+                                         max_age_seconds=int(os.getenv('SENTINEL_WATCHLIST_SNAPSHOT_MAX_AGE', '900')))
+        delivery = SharedDelivery(config, detector_profile, options=options, evidence=evidence, snapshot=snapshot)
         delivery.start(shutdown)
 
     class Handler(BaseHTTPRequestHandler):
@@ -603,6 +624,18 @@ def serve(config, cache, checkpoint, port=7780, lifetime=1800, bind_host='127.0.
                     self.reply(404, b'{}')
                 else:
                     self.reply(200, json.dumps(body).encode())
+            elif path == '/internal/review-evidence':
+                # Review evidence for one partial passage, for the operator-only review
+                # proxy. Opt-in (SENTINEL_REVIEW_EVIDENCE); memory only; expires.
+                query = parse_qs(parsed.query, keep_blank_values=True)
+                store = getattr(delivery, 'evidence', None) if delivery is not None else None
+                if set(query) != {'ref'} or len(query['ref']) != 1:
+                    self.reply(400, b'{"error":"Invalid evidence reference"}'); return
+                record = store.get(query['ref'][0]) if store is not None else None
+                if record is None:
+                    self.reply(404, b'{"error":"Evidence expired or unavailable"}')
+                else:
+                    self.reply(200, json.dumps(record, allow_nan=False).encode())
             elif path == '/internal/status':
                 snapshot = state.operator_snapshot()
                 snapshot['model_profile'] = detector_profile or 'legacy'
@@ -713,7 +746,8 @@ def serve(config, cache, checkpoint, port=7780, lifetime=1800, bind_host='127.0.
                     import av
                     av.logging.set_level(av.logging.PANIC)
                     model, detector, vehicle = load_models(config, cache, checkpoint,
-                        detector_profile=detector_profile, training_root=training_root, device=device)
+                        detector_profile=detector_profile, training_root=training_root, device=device,
+                        keep_unconfirmed=keep_unconfirmed_vehicles)
                     identity.update(model_identity(model, detector_profile,
                                                    detector=detector, vehicle_model=vehicle))
                 if recording is not None:
@@ -780,6 +814,9 @@ if __name__ == '__main__':
     parser.add_argument('--unpaced', action='store_true',
                         default=os.getenv('SENTINEL_RECORDED_UNPACED','').lower() == 'true',
                         help='Process recordings as fast as possible instead of at most real time; frames are never dropped either way')
+    parser.add_argument('--keep-unconfirmed-vehicles', action='store_true',
+                        default=os.getenv('SENTINEL_KEEP_UNCONFIRMED_VEHICLES','').lower() == 'true',
+                        help='Show and plate-search vehicles ByteTrack has not yet confirmed, linked by plausible motion; off by default')
     parser.add_argument('--cache', type=Path, required=True)
     parser.add_argument('--checkpoint', type=Path, required=True)
     parser.add_argument('--container-bind', action='store_true', help='Use only with a Docker loopback-only port publication')
@@ -801,4 +838,5 @@ if __name__ == '__main__':
           bind_host='0.0.0.0' if args.container_bind else '127.0.0.1',
           detector_profile=args.detector_profile, training_root=args.training_root, deliver=args.deliver,
           lifetime=max(60,min(28800,args.lifetime)), configured_relays=args.configured_relays,
-          plate_recovery=args.plate_recovery, device=args.device, dashboard_evidence=args.dashboard_evidence)
+          plate_recovery=args.plate_recovery, device=args.device, dashboard_evidence=args.dashboard_evidence,
+          keep_unconfirmed_vehicles=args.keep_unconfirmed_vehicles)

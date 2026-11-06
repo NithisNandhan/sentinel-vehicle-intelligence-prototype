@@ -26,8 +26,27 @@ def observe_tracked(config,camera,model,detector,vehicle,state,stop, *, debug=Fa
                     if recorded else
                     (lambda track, candidate, pts: delivery.accept(camera.camera_id, track, candidate, pts)))
     from .plate_search import TargetedPlateSearch
-    pipeline = TrackedOCR(model,TargetedPlateSearch(detector),threshold=config.ocr_min_confidence, debug=debug, on_accepted=callback,
-                          reconstruction=True)
+    from .plate_options import PlateOptions
+    options = PlateOptions.from_env()
+    plate_search = TargetedPlateSearch(detector)
+    if options.multi_source_plates:
+        # GPU profile: pool the vehicle-crop detector with native tiles and, when its
+        # pinned assets are configured, the text-region detector. Budgeted per frame.
+        from .plate_proposals import ProposalPool
+        plate_search = ProposalPool(plate_search, tile_detector=detector if hasattr(detector,'boxes') else None,
+                                    text_detector=load_text_detector())
+    finalized = None
+    if options.result_states:
+        sinks = [sink for sink in (getattr(delivery,'finalized',None), getattr(delivery,'on_passage',None)) if callable(sink)]
+        def finalized(outcome):
+            for sink in sinks:
+                if getattr(sink,'__name__','') == 'finalized':
+                    sink(camera.camera_id, outcome, recorded=recorded)
+                else:
+                    sink(outcome)
+    pipeline = TrackedOCR(model,plate_search,threshold=config.ocr_min_confidence, debug=debug, on_accepted=callback,
+                          reconstruction=True, options=options, on_finalized=finalized,
+                          keep_evidence=getattr(delivery,'evidence',None) is not None)
     # Running list of vehicles seen in this run, for the side panels.
     from .passed_vehicles import PassedVehicles
     seen = PassedVehicles(keep_text=debug, hmac_key=getattr(config,'hmac_key',None))
@@ -70,7 +89,8 @@ def observe_tracked(config,camera,model,detector,vehicle,state,stop, *, debug=Fa
                 sampled_pts = last_crop = None
             if frame.pts_ms is None:continue
             last_pts = frame.pts_ms
-            if sampled_pts is not None and frame.pts_ms-sampled_pts < (250 if plate_recovery else 500):continue
+            fast = plate_recovery or (options.adaptive_sampling and pipeline.needs_more_evidence())
+            if sampled_pts is not None and frame.pts_ms-sampled_pts < (250 if fast else 500):continue
             sampled_pts = frame.pts_ms
             started = time.monotonic()
             tracks = frame.tracks if hasattr(frame,'tracks') else vehicle.track(frame.image)
@@ -95,7 +115,8 @@ def observe_tracked(config,camera,model,detector,vehicle,state,stop, *, debug=Fa
                 draw_vehicle(view,track,scale,shown.get(track.track_id))
             for display in displays:
                 draw_plate_callout(view,boxes.get(display['track_id'],display['box']),display['box'],display['crop'],
-                                   shown[display['track_id']],display['ocr_status'],display['observations'],scale)
+                                   shown[display['track_id']],display['ocr_status'],display['observations'],scale,
+                                   format_adjusted=display.get('format_adjusted',False))
             if displays:
                 selected = max(displays,key=lambda d:d['observations'])
                 crop = selected['crop']
@@ -146,6 +167,8 @@ def observe_tracked(config,camera,model,detector,vehicle,state,stop, *, debug=Fa
             if delivery:
                 snapshot['delivery'] = {'enabled':True,'outbox_depth':delivery.depth()}
             state.publish(snapshot,stop)
+        # Every open passage ends with the source: report its final outcome once.
+        pipeline.flush('end_of_source')
         if recorded:
             # End of file or an operator stop. Only a decoder failure is an error.
             if tap.failed:
@@ -157,3 +180,22 @@ def observe_tracked(config,camera,model,detector,vehicle,state,stop, *, debug=Fa
             error = RuntimeError('Experimental viewer stream unavailable')
             error.failure_code = getattr(tap,'failure_code','NoUsableFrames')
             raise error
+
+
+def load_text_detector():
+    """The pinned PP-OCRv5 text-region detector, or None when it is not configured.
+
+    Never downloads: SENTINEL_TEXT_DETECTOR_ASSETS must name a directory holding
+    the hash-checked receipt (text_boundaries.py). Missing assets or a CPU-only
+    Paddle build simply leave the text source out of the proposal pool.
+    """
+    import os
+    from pathlib import Path
+    assets = os.getenv('SENTINEL_TEXT_DETECTOR_ASSETS', '').strip()
+    if not assets:
+        return None
+    try:
+        from .text_boundaries import TextBoundaryDetector
+        return TextBoundaryDetector(Path(assets), device=os.getenv('SENTINEL_TEXT_DETECTOR_DEVICE', 'gpu'))
+    except Exception:
+        return None

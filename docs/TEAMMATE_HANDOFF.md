@@ -1,13 +1,18 @@
 # Teammate handoff: source, models, saved state and next work
 
+> Historical restore instructions for the 7 October 2026 snapshot. The
+> repository is public as checked on 6 November 2026. Current code, dashboard
+> access and recorded-video support have advanced since this snapshot; follow
+> the current README and `docs/RECORDED_VIDEO.md` for operation. The original
+> release remains a historical restore point, not a current-state claim.
+
 ## What to download
 
 Repository: <https://github.com/NithisNandhan/sentinel-vehicle-intelligence-prototype>
 
 Release: <https://github.com/NithisNandhan/sentinel-vehicle-intelligence-prototype/releases/tag/handoff-2026-10-07>
 
-The repository is private. The owner must grant the teammate repository access
-in GitHub Settings > Collaborators. Downloading only the repository ZIP is not
+Downloading only the repository ZIP is not
 sufficient: Git ignores models and local data deliberately. They are in the
 release, not missing or silently regenerated. Docker images are rebuilt from
 the checked-in Dockerfiles; images themselves are not included.
@@ -25,7 +30,8 @@ the checked-in Dockerfiles; images themselves are not included.
 Download every part for each archive you need and its manifest into one folder.
 Parts are 256 MiB except the last part. Do not extract a part individually;
 the restore tool reads them together. Each manifest records part sizes/hashes
-and fine-tuned checkpoint hashes. Private release downloads require GitHub login.
+and fine-tuned checkpoint hashes. A private repository would require GitHub login;
+the current public release does not.
 With GitHub CLI installed and signed in:
 
 ```powershell
@@ -136,6 +142,10 @@ Building this image does not start a live camera connection. The existing
 still **live-camera launchers**, not downloaded-video launchers.
 
 ## Next stage: downloaded CCTV footage
+
+The work is assigned by hardware in [CPU and GPU work allocation](CPU_GPU_WORK_SPLIT.md).
+The Ryzen 7 teammate owns CPU setup, recorded input, interfaces, labels and
+integration testing; the owner and Codex own model experiments and GPU validation.
 
 The owner has changed the intended input to permitted, high-quality downloaded
 videos. No Sentinel credentials are needed for that direction. This handoff

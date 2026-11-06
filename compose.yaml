@@ -27,6 +27,18 @@ services:
       CATALOGUE_GATEWAY_URL: http://catalogue-gateway:8765
       RECOGNITION_GATEWAY_URL: http://host.docker.internal:7780
       DASHBOARD_RECORDED_EVIDENCE: ${DASHBOARD_RECORDED_EVIDENCE:-false}
+      # Opt-in: after Stop, evidence is a plain 404 (shown as empty), not a 503.
+      RECOGNITION_IDLE_EVIDENCE_404: ${RECOGNITION_IDLE_EVIDENCE_404:-false}
+      # Review workflow (docs/SECURITY_AND_PRIVACY.md). Empty REVIEWER_TOKENS disables review.
+      # Format: reviewer-id:sha256-hex-of-token, comma separated. Never put a raw token here.
+      REVIEWER_TOKENS: ${REVIEWER_TOKENS:-}
+      REVIEW_EVIDENCE_ENABLED: ${REVIEW_EVIDENCE_ENABLED:-false}
+      WATCHLIST_SNAPSHOT_TTL_SECONDS: ${WATCHLIST_SNAPSHOT_TTL_SECONDS:-900}
+      REVOKED_EDGE_IDS: ${REVOKED_EDGE_IDS:-}
+      REQUIRE_EDGE_ID: ${REQUIRE_EDGE_ID:-false}
+      RETENTION_PARTIAL_DAYS: ${RETENTION_PARTIAL_DAYS:-30}
+      RETENTION_UNREADABLE_DAYS: ${RETENTION_UNREADABLE_DAYS:-30}
+      RETENTION_CONFIRMED_DAYS: ${RETENTION_CONFIRMED_DAYS:-90}
       LOCAL_DASHBOARD_MODE: ${LOCAL_DASHBOARD_MODE:-true}
       LOCAL_DASHBOARD_ORIGINS: http://localhost:5173,http://127.0.0.1:5173
       LOCAL_DASHBOARD_BIND_HOST: 127.0.0.1
@@ -43,6 +55,8 @@ services:
     environment:
       VITE_API_PROXY_TARGET: http://api:8000
       VITE_MEDIA_PROXY_TARGET: http://mediamtx:8888
+      # Opt-in: with no source selected, do not call the session "live".
+      VITE_NEUTRAL_IDLE_LABEL: ${VITE_NEUTRAL_IDLE_LABEL:-false}
     ports:
       - 127.0.0.1:5173:5173
     depends_on:
@@ -231,6 +245,33 @@ services:
       # Opt-in: show the analysed frame and full unverified readings of a
       # permitted recording in the operator dashboard. Never applies to cameras.
       SENTINEL_DASHBOARD_EVIDENCE: ${DASHBOARD_RECORDED_EVIDENCE:-false}
+      # Opt-in: keep vehicles ByteTrack has not yet confirmed (often motorcycles
+      # between 500 ms samples). Fusion and acceptance thresholds are unchanged.
+      SENTINEL_KEEP_UNCONFIRMED_VEHICLES: ${SENTINEL_KEEP_UNCONFIRMED_VEHICLES:-false}
+      # Optional: apply it only to frames at least this tall (2160 = 4K); 0 = every height.
+      SENTINEL_KEEP_UNCONFIRMED_MIN_HEIGHT: ${SENTINEL_KEEP_UNCONFIRMED_MIN_HEIGHT:-0}
+      # Opt-in plate options (docs/WORK_LOG.md); all off by default.
+      SENTINEL_REJECT_NON_PLATES: ${SENTINEL_REJECT_NON_PLATES:-false}
+      SENTINEL_TWO_LINE_PLATES: ${SENTINEL_TWO_LINE_PLATES:-false}
+      # Opt-in plate reading (docs/OCR_NEXT_STEPS.md); off by default, gates unchanged.
+      SENTINEL_PLATE_FORMAT_VALIDATOR: ${SENTINEL_PLATE_FORMAT_VALIDATOR:-false}
+      SENTINEL_POSITION_VOTE: ${SENTINEL_POSITION_VOTE:-false}
+      # Named operational profile: baseline (default, current behaviour), candidate (CPU) or
+      # candidate-gpu. Individual SENTINEL_* flags below still override, for diagnosis/rollback.
+      # Roll back with SENTINEL_PROFILE=baseline and recreate the service. docs/DEPLOYMENT_GUIDE.md.
+      SENTINEL_PROFILE: ${SENTINEL_PROFILE:-baseline}
+      SENTINEL_RESULT_STATES: ${SENTINEL_RESULT_STATES:-}
+      SENTINEL_PLATE_LEVEL_TRACKING: ${SENTINEL_PLATE_LEVEL_TRACKING:-}
+      SENTINEL_NEAR_DUPLICATE_GUARD: ${SENTINEL_NEAR_DUPLICATE_GUARD:-}
+      SENTINEL_ADAPTIVE_SAMPLING: ${SENTINEL_ADAPTIVE_SAMPLING:-}
+      SENTINEL_MULTI_SOURCE_PLATES: ${SENTINEL_MULTI_SOURCE_PLATES:-}
+      SENTINEL_SECONDARY_VETO: ${SENTINEL_SECONDARY_VETO:-}
+      SENTINEL_PARTIAL_WATCHLIST: ${SENTINEL_PARTIAL_WATCHLIST:-}
+      SENTINEL_REVIEW_EVIDENCE: ${SENTINEL_REVIEW_EVIDENCE:-false}
+      SENTINEL_REVIEW_EVIDENCE_LIVE: ${SENTINEL_REVIEW_EVIDENCE_LIVE:-false}
+      SENTINEL_WATCHLIST_SNAPSHOT_MAX_AGE: ${SENTINEL_WATCHLIST_SNAPSHOT_MAX_AGE:-900}
+      # Opt-in: refuse pause/resume on a finished recording instead of a silent no-op.
+      SENTINEL_STRICT_PLAYBACK: ${SENTINEL_STRICT_PLAYBACK:-false}
     volumes:
       - ./edge:/workspace/edge:ro
       - ./tools:/workspace/tools:ro

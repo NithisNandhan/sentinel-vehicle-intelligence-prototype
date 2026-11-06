@@ -17,7 +17,12 @@ import time
 
 from .privacy import mask_plate
 
-SPLITS = ('development', 'validation', 'test')
+SPLITS = ('development', 'validation', 'test', 'sealed_a', 'sealed_b', 'sealed_c')
+SEALED = ('test', 'sealed_a', 'sealed_b', 'sealed_c')
+# Who produced a recording's labels (schema 1.1). Sealed sets need blind human labels.
+LABEL_SOURCES = ('blind_human', 'human_verified_prefill', 'review')
+LAYOUTS = ('one_row', 'two_row')
+CONDITIONS = frozenset({'night', 'low_light', 'blur', 'small', 'perspective', 'glare', 'occluded', 'rain', 'motion'})
 IOU_RULE = 0.5
 # One sampling interval: a labelled instant and an analysed sample can differ by this much.
 TIME_TOLERANCE_MS = 500
@@ -58,6 +63,9 @@ class Passage:
     readable: bool
     plate_visible: bool
     boxes: tuple = ()           # ({'position_ms', 'vehicle', 'plate'}, ...)
+    layout: str | None = None   # 'one_row' or 'two_row' (schema 1.1)
+    conditions: tuple = ()      # Annotated image conditions for slices (schema 1.1)
+    camera_id: str | None = None
 
 
 def load_labels(path, *, split):
@@ -69,7 +77,7 @@ def load_labels(path, *, split):
         data = json.loads(raw)
     except ValueError:
         raise LabelError('Label file is not JSON') from None
-    if not isinstance(data, dict) or data.get('schema_version') != '1.0' or not isinstance(data.get('recordings'), list):
+    if not isinstance(data, dict) or data.get('schema_version') not in ('1.0', '1.1') or not isinstance(data.get('recordings'), list):
         raise LabelError('Unsupported label file')
     if not isinstance(data.get('labeller'), str) or not data['labeller'].strip():
         raise LabelError('Labels must name the person who made them; model output is not ground truth')
@@ -82,6 +90,16 @@ def load_labels(path, *, split):
             raise LabelError(f'{rid}: split must be development, validation or test')
         if not isinstance(entry.get('sha256'), str) or not entry['sha256'].startswith(rid[4:]):
             raise LabelError(f'{rid}: sha256 must be the labelled file\'s hash')
+        source = entry.get('label_source', 'blind_human' if data['schema_version'] == '1.0' else None)
+        if source not in LABEL_SOURCES:
+            raise LabelError(f'{rid}: label_source must be one of ' + ', '.join(LABEL_SOURCES))
+        if entry['split'] in SEALED and source != 'blind_human':
+            raise LabelError(f'{rid}: a sealed split needs blind human labels, never model-assisted or review-derived')
+        if source == 'review' and entry['split'] != 'development':
+            raise LabelError(f'{rid}: review-derived labels are development data only')
+        camera = entry.get('camera_id')
+        if camera is not None and (not isinstance(camera, str) or not 1 <= len(camera) <= 80):
+            raise LabelError(f'{rid}: camera_id must be a short string')
         passages, seen = [], set()
         for item in entry.get('passages') or []:
             where = f'{rid}/{item.get("passage_id") if isinstance(item, dict) else "?"}'
@@ -111,7 +129,19 @@ def load_labels(path, *, split):
             visible = item.get('plate_visible', readable or any(b['plate'] for b in boxes))
             if not isinstance(visible, bool) or (readable and not visible):
                 raise LabelError(f'{where}: plate_visible must be true for a readable passage')
-            passages.append(Passage(item['passage_id'], item['vehicle_id'], start, end, plate, readable, visible, tuple(boxes)))
+            layout = item.get('layout')
+            if layout is not None and layout not in LAYOUTS:
+                raise LabelError(f'{where}: layout must be one_row or two_row')
+            conditions = item.get('conditions') or []
+            if not isinstance(conditions, list) or any(c not in CONDITIONS for c in conditions):
+                raise LabelError(f'{where}: conditions must come from ' + ', '.join(sorted(CONDITIONS)))
+            corners = item.get('corners')
+            if corners is not None and (not isinstance(corners, list) or len(corners) != 4 or any(
+                    not isinstance(p, list) or len(p) != 2 or any(isinstance(v, bool) or not isinstance(v, (int, float)) or v < 0 for v in p)
+                    for p in corners)):
+                raise LabelError(f'{where}: corners are four [x, y] native-pixel points')
+            passages.append(Passage(item['passage_id'], item['vehicle_id'], start, end, plate, readable, visible, tuple(boxes),
+                                    layout, tuple(sorted(conditions)), camera))
             vehicles.setdefault(item['vehicle_id'], set()).add(entry['split'])
         if entry['split'] == split:
             selected[rid] = {'sha256': entry['sha256'], 'passages': passages}
@@ -270,12 +300,135 @@ def merge(results):
     }
 
 
+@dataclass(frozen=True, repr=False)
+class PassageResult:
+    """One pipeline passage outcome in video time. Full strings stay in memory."""
+    first_ms: int
+    last_ms: int
+    state: str                 # confirmed, partial or unreadable
+    plate: str | None = None   # confirmed only
+    pattern: str | None = None # partial only, '?' for unknown
+    reason: str | None = None
+    length_certain: bool = True
+    quality: dict | None = None
+
+
+STATE_RULES = {
+    'counting': 'Outcomes are judged per labelled passage after plate-level association, never per tracker ID or frame.',
+    'coverage': 'Readable passages with an overlapping CONFIRMED outcome equal to the label / readable passages.',
+    'accepted_precision': 'Correct CONFIRMED / all CONFIRMED on readable passages. A CONFIRMED outcome on a passage no person could read is reported separately as unsupported.',
+    'partial_safety': 'A PARTIAL outcome is useful only when its length equals the label and every displayed known character equals the label at that position. Any wrong known character is a safety failure.',
+    'unreadable_rate': 'Readable passages whose best outcome is UNREADABLE or that produced no outcome / readable passages.',
+    'intervals': 'Wilson 95% intervals and the rule of three treat passages as independent. Passages from one recording are correlated, so true uncertainty is wider.',
+}
+
+
+def _known_errors(pattern, truth):
+    if pattern is None or truth is None or len(pattern) != len(truth):
+        return None
+    return sum(1 for a, b in zip(pattern, truth) if a != '?' and a != b)
+
+
+def score_states(passages, outcomes, *, slices=True):
+    """Three-state scoring for one recording (or a merged list)."""
+    from .evaluation_stats import error_bound, proportion
+    readable = [p for p in passages if p.readable]
+    rows = []
+    correct = wrong = unsupported = partial_total = partial_useful = partial_wrong = 0
+    known_total = known_wrong = unreadable = missed = 0
+    for passage in passages:
+        near = [o for o in outcomes if o.first_ms <= passage.end_ms + TIME_TOLERANCE_MS
+                and o.last_ms >= passage.start_ms - TIME_TOLERANCE_MS]
+        confirmed = [o for o in near if o.state == 'confirmed']
+        partials = [o for o in near if o.state == 'partial']
+        row = {'passage_id': passage.passage_id, 'readable': passage.readable, 'layout': passage.layout,
+               'conditions': list(passage.conditions), 'outcomes': len(near)}
+        if not passage.readable:
+            unsupported += bool(confirmed)
+            row['state'] = 'confirmed_unsupported' if confirmed else (near[0].state if near else 'none')
+            rows.append(row)
+            continue
+        if any(o.plate != passage.plate for o in confirmed):
+            wrong += 1; row['state'] = 'confirmed_wrong'
+        elif confirmed:
+            correct += 1; row['state'] = 'confirmed_correct'
+        elif partials:
+            partial_total += 1
+            errors = [_known_errors(o.pattern, passage.plate) for o in partials]
+            bad = any(e is None or e > 0 for e in errors)
+            known = sum(sum(c != '?' for c in o.pattern) for o in partials)
+            known_total += known
+            # A wrong length makes every displayed known character unsupported.
+            known_wrong += sum(sum(c != '?' for c in o.pattern) if e is None else e for o, e in zip(partials, errors))
+            partial_useful += not bad
+            partial_wrong += bad
+            row['state'] = 'partial_wrong_known_character' if bad else 'partial_useful'
+        elif near:
+            unreadable += 1; row['state'] = 'unreadable'
+        else:
+            missed += 1; unreadable += 1; row['state'] = 'no_outcome'
+        rows.append(row)
+    judged = correct + wrong
+    report = {
+        'readable_passages': len(readable), 'unreadable_labelled_passages': len(passages) - len(readable),
+        'coverage': proportion(correct, len(readable)),
+        'accepted': {'correct': correct, 'wrong': wrong, 'unsupported_on_unreadable_passages': unsupported},
+        'accepted_precision': proportion(correct, judged) if judged else {'count': 0, 'of': 0, 'rate': None,
+                                                                          'note': 'undefined: nothing was confirmed'},
+        'accepted_error': error_bound(wrong, judged) if judged else None,
+        'partial': {'passages': partial_total, 'useful': proportion(partial_useful, partial_total),
+                    'with_wrong_known_character': partial_wrong, 'known_characters': known_total,
+                    'wrong_known_characters': error_bound(known_wrong, known_total) if known_total else None},
+        'unreadable_rate': proportion(unreadable, len(readable)),
+        'readable_passages_without_any_outcome': missed,
+        'outcomes_outside_labelled_passages': sum(1 for o in outcomes if not any(
+            o.first_ms <= p.end_ms + TIME_TOLERANCE_MS and o.last_ms >= p.start_ms - TIME_TOLERANCE_MS for p in passages)),
+        'per_passage': rows,
+    }
+    if slices:
+        report['slices'] = _slices(passages, rows)
+    return report
+
+
+def _slices(passages, rows):
+    from .evaluation_stats import proportion
+    groups = {}
+    for passage, row in zip(passages, rows):
+        if not passage.readable:
+            continue
+        keys = ['layout:' + (passage.layout or 'unlabelled')] + ['condition:' + c for c in passage.conditions]
+        for key in keys:
+            groups.setdefault(key, []).append(row['state'])
+    return {key: {'readable_passages': len(states), 'coverage': proportion(states.count('confirmed_correct'), len(states)),
+                  'confirmed_wrong': states.count('confirmed_wrong'),
+                  'partial_wrong_known_character': states.count('partial_wrong_known_character')}
+            for key, states in sorted(groups.items())}
+
+
+def release_gates(states, *, split, previously_opened):
+    """Initial-release gates (docs/EVALUATION_PROTOCOL.md). Only a first-opened sealed split counts."""
+    coverage = states['coverage']
+    low = coverage['wilson_95'][0] if coverage.get('wilson_95') else None
+    partial = states['partial']
+    checks = {
+        'sealed_split_first_opening': split in SEALED and not previously_opened,
+        'readable_passages_at_least_50': states['readable_passages'] >= 50,
+        'coverage_at_least_60_percent': coverage['rate'] is not None and coverage['rate'] >= .60,
+        'coverage_wilson_lower_at_least_45_percent': low is not None and low >= .45,
+        'zero_wrong_confirmed': states['accepted']['wrong'] == 0 and states['accepted']['unsupported_on_unreadable_passages'] == 0,
+        'zero_wrong_known_partial_characters': partial['with_wrong_known_character'] == 0,
+    }
+    return {'checks': checks, 'passed': all(checks.values()),
+            'note': 'Passing on one small sealed set does not establish 99.9% precision.'}
+
+
 class _Collector:
     """Stands in for delivery and the interface state; keeps everything in memory."""
     def __init__(self, recording, top_k):
         self.recording, self.top_k = recording, top_k
         self.tracks, self.samples, self.last_position = {}, 0, None
         self.segment = 0
+        self.passages = []
 
     # LiveState stand-in: snapshots are not needed for scoring.
     def publish(self, snapshot, stop=None):
@@ -309,6 +462,15 @@ class _Collector:
             if history is not None and display['candidate_count']:
                 outcome.candidates = [c.plate for c in history.reader.candidates()[:self.top_k]]
 
+    def on_passage(self, outcome):
+        """A finished passage (result states on). Kept in memory for three-state scoring."""
+        start = self.recording.start_pts_ms
+        result = outcome.result
+        state = 'confirmed' if outcome.confirmed_plate else result.state
+        self.passages.append(PassageResult(outcome.first_pts - start, outcome.last_pts - start, state,
+                                           outcome.confirmed_plate or result.plate, result.pattern, result.reason,
+                                           result.length_certain, outcome.indicators))
+
 
 def analyse_recording(config, recording, model, detector, vehicle, *, detector_profile, top_k=20,
                       plate_recovery=False, stop=None):
@@ -329,6 +491,8 @@ def analyse_recording(config, recording, model, detector, vehicle, *, detector_p
         'analysed_frames': summary.get('analysed_frames', 0), 'ocr_calls': summary.get('ocr_calls', 0),
         'vehicle_tracks': len(collector.tracks),
         'reached_end': duration is None or collector.last_position is None or duration-collector.last_position <= 2000,
+        'passage_outcomes': len(collector.passages),
+        '_passages': collector.passages,
     }
 
 
@@ -344,7 +508,7 @@ def evaluate(labels_path, split, recordings_dir, config, models, *, detector_pro
     if missing:
         raise LabelError('Labelled recordings are not present with a valid receipt: ' + ', '.join(missing))
     model, detector, vehicle = models
-    per_recording, results = [], []
+    per_recording, results, states_input = [], [], []
     for recording_id, entry in sorted(labelled.items()):
         recording = available[recording_id]
         if recording.sha256 != entry['sha256']:
@@ -352,10 +516,33 @@ def evaluate(labels_path, split, recordings_dir, config, models, *, detector_pro
         tracks, runtime = analyse_recording(config, recording, model, detector, vehicle,
                                             detector_profile=detector_profile, top_k=top_k,
                                             plate_recovery=plate_recovery)
+        outcomes = runtime.pop('_passages', [])
         result = score(entry['passages'], tracks, top_k=top_k)
+        if outcomes or runtime.get('passage_outcomes') is not None:
+            result['states'] = score_states(entry['passages'], outcomes)
+            states_input.append((entry['passages'], outcomes))
         results.append(result)
         per_recording.append({'recording_id': recording_id, 'runtime': runtime, **result})
-    return {'schema_version': '1.0', 'split': split, 'labels_sha256': label_hash,
+    from .plate_options import PlateOptions
+    options = PlateOptions.from_env()
+    report_states = None
+    if options.result_states and states_input:
+        all_outcomes = []
+        offset = 0
+        merged_passages = []
+        # Recordings share video time; shift each one so outcomes match only their own passages.
+        for passages, outcomes in states_input:
+            span = max([p.end_ms for p in passages] + [o.last_ms for o in outcomes] + [0]) + 10 * TIME_TOLERANCE_MS
+            merged_passages += [Passage(p.passage_id, p.vehicle_id, p.start_ms + offset, p.end_ms + offset, p.plate,
+                                        p.readable, p.plate_visible, p.boxes, p.layout, p.conditions, p.camera_id)
+                                for p in passages]
+            all_outcomes += [PassageResult(o.first_ms + offset, o.last_ms + offset, o.state, o.plate, o.pattern,
+                                           o.reason, o.length_certain, o.quality) for o in outcomes]
+            offset += span
+        report_states = score_states(merged_passages, all_outcomes)
+        report_states.pop('per_passage')
+    return {'schema_version': '1.1', 'split': split, 'labels_sha256': label_hash,
+            'profile': options.manifest(), 'state_rules': STATE_RULES, 'states_totals': report_states,
             'settings': {'detector_profile': detector_profile, 'acceptance_threshold': config.ocr_min_confidence,
                          'sampling_interval_ms': 250 if plate_recovery else 500, 'plate_recovery': plate_recovery,
                          'top_k': top_k, 'pacing': 'unpaced', 'frames_dropped_by_design': 0},

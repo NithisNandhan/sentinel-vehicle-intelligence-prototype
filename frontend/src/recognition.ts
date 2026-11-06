@@ -1,4 +1,4 @@
-import type { RecognitionState, RecognitionStatus } from './api';
+import type { RecognitionEvidence, RecognitionState, RecognitionStatus } from './api';
 
 export function recognitionLabel(state: RecognitionState | string): string {
   switch (state) {
@@ -20,6 +20,15 @@ export function recognitionTone(state: RecognitionState | string): string {
 
 export function isRecorded(status: RecognitionStatus | null): boolean {
   return status?.source_mode === 'recorded';
+}
+
+/** Panel eyebrow. Opt-in (VITE_NEUTRAL_IDLE_LABEL=true): with no source selected the
+ *  session is neither live nor recorded, so it is not called live. */
+export function processingHeading(status: RecognitionStatus | null,
+  neutralIdle = import.meta.env.VITE_NEUTRAL_IDLE_LABEL === 'true'): string {
+  if (isRecorded(status)) return 'SHARED RECORDED PROCESSING';
+  if (neutralIdle && !status?.camera_id) return 'SHARED PROCESSING · NO SOURCE SELECTED';
+  return 'SHARED LIVE PROCESSING';
 }
 
 /** Seconds after which shown evidence is no longer current. A recording analysed on a slow CPU gets longer than a live feed. */
@@ -101,4 +110,17 @@ export function failureMessage(code?: string | null): string {
     case undefined: case null: case '': return '';
     default: return `Analysis stopped (${code}).`;
   }
+}
+
+/** Evidence to show after a poll. A failed (`undefined`) or empty (`null`) poll keeps the
+ * previous evidence for the same session so the frame does not flicker; a session change clears it. */
+export function retainEvidence(previous: RecognitionEvidence | null, incoming: RecognitionEvidence | null | undefined, sessionId: string | null | undefined): RecognitionEvidence | null {
+  if (incoming && incoming.session_id === sessionId) return incoming;
+  return previous && previous.session_id === sessionId ? previous : null;
+}
+
+/** Title of the frame placeholder; never claims the frame is unavailable. */
+export function framePlaceholderTitle(status: RecognitionStatus | null): string {
+  if (status?.status === 'connecting') return 'Loading recording and models';
+  return status?.camera_id ? 'Waiting for analysis evidence' : 'Select a recording to begin';
 }

@@ -1,0 +1,270 @@
+{
+  "scope": "Previously examined Mumbai development targets. Best matching proposal is associated to each reference AFTER inference; this measures proposal coverage, not automatic final selection or precision.",
+  "ocr_loaded": false,
+  "live_pipeline_changed": false,
+  "targets": 21,
+  "unique_frames": 14,
+  "source_sha256": "6b7064605b3d4d12c6c1da4566cbcec1cd2e3e3bd7b77814865fe9df22045f65",
+  "manifest_sha256": "80e43807e4c25d1fb8ae37e411a5ae2c0078a0d1900af6d176d701743a5f6814",
+  "plate_detector_sha256": "746fdd358ec110418775d7c9d8d07910d48b1a21471f92bf4421f6510d6daade",
+  "text_model": "PaddlePaddle/PP-OCRv5_mobile_det",
+  "text_model_revision": "0d63e78e2b680928f6b1747d76a08db6e645efb7",
+  "text_assets_bytes": 4939860,
+  "baseline_hit_iou50": 3,
+  "tiled_plate_hit_iou50": 10,
+  "text_region_hit_iou50": 13,
+  "combined_native_candidate_hit_iou50": 15,
+  "text_quad_iou50_on_17_corner_annotations": 14,
+  "annotated_corner_targets": 17,
+  "median_text_quad_iou_when_returned": 0.8133223859737501,
+  "mean_gpu_frame_ms": {
+    "plate_tiles_and_refinement": 765.3960567857122,
+    "text_tiles": 821.920506785716,
+    "denser_plate_tiles": 1771.7223565714287
+  },
+  "denser_plate_tiles_hit_iou50": 10,
+  "failures": [
+    {
+      "experiment": "Initial plate-only run through OCR launcher",
+      "error": "cuDNN library-version conflict",
+      "resolution": "Use detector image native runtime"
+    },
+    {
+      "experiment": "First text-boundary run",
+      "error": "CUDA error 999 at last sampled frame",
+      "resolution": "GPU health checked; repeated run completed 14/14 frames. Long-duration reliability unproven."
+    }
+  ],
+  "verification": {
+    "unit_tests_passed": 22,
+    "crop_viewer_desktop_and_mobile_checked": true
+  },
+  "remaining_work": [
+    "Plate-vs-other-text filtering without annotation lookup",
+    "Multi-row and separated text-region grouping",
+    "Boundary-labelled examples for custom painted registrations",
+    "Full-video temporal association, bounded scheduling and endurance checks",
+    "Unseen-footage localisation evaluation and exhaustive false-proposal annotation"
+  ],
+  "cases": [
+    {
+      "id": "01",
+      "baseline_iou": 0.2348896706108091,
+      "tiled_plate_iou": 0.14183976181592242,
+      "text_region_iou": 0.6581977365196702,
+      "text_quad": {
+        "iou": 0.8586412275615547,
+        "target_coverage": 0.8677054193789709
+      },
+      "combined_native_candidate_hit": true
+    },
+    {
+      "id": "02",
+      "baseline_iou": 0.3777322404371585,
+      "tiled_plate_iou": 0.44954020033500947,
+      "text_region_iou": 0.4946018217523667,
+      "text_quad": {
+        "iou": 0.8133223859737501,
+        "target_coverage": 0.8363371901371308
+      },
+      "combined_native_candidate_hit": false
+    },
+    {
+      "id": "03",
+      "baseline_iou": 0.0,
+      "tiled_plate_iou": 0.5654821321621082,
+      "text_region_iou": 0.35819148936170214,
+      "text_quad": null,
+      "combined_native_candidate_hit": true
+    },
+    {
+      "id": "04",
+      "baseline_iou": 0.0,
+      "tiled_plate_iou": 0.0,
+      "text_region_iou": 0.4379745179501259,
+      "text_quad": {
+        "iou": 0.33689043305621047,
+        "target_coverage": 0.33689043305621047
+      },
+      "combined_native_candidate_hit": false
+    },
+    {
+      "id": "05",
+      "baseline_iou": 0.0,
+      "tiled_plate_iou": 0.4166176146722556,
+      "text_region_iou": 0.4275090364020015,
+      "text_quad": {
+        "iou": 0.8062646301762564,
+        "target_coverage": 0.9085929924854558
+      },
+      "combined_native_candidate_hit": false
+    },
+    {
+      "id": "06",
+      "baseline_iou": 0.37334204245295693,
+      "tiled_plate_iou": 0.6177879885001384,
+      "text_region_iou": 0.0,
+      "text_quad": {
+        "iou": 0.0,
+        "target_coverage": 0.0
+      },
+      "combined_native_candidate_hit": true
+    },
+    {
+      "id": "07",
+      "baseline_iou": 0.0,
+      "tiled_plate_iou": 0.614329268292683,
+      "text_region_iou": 0.7098508086549703,
+      "text_quad": {
+        "iou": 0.8914688048382597,
+        "target_coverage": 0.9272709318781017
+      },
+      "combined_native_candidate_hit": true
+    },
+    {
+      "id": "08",
+      "baseline_iou": 0.0,
+      "tiled_plate_iou": 0.08715415019762845,
+      "text_region_iou": 0.07988142292490119,
+      "text_quad": null,
+      "combined_native_candidate_hit": false
+    },
+    {
+      "id": "09",
+      "baseline_iou": 0.0,
+      "tiled_plate_iou": 0.2216197810257216,
+      "text_region_iou": 0.6432445295564856,
+      "text_quad": {
+        "iou": 0.6672490865106708,
+        "target_coverage": 0.704257263104243
+      },
+      "combined_native_candidate_hit": true
+    },
+    {
+      "id": "10",
+      "baseline_iou": 0.5524253731343284,
+      "tiled_plate_iou": 0.5801095187498916,
+      "text_region_iou": 0.621567392258396,
+      "text_quad": {
+        "iou": 0.8640230021997762,
+        "target_coverage": 0.8926435589750085
+      },
+      "combined_native_candidate_hit": true
+    },
+    {
+      "id": "11",
+      "baseline_iou": 0.0,
+      "tiled_plate_iou": 0.0,
+      "text_region_iou": 0.7020058644955701,
+      "text_quad": {
+        "iou": 0.7548422239549857,
+        "target_coverage": 0.7878821480436212
+      },
+      "combined_native_candidate_hit": true
+    },
+    {
+      "id": "12",
+      "baseline_iou": 0.0,
+      "tiled_plate_iou": 0.0,
+      "text_region_iou": 0.5305681818181818,
+      "text_quad": null,
+      "combined_native_candidate_hit": true
+    },
+    {
+      "id": "13",
+      "baseline_iou": 0.0,
+      "tiled_plate_iou": 0.459252064853027,
+      "text_region_iou": 0.58477324884889,
+      "text_quad": {
+        "iou": 0.7351583147762034,
+        "target_coverage": 0.8058718888707965
+      },
+      "combined_native_candidate_hit": true
+    },
+    {
+      "id": "14",
+      "baseline_iou": 0.0,
+      "tiled_plate_iou": 0.0,
+      "text_region_iou": 0.0,
+      "text_quad": null,
+      "combined_native_candidate_hit": false
+    },
+    {
+      "id": "15",
+      "baseline_iou": 0.0,
+      "tiled_plate_iou": 0.7889572475166443,
+      "text_region_iou": 0.879573796096229,
+      "text_quad": {
+        "iou": 0.865357624640273,
+        "target_coverage": 0.8656576220126209
+      },
+      "combined_native_candidate_hit": true
+    },
+    {
+      "id": "16",
+      "baseline_iou": 0.0,
+      "tiled_plate_iou": 0.0,
+      "text_region_iou": 0.0,
+      "text_quad": {
+        "iou": 0.0,
+        "target_coverage": 0.0
+      },
+      "combined_native_candidate_hit": false
+    },
+    {
+      "id": "17",
+      "baseline_iou": 0.0,
+      "tiled_plate_iou": 0.656896551724138,
+      "text_region_iou": 0.8381244368967908,
+      "text_quad": {
+        "iou": 0.8218790767559555,
+        "target_coverage": 0.8300063566272966
+      },
+      "combined_native_candidate_hit": true
+    },
+    {
+      "id": "18",
+      "baseline_iou": 0.64656420267438,
+      "tiled_plate_iou": 0.6402202643171806,
+      "text_region_iou": 0.7723133908303694,
+      "text_quad": {
+        "iou": 0.7080437624716163,
+        "target_coverage": 0.7080437624716163
+      },
+      "combined_native_candidate_hit": true
+    },
+    {
+      "id": "19",
+      "baseline_iou": 0.0,
+      "tiled_plate_iou": 0.5921075997094575,
+      "text_region_iou": 0.6979331908287137,
+      "text_quad": {
+        "iou": 0.8277149469118883,
+        "target_coverage": 0.8310081381163781
+      },
+      "combined_native_candidate_hit": true
+    },
+    {
+      "id": "20",
+      "baseline_iou": 0.7125514403292181,
+      "tiled_plate_iou": 0.7644229400819835,
+      "text_region_iou": 0.8112703908061168,
+      "text_quad": {
+        "iou": 0.8232246150685681,
+        "target_coverage": 0.8317221791077101
+      },
+      "combined_native_candidate_hit": true
+    },
+    {
+      "id": "21",
+      "baseline_iou": 0.0,
+      "tiled_plate_iou": 0.6826254826254826,
+      "text_region_iou": 0.7049441786283892,
+      "text_quad": {
+        "iou": 0.874381800197824,
+        "target_coverage": 1.0
+      },
+      "combined_native_candidate_hit": true
+    }
+  ]
+}

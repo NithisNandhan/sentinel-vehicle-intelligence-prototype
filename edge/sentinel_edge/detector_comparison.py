@@ -100,7 +100,7 @@ def letterbox(image, height, width):
     return np.ascontiguousarray(tensor), scale, left, top
 
 
-def decode_yolo11(output, scale, left, top, shape, threshold=.25):
+def decode_yolo11(output, scale, left, top, shape, threshold=.25, with_confidence=False):
     import cv2
     values = np.asarray(output)
     if values.ndim != 3 or values.shape[0] != 1 or values.shape[1] != 5:
@@ -118,13 +118,25 @@ def decode_yolo11(output, scale, left, top, shape, threshold=.25):
         return []
     rects = [[b[0],b[1],b[2]-b[0],b[3]-b[1]] for b in boxes]
     kept = cv2.dnn.NMSBoxes(rects, confidences, threshold, .45)
+    if with_confidence:
+        return [(boxes[int(index)], confidences[int(index)]) for index in np.asarray(kept).reshape(-1)]
     return [boxes[int(index)] for index in np.asarray(kept).reshape(-1)]
+
+
+def configured_threads(variable, default=2):
+    """CPU threads for one model from an opt-in variable; the default is the long-standing value."""
+    import os
+    value = os.environ.get(variable, '').strip() or str(default)
+    if not value.isdigit() or not 1 <= int(value) <= 64:
+        raise ValueError(f'{variable} must be between 1 and 64')
+    return int(value)
 
 
 class PlateModel:
     def __init__(self, name, cache, device):
         import onnxruntime as ort
-        options = ort.SessionOptions(); options.intra_op_num_threads = 2; options.inter_op_num_threads = 1
+        options = ort.SessionOptions(); options.inter_op_num_threads = 1
+        options.intra_op_num_threads = configured_threads('SENTINEL_PLATE_THREADS')
         providers = ['CPUExecutionProvider'] if device == 'cpu' else ['CUDAExecutionProvider', 'CPUExecutionProvider']
         self.device = device
         if name.startswith('yolov9'):

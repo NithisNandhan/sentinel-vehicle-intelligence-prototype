@@ -76,32 +76,77 @@ def _box_iou(first, second):
 
 
 def associate_vehicle_tracks(detections, previous, frame_index, next_detection_id,
-                             *, minimum_iou=.2, max_gap=2):
-    """Keep detector boxes even without ByteTrack IDs; fallback IDs are local, not proof of identity."""
+                             *, minimum_iou=.2, max_gap=2, aliases=None):
+    """Keep detector boxes even without ByteTrack IDs; fallback IDs are local, not proof of identity.
+
+    Opt-in `aliases` (ByteTrack ID -> shown ID) also links boxes by plausible motion, so a
+    small fast vehicle keeps one ID between 500 ms samples even without box overlap, and a
+    ByteTrack ID that confirms a box already shown under a fallback ID keeps that ID.
+    """
     resolved, reserved = {}, set()
     untracked = []
     for index,(native_id,box,vehicle_class) in enumerate(detections):
-        if native_id is None:
-            untracked.append((index,box,vehicle_class))
+        if aliases is not None and native_id is not None and aliases.get(str(native_id)) in reserved:
+            del aliases[str(native_id)]  # Its shown ID is taken this frame: decide afresh, never duplicate.
+        if native_id is None or (aliases is not None and str(native_id) not in aliases):
+            untracked.append((index,box,vehicle_class,native_id))
             continue
-        track_id = str(native_id)
+        track_id = aliases[str(native_id)] if aliases is not None else str(native_id)
         resolved[index] = (track_id,box,vehicle_class)
         reserved.add(track_id)
-    for index,box,vehicle_class in untracked:
-        matches = [(_box_iou(box,old_box),track_id)
-            for track_id,(old_box,old_class,old_frame) in previous.items()
-            if track_id not in reserved and old_class == vehicle_class and frame_index-old_frame <= max_gap]
-        score,track_id = max(matches,default=(0.,None))
-        if track_id is None or score < minimum_iou:
-            next_detection_id += 1
-            track_id = f'det-{next_detection_id}'
-        resolved[index] = (track_id,box,vehicle_class)
-        reserved.add(track_id)
+    if aliases is None:
+        for index,box,vehicle_class,_ in untracked:
+            matches = [(_box_iou(box,old_box),track_id)
+                for track_id,(old_box,old_class,old_frame) in previous.items()
+                if track_id not in reserved and old_class == vehicle_class and frame_index-old_frame <= max_gap]
+            score,track_id = max(matches,default=(0.,None))
+            if track_id is None or score < minimum_iou:
+                next_detection_id += 1
+                track_id = f'det-{next_detection_id}'
+            resolved[index] = (track_id,box,vehicle_class)
+            reserved.add(track_id)
+    else:
+        # Best pairs first across all boxes, so side-by-side vehicles cannot swap or merge.
+        pairs = []
+        for index,box,vehicle_class,native_id in untracked:
+            for track_id,(old_box,old_class,old_frame) in previous.items():
+                if track_id in reserved or old_class != vehicle_class or frame_index-old_frame > max_gap:
+                    continue
+                if native_id is not None and not track_id.startswith('det-'):
+                    continue  # A new ByteTrack ID may inherit a fallback ID, never another ByteTrack ID.
+                overlap = _box_iou(box,old_box)
+                if overlap >= minimum_iou:
+                    pairs.append(((0,-overlap),index,track_id))
+                elif track_consistent(old_box,box,old_class,vehicle_class):
+                    # The same discontinuity rule the OCR stage applies, so linking never
+                    # outruns what that stage accepts as one vehicle.
+                    moved = math.hypot((box[0]+box[2]-old_box[0]-old_box[2])/2,(box[1]+box[3]-old_box[1]-old_box[3])/2)
+                    pairs.append(((1,moved/math.hypot(old_box[2]-old_box[0],old_box[3]-old_box[1])),index,track_id))
+        for _,index,track_id in sorted(pairs):
+            if index not in resolved and track_id not in reserved:
+                resolved[index] = (track_id,detections[index][1],detections[index][2])
+                reserved.add(track_id)
+        for index,box,vehicle_class,native_id in untracked:
+            if index not in resolved:
+                if native_id is not None:
+                    track_id = str(native_id)
+                else:
+                    next_detection_id += 1
+                    track_id = f'det-{next_detection_id}'
+                resolved[index] = (track_id,box,vehicle_class)
+                reserved.add(track_id)
+            if native_id is not None:
+                for stale in [key for key,value in aliases.items() if value == resolved[index][0]]:
+                    del aliases[stale]
+                aliases[str(native_id)] = resolved[index][0]
     current = {track_id:(box,vehicle_class,frame_index)
                for track_id,box,vehicle_class in resolved.values()}
     retained = {track_id:state for track_id,state in previous.items()
                 if track_id not in reserved and frame_index-state[2] <= max_gap}
     retained.update(current)
+    if aliases is not None:
+        for native_id in [key for key,value in aliases.items() if value not in retained]:
+            del aliases[native_id]
     return [resolved[index] for index in sorted(resolved)],retained,next_detection_id
 
 

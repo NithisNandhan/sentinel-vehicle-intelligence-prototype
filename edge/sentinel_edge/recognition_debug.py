@@ -1,6 +1,10 @@
 """Observable OCR diagnostics, not calibrated confidence or model reasoning."""
 from .ctc_fusion import greedy_text
 
+FORMAT_ADJUSTED = 'format-adjusted, unverified'
+FORMAT_ADJUSTED_REASON = ('Leading reading is format-adjusted, unverified: look-alike characters were '
+                          'swapped to fit the plate format and no frame read this exact text')
+
 
 def characters(rows, tokens):
     result, previous = [], None
@@ -22,6 +26,8 @@ def gate_reasons(reader, candidates, threshold):
         reasons.append('No complete supported Indian-format candidate in the retained search')
         return reasons
     best = candidates[0]
+    if getattr(best, 'format_adjusted', False):
+        reasons.append(FORMAT_ADJUSTED_REASON)
     if best.score < threshold:
         reasons.append(f'Mean character score is below {threshold:g}')
     if best.minimum_character_score < .75:
@@ -31,7 +37,7 @@ def gate_reasons(reader, candidates, threshold):
     peaks = reader._peaks.get(best.plate, [])
     if any(sum(values[i] >= .6 for values in peaks) < 2 for i in range(len(best.plate))):
         reasons.append('Each character needs support of at least 0.6 in two distinct frames')
-    if not reasons:
+    if not reasons or reasons == [FORMAT_ADJUSTED_REASON]:
         reasons.append('Model gates passed; correctness has not been independently verified')
     return reasons
 
@@ -69,10 +75,12 @@ def describe_track(track_id, history, samples, threshold):
             'recognition_state': 'model_accepted' if accepted else 'uncertain' if candidates else 'reading' if reader.observation_count < 3 else 'unreadable',
             'masked_plate': mask_plate(candidates[0].plate) if candidates else None,
             'best_guess': {'plate': ranked[0].plate, 'score': round(ranked[0].score, 4),
-                           'observations': ranked[0].observations} if ranked else None,
+                           'observations': ranked[0].observations,
+                           'format_adjusted': ranked[0].format_adjusted} if ranked else None,
             'candidates': [{'plate': c.plate, 'score': round(c.score, 4),
                             'minimum_character_score': round(c.minimum_character_score, 4),
-                            'log_score': round(c.log_score, 4), 'observations': c.observations} for c in candidates],
+                            'log_score': round(c.log_score, 4), 'observations': c.observations,
+                            'format_adjusted': c.format_adjusted} for c in candidates],
             'gate_reasons': reasons, 'frames': frames,
             'reconstruction': snapshot(history.reconstruction, reader.tokens) if history.reconstruction is not None else
                               {'status': 'not_run', 'reason': 'Reconstruction has no retained crop window yet or is disabled'}}

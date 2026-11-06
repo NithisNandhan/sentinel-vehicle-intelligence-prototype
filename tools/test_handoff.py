@@ -102,14 +102,14 @@ class HandoffTests(unittest.TestCase):
     def test_sqlite_backup_preserves_source_and_queue(self):
         path = self.source / 'outbox.sqlite3'
         secret_url = 'rtsp://email%40example.com:password@camera/stream/cam01'
-        with sqlite3.connect(path) as db:
+        with contextlib.closing(sqlite3.connect(path)) as db, db:
             db.execute('CREATE TABLE outbox (event_id TEXT PRIMARY KEY,payload TEXT)')
             db.execute('INSERT INTO outbox VALUES (?,?)', ('one', secret_url))
         with contextlib.redirect_stdout(io.StringIO()):
             events.export_outboxes(self.output, [str(self.source) + '=edge'])
-        with sqlite3.connect(path) as db:
+        with contextlib.closing(sqlite3.connect(path)) as db, db:
             self.assertEqual(db.execute('SELECT payload FROM outbox').fetchone()[0], secret_url)
-        with sqlite3.connect(self.output / 'edge-outbox.sqlite3') as db:
+        with contextlib.closing(sqlite3.connect(self.output / 'edge-outbox.sqlite3')) as db, db:
             self.assertEqual(db.execute('SELECT payload FROM outbox').fetchone()[0], '[source URL removed]')
         records = json.loads((self.output / 'outboxes.json').read_text())
         self.assertEqual(records[0]['queued_events'], 1)
@@ -158,7 +158,7 @@ class HandoffTests(unittest.TestCase):
 
     def test_outbox_restore_refuses_overwrite(self):
         source = self.source / 'queue.sqlite3'
-        with sqlite3.connect(source) as db:
+        with contextlib.closing(sqlite3.connect(source)) as db, db:
             db.execute('CREATE TABLE outbox (event_id TEXT,payload TEXT)')
             db.execute('INSERT INTO outbox VALUES (?,?)', ('one', '{}'))
         destination = self.root / 'restored.sqlite3'
@@ -166,7 +166,7 @@ class HandoffTests(unittest.TestCase):
             events.restore_outbox(source, destination)
         with self.assertRaisesRegex(ValueError, 'Existing outbox preserved'):
             events.restore_outbox(source, destination)
-        with sqlite3.connect(destination) as db:
+        with contextlib.closing(sqlite3.connect(destination)) as db, db:
             self.assertEqual(db.execute('SELECT COUNT(*) FROM outbox').fetchone()[0], 1)
 
     def test_finalized_wal_snapshot_uses_immutable_read(self):
@@ -184,7 +184,7 @@ class HandoffTests(unittest.TestCase):
             with contextlib.redirect_stdout(io.StringIO()):
                 events.restore_outbox(source, destination)
             self.assertIn('mode=ro&immutable=1', connect.call_args_list[0].args[0])
-        with sqlite3.connect(destination) as restored:
+        with contextlib.closing(sqlite3.connect(destination)) as restored, restored:
             self.assertEqual(restored.execute('SELECT COUNT(*) FROM outbox').fetchone()[0], 1)
 
 

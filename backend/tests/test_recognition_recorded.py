@@ -158,6 +158,36 @@ def test_evidence_view_never_serves_a_live_camera(client, monkeypatch):
     assert response.status_code == 404 and "QUJD" not in response.text
 
 
+def _edge_returns(monkeypatch, code):
+    import urllib.error
+
+    class Opener:
+        def open(self, *args, **kwargs):
+            raise urllib.error.HTTPError("http://SECRET", code, "SECRET", {}, None)
+    monkeypatch.setattr(recognition.urllib.request, "build_opener", lambda *args: Opener())
+
+
+def test_evidence_after_stop_is_unavailable_by_default(client, monkeypatch):
+    recognition.get_settings().dashboard_recorded_evidence = True
+    _edge_returns(monkeypatch, 404)
+    response = client.get("/v1/recognition/evidence", headers=OPERATOR)
+    assert response.status_code == 503 and "SECRET" not in response.text
+
+
+def test_evidence_after_stop_is_a_plain_not_found_when_enabled(client, monkeypatch):
+    settings = recognition.get_settings()
+    settings.dashboard_recorded_evidence = settings.recognition_idle_evidence_404 = True
+    _edge_returns(monkeypatch, 404)
+    response = client.get("/v1/recognition/evidence", headers=OPERATOR)
+    assert response.status_code == 404 and "SECRET" not in response.text
+    assert response.json()["detail"] == "No recording is being analysed"
+    # Only the evidence 404 changes meaning: an edge failure is still unavailable.
+    _edge_returns(monkeypatch, 500)
+    assert client.get("/v1/recognition/evidence", headers=OPERATOR).status_code == 503
+    _edge_returns(monkeypatch, 404)
+    assert client.get("/v1/recognition/status", headers=OPERATOR).status_code == 503
+
+
 def test_recordings_list_has_names_and_durations_only(client, monkeypatch):
     monkeypatch.setattr(recognition, "request_edge", lambda *args: {
         "available": False, "scope": "unavailable", "cameras": [], "recordings_rejected": [{"file": "SECRET.mp4"}],

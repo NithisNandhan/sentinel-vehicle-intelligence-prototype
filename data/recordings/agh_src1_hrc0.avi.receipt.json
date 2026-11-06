@@ -1,0 +1,10 @@
+{
+  "schema_version": "1.0",
+  "sha256": "34b977df9caade1f74f84ef6e409525ea4702c5989eec360acbbe23b3218568a",
+  "title": "AGH SRC1 - Original fixed parking CCTV - Poland - 720p",
+  "source": "https://qoe.agh.edu.pl/parking-database/",
+  "licence": "AGH Parking Database: free research use with attribution",
+  "permission": "Dataset publisher explicitly permits research use free of charge with citation to the webpage and Leszczuk et al., Quality assessment for a licence plate recognition task based on a video streamed in limited networking conditions, 2011. Original SRC1 download: https://qoe.agh.edu.pl/wp-content/uploads/2021/02/agh_src1_hrc0.avi",
+  "obtained_on": "2026-10-15",
+  "recorded_start_utc": null
+}

@@ -4,8 +4,8 @@ import hashlib
 import json
 from pathlib import Path
 
-from .detector_comparison import PlateModel, decode_yolo11, letterbox
-from .vision import associate_vehicle_tracks
+from .detector_comparison import PlateModel, configured_threads, decode_yolo11, letterbox
+from .vision import _box_iou, associate_vehicle_tracks
 
 PROFILES = {
     'legacy': ('yolov8n', 'parent'),
@@ -56,14 +56,27 @@ class VehicleTrack:
     confidence: float | None = None
 
 
+def unconfirmed_min_height():
+    """Frame height below which unconfirmed vehicles are not kept (2160 = 4K only); 0 keeps every height."""
+    import os
+    value = os.environ.get('SENTINEL_KEEP_UNCONFIRMED_MIN_HEIGHT', '').strip() or '0'
+    if not value.isdigit() or int(value) > 8640:
+        raise ValueError('SENTINEL_KEEP_UNCONFIRMED_MIN_HEIGHT must be between 0 and 8640')
+    return int(value)
+
+
 class VehicleTracker:
-    def __init__(self, name, cache, training_root, *, device='cpu'):
+    def __init__(self, name, cache, training_root, *, device='cpu', keep_unconfirmed=False):
         self.device = _execution_device(device)
+        # Opt-in: ByteTrack hides a new track until it matches twice. Between 500 ms
+        # samples a motorcycle often moves farther than its own width, so it never does.
+        self.aliases = {} if keep_unconfirmed else None
+        self.unconfirmed_min_height = unconfirmed_min_height()
         import torch
         if self.device == 'gpu' and not torch.cuda.is_available():
             raise RuntimeError('GPU requested but vehicle CUDA runtime is unavailable')
         from ultralytics import YOLO
-        torch.set_num_threads(2)
+        torch.set_num_threads(configured_threads('SENTINEL_VEHICLE_THREADS'))
         if name not in ('yolov8n', 'yolo26s', 'bmd'):
             raise ValueError('Unknown diagnostic vehicle model')
         path = (Path(training_root)/'runs/vehicle-bmd/weights/best.pt' if name == 'bmd'
@@ -82,6 +95,8 @@ class VehicleTracker:
     def reset(self):
         self.frame_index = 0
         self.previous_tracks.clear()
+        if getattr(self, 'aliases', None) is not None:
+            self.aliases.clear()
         predictor = getattr(self.model, 'predictor', None)
         for tracker in getattr(predictor, 'trackers', ()):
             tracker.reset()
@@ -108,9 +123,33 @@ class VehicleTracker:
             identity = getattr(item,'id',None)
             detections.append((str(int(identity.item())) if identity is not None else None,
                                coords,coarse))
+        aliases = getattr(self, 'aliases', None)
+        if aliases is not None and image.shape[0] < getattr(self, 'unconfirmed_min_height', 0):
+            aliases = None  # Below the opt-in height (e.g. 720p): plain ByteTrack, as before.
+        if aliases is not None:
+            detections += self._unconfirmed(detections, scores)
         tracks,self.previous_tracks,self.next_detection_id = associate_vehicle_tracks(
-            detections,self.previous_tracks,self.frame_index,self.next_detection_id)
+            detections,self.previous_tracks,self.frame_index,self.next_detection_id,aliases=aliases)
         return [VehicleTrack(track_id,coords,coarse,scores.get(coords)) for track_id,coords,coarse in tracks]
+
+    def _unconfirmed(self, shown, scores):
+        """Detections ByteTrack holds back this frame, minus any that overlap a shown vehicle."""
+        trackers = getattr(getattr(self.model, 'predictor', None), 'trackers', None) or ()
+        result = []
+        for item in (getattr(trackers[0], 'tracked_stracks', ()) if trackers else ()):
+            if getattr(item, 'is_activated', True):
+                continue
+            cls = int(item.cls)
+            coarse = BMD_TO_COCO.get(cls) if self.name == 'bmd' else cls
+            if coarse is None or (self.name != 'bmd' and cls not in COCO_CLASSES):
+                continue
+            coords = tuple(int(v) for v in item.xyxy)
+            # One vehicle, one ID: never add a second box over one already shown (any class).
+            if any(_box_iou(coords, box) >= .5 for _, box, _ in shown + result):
+                continue
+            scores[coords] = float(item.score)
+            result.append((None, coords, coarse))
+        return result
 
 
 class PlateDetector:
@@ -147,7 +186,7 @@ class PlateDetector:
             if receipt['input_shape'] != [1,3,512,512] or receipt['output_shape'] != [1,5,5376]:
                 raise ValueError('Adapted plate export contract changed')
             options = ort.SessionOptions()
-            options.intra_op_num_threads = 2
+            options.intra_op_num_threads = configured_threads('SENTINEL_PLATE_THREADS')
             options.inter_op_num_threads = 1
             providers = (['CUDAExecutionProvider', 'CPUExecutionProvider']
                          if self.device == 'gpu' else ['CPUExecutionProvider'])
@@ -161,21 +200,27 @@ class PlateDetector:
         else:
             raise ValueError('Unknown diagnostic plate model')
 
-    def boxes(self, image):
+    def scored_boxes(self, image):
+        """Proposals with the detector's own score, in the adapter's ranking order."""
         if self.session is None:
             detections = sorted(self.model.model.predict(image),key=lambda d:-float(d.confidence))
-            return [[d.bounding_box.x1,d.bounding_box.y1,d.bounding_box.x2,d.bounding_box.y2]
+            return [([d.bounding_box.x1,d.bounding_box.y1,d.bounding_box.x2,d.bounding_box.y2],float(d.confidence))
                     for d in detections]
         tensor, scale, left, top = letterbox(image,512,512)
         output = self.session.run(None, {self.session.get_inputs()[0].name:tensor})[0]
-        return decode_yolo11(output,scale,left,top,image.shape)
+        return decode_yolo11(output,scale,left,top,image.shape,with_confidence=True)
+
+    def boxes(self, image):
+        return [box for box,_ in self.scored_boxes(image)]
 
     def box(self, image):
-        boxes = self.boxes(image)
-        if not boxes:
+        scored = self.scored_boxes(image)
+        # Uncalibrated detector score of the chosen box; diagnostics and opt-in filters only.
+        self.last_confidence = scored[0][1] if scored else None
+        if not scored:
             return None
         # Both adapters rank proposals by confidence before selecting a crop.
-        x1,y1,x2,y2 = boxes[0]
+        x1,y1,x2,y2 = scored[0][0]
         padx,pady = max(1,round((x2-x1)*.03)), max(1,round((y2-y1)*.03))
         return (max(0,int(x1)-padx),max(0,int(y1)-pady),
                 min(image.shape[1],int(x2)+padx),min(image.shape[0],int(y2)+pady))

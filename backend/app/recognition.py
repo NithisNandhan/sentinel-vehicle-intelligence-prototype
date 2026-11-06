@@ -99,6 +99,9 @@ def request_edge(method: str, path: str, payload: dict | None = None) -> dict:
     except urllib.error.HTTPError as error:
         if error.code == 404 and path.startswith("/internal/diagnostics?"):
             raise HTTPException(status_code=404, detail="Track evidence is no longer available") from None
+        if (error.code == 404 and path.startswith("/internal/evidence")
+                and settings.recognition_idle_evidence_404):
+            raise HTTPException(status_code=404, detail="No recording is being analysed") from None
         # A heartbeat conflict must remain visible, not silently switch cameras.
         if error.code == 409:
             detail = ("Playback control not available for the current session" if path.endswith("/control")
