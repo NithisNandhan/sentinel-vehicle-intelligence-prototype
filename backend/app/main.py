@@ -18,6 +18,7 @@ from .catalogue import gateway_request
 from .recognition import router as recognition_router
 from .local_access import router as local_router
 from .watchlist import router as watchlist_router, revision as watchlist_revision
+from .review import purge_expired, results_router, review_router
 from .db import Base, SessionLocal, engine, get_db
 from .models import Alert, AlertAudit, Camera, HealthReport, Sighting, WatchlistEntry, utc_now
 from .schemas import (AlertOut, AlertPatch, AuditOut, CameraSyncIn, CatalogueSearchOut,
@@ -30,12 +31,14 @@ app = FastAPI(title="Sentinel Vehicle Intelligence API", version="1.0.0")
 app.include_router(recognition_router)
 app.include_router(local_router)
 app.include_router(watchlist_router)
+app.include_router(results_router)
+app.include_router(review_router)
 app.add_middleware(
     CORSMiddleware,
     allow_origins=settings.cors_origin_list,
     allow_credentials=settings.local_dashboard_mode,
     allow_methods=["GET", "POST", "PATCH", "OPTIONS"],
-    allow_headers=["X-Edge-Key", "X-Operator-Key", "Content-Type", "X-CSRF-Token"],
+    allow_headers=["X-Edge-Key", "X-Edge-Id", "X-Operator-Key", "X-Reviewer-Token", "Content-Type", "X-CSRF-Token"],
 )
 
 
@@ -99,6 +102,8 @@ def startup() -> None:
         session.commit()
         watchlist_revision(session)
         session.commit()
+        # Enforce retention at every start as well as on demand.
+        purge_expired(session)
 
 
 def alert_dict(alert: Alert) -> dict:
@@ -293,13 +298,20 @@ async def post_health(payload: HealthIn, session: Session = Depends(get_db)) -> 
 
 
 @app.get("/v1/watchlist/snapshot", dependencies=[Depends(check_edge_key)])
-def watchlist_snapshot(session: Session = Depends(get_db)) -> dict:
-    entries = session.scalars(select(WatchlistEntry).where(WatchlistEntry.active.is_(True))).all()
-    return {
+def watchlist_snapshot(session: Session = Depends(get_db)) -> JSONResponse:
+    # Smallest practical snapshot: fingerprints only. Reasons and severities stay
+    # central (alerts are raised centrally). The edge must stop using it after
+    # expires_at. See docs/SECURITY_AND_PRIVACY.md for the residual risk.
+    entries = session.scalars(select(WatchlistEntry.plate_hmac).where(WatchlistEntry.active.is_(True))).all()
+    generated = utc_now()
+    ttl = settings.watchlist_snapshot_ttl_seconds
+    return JSONResponse({
         "version": watchlist_revision(session),
-        "generated_at": utc_now().isoformat(),
-        "entries": [{"plate_hmac": entry.plate_hmac, "reason": entry.reason, "severity": entry.severity} for entry in entries],
-    }
+        "generated_at": generated.isoformat(),
+        "expires_at": (generated + timedelta(seconds=ttl)).isoformat(),
+        "ttl_seconds": ttl,
+        "entries": [{"plate_hmac": token} for token in entries],
+    }, headers={"Cache-Control": "no-store, max-age=0"})
 
 
 @app.get("/v1/alerts", dependencies=[Depends(check_operator_key)])

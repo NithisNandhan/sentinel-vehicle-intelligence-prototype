@@ -320,7 +320,9 @@ def test_migration_adds_recorded_columns_to_an_existing_0001_database(tmp_path):
         assert {"session_id", "time_basis", "processed_at"} <= {
             row[1] for row in connection.execute("PRAGMA table_info(sightings)")}
         assert connection.execute("SELECT event_id, session_id FROM sightings").fetchall() == [("kept", None)]
-        assert connection.execute("SELECT version_num FROM alembic_version").fetchall() == [("0003_watchlist_management",)]
+        assert connection.execute("SELECT version_num FROM alembic_version").fetchall() == [("0004_result_states",)]
+        tables = {row[0] for row in connection.execute("SELECT name FROM sqlite_master WHERE type='table'")}
+        assert {"recognition_results", "review_decisions"} <= tables
     finally:
         connection.close()
 

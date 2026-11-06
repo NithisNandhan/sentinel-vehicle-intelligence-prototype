@@ -24,10 +24,32 @@ def plate_token(plate: str) -> str:
     return hmac.new(key, normalize_plate(plate).encode("ascii"), hashlib.sha256).hexdigest()
 
 
-def check_edge_key(x_edge_key: str | None = Header(default=None)) -> None:
-    expected = get_settings().edge_api_key
+def check_edge_key(x_edge_key: str | None = Header(default=None),
+                   x_edge_id: str | None = Header(default=None)) -> None:
+    settings = get_settings()
+    expected = settings.edge_api_key
     if not x_edge_key or not hmac.compare_digest(x_edge_key, expected):
         raise HTTPException(status_code=401, detail="invalid edge key")
+    # The edge key is shared, so revocation by device ID is a policy control, not
+    # cryptographic isolation: rotate EDGE_API_KEY and WATCHLIST_HMAC_KEY when a
+    # device is lost (docs/SECURITY_AND_PRIVACY.md).
+    if x_edge_id is None:
+        if settings.require_edge_id:
+            raise HTTPException(status_code=401, detail="edge device identity required")
+        return
+    if len(x_edge_id) > 80 or x_edge_id in settings.revoked_edge_id_set:
+        raise HTTPException(status_code=403, detail="edge device revoked")
+
+
+def reviewer_identity(token: str | None) -> str | None:
+    """The reviewer a token belongs to. Tokens are compared by SHA-256 digest only."""
+    if not token or len(token) > 256:
+        return None
+    digest = hashlib.sha256(token.encode("utf-8")).hexdigest()
+    for known, reviewer in get_settings().reviewer_token_map.items():
+        if hmac.compare_digest(known, digest):
+            return reviewer
+    return None
 
 
 COOKIE_NAME = "sentinel_local"
