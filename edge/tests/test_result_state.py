@@ -6,7 +6,7 @@ from sentinel_edge.layout import CONFLICT, TWO_ROW, passage_layout
 from sentinel_edge.plate_format import completions, pattern_compatible, strict_status, TooManyCompletions
 from sentinel_edge.result_state import (CONFIRMED, PARTIAL, UNREADABLE, RecognitionResult, ResultPolicy,
                                         classify)
-from tests.ctc_fixtures import TOKENS, reader_with
+from ctc_fixtures import TOKENS, reader_with
 
 PLATE = 'MH49BE5557'
 
