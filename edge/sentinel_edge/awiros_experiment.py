@@ -21,6 +21,12 @@ DEEP_PREFIXES = ('head.ctc_head.fc.', 'head.ctc_encoder.encoder.svtr_block.1.',
 def adaptation_keys(state, scope):
     if scope == 'ctc_linear_head_only':
         return {'head.ctc_head.fc.weight', 'head.ctc_head.fc.bias'}
+    if scope == 'full_image_encoder_and_ctc':
+        prefixes = ('backbone.', 'head.ctc_encoder.', 'head.ctc_head.fc.')
+        keys = {key for key in state if key.startswith(prefixes)}
+        if not all(any(key.startswith(prefix) for key in keys) for prefix in prefixes):
+            raise ValueError('Selected full encoder architecture contract changed')
+        return keys
     if scope != 'bounded_image_encoder_tail_and_ctc':
         raise ValueError('Unsupported adaptation scope')
     keys = {key for key in state if key.startswith(DEEP_PREFIXES)}
@@ -129,7 +135,7 @@ def checkpoint_metadata(path: Path, cache: Path):
     if (metadata.get('parent_sha256') != WEIGHTS_SHA256
             or metadata.get('dictionary_sha256') != file_hash(cache / 'en_dict.txt')
             or metadata.get('weights_sha256') != file_hash(path)
-            or metadata.get('training_scope') not in {'ctc_linear_head_only', 'bounded_image_encoder_tail_and_ctc'}
+            or metadata.get('training_scope') not in {'ctc_linear_head_only', 'bounded_image_encoder_tail_and_ctc', 'full_image_encoder_and_ctc'}
             or not metadata.get('frozen_state_unchanged')):
         raise ValueError('Unverified adapted OCR checkpoint')
     return metadata

@@ -1,0 +1,76 @@
+{
+  "date": "2026-11-09",
+  "scope": "Previously examined fixed-crop OCR regression and selected sequence diagnostics; not a fresh blind test or video-wide accuracy",
+  "baseline_checkpoint_sha256": "c2ba896d994b174071c95ace0f5ffc8a61cec3fc6eecce8f0bc5feb7dec4456d",
+  "rejected_candidate_checkpoint_sha256": "ad3b11448accb8a1b8a7965a663c531746f7989fd25cf756b36624bd98253627",
+  "training": {
+    "device": "NVIDIA GeForce RTX 3050 6GB Laptop GPU",
+    "photographs": 802,
+    "validation_samples": 37,
+    "training_continuations": 7,
+    "epochs_total": 20,
+    "optimizer_steps_total": 4020,
+    "unique_bias_and_blend_settings": 34,
+    "settings_evaluations_including_repeated_bias_controls": 40,
+    "scope_variants": ["CTC output head", "bounded encoder tail plus CTC", "full image encoder plus CTC"],
+    "auxiliary_NRTR_decoder_updated": false,
+    "selected_weights": "full encoder epoch 2, blend 1.0",
+    "full_path_final_epoch_actually_changed_state_elements": 2647159,
+    "training_evaluation_registration_and_exact_hash_overlap_checked": true,
+    "evaluation_images_used_for_training": false,
+    "external_labels_used_for_candidate_selection": false,
+    "candidate_saved_reload_and_serving_parity_passed": true
+  },
+  "raw_ocr_results": {
+    "validation": {"samples": 37, "baseline_exact": 29, "candidate_exact": 29, "baseline_character_errors": 42, "candidate_character_errors": 36},
+    "mumbai_manual": {"samples": 18, "baseline_exact": 14, "candidate_exact": 12, "baseline_character_errors": 13, "candidate_character_errors": 15},
+    "corpus_test": {"samples": 31, "baseline_exact": 28, "candidate_exact": 28, "baseline_character_errors": 13, "candidate_character_errors": 12},
+    "separate_source_regression": {"samples": 200, "baseline_exact": 137, "candidate_exact": 135, "baseline_character_errors": 135, "candidate_character_errors": 123}
+  },
+  "fixed_weight_manual_input_diagnosis": {
+    "samples": 18,
+    "earlier_native_contextual_crop_exact": 5,
+    "prepared_rectified_crop_exact": 14,
+    "blanket_padding_exact": 8,
+    "blanket_contrast_exact": 13,
+    "existing_candidate_decoder_rectified_exact": 15,
+    "remaining_raw_failures": 4,
+    "raw_failures_without_truth_in_beam_100": 3,
+    "raw_failures_recovered_by_existing_candidate_decoder": 1
+  },
+  "sequence_checks": {
+    "licensed_development_passages": 1,
+    "distinct_frames": 3,
+    "baseline_correct_frames": 3,
+    "candidate_correct_frames": 3,
+    "both_fused_correctly": true,
+    "timing_caveat": "Assigned replay times, not original capture PTS",
+    "mumbai_pixel_associated_tracks": 1,
+    "mumbai_excluded_unassociated_tracks": 6,
+    "mumbai_correct_individual_or_fused_reading_for_either_model": false,
+    "mumbai_association": "Exact PTS, NCC >= 0.995, overlap coverage >= 0.20, ambiguity margin >= 0.02; no prediction-based labels"
+  },
+  "verification": {
+    "study_safeguard_tests_passed": 5,
+    "checkpoint_tests_passed": 4,
+    "fusion_tests_passed": 8,
+    "corpus_and_shadow_tests_passed_in_ocr_container": 5,
+    "integrity_tests_passed": 4,
+    "training_serving_forward_parity_passed": true,
+    "frozen_state_checks_passed": true,
+    "restored_baseline_four_model_gpu_preflight_passed": true
+  },
+  "decision": {
+    "candidate_promoted": false,
+    "reason": "Fewer exact readings on Mumbai and separate-source crops despite lower aggregate character errors",
+    "runtime_baseline_unchanged": true,
+    "crop_pipeline_and_alert_thresholds_unchanged": true,
+    "rejected_weights_retained_locally_only": true
+  },
+  "limitations": [
+    "These are selected manual crops and previously examined publisher-labelled regression sets",
+    "Publisher-label uncertainty and unknown pretraining overlap remain",
+    "No exhaustive vehicle recall, unseen CCTV accuracy or production reliability is established",
+    "Detailed plates, crops, external dataset assets and credentials are excluded from this public aggregate"
+  ]
+}
