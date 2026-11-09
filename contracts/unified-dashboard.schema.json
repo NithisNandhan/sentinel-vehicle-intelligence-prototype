@@ -385,6 +385,42 @@
           ],
           "default": null,
           "title": "Image"
+        },
+        "crop_sources": {
+          "items": {
+            "enum": [
+              "plate",
+              "tile",
+              "text",
+              "vehicle_roi",
+              "full_image"
+            ],
+            "type": "string"
+          },
+          "maxItems": 3,
+          "title": "Crop Sources",
+          "type": "array"
+        },
+        "working_view": {
+          "default": "native",
+          "enum": [
+            "native",
+            "text_quad"
+          ],
+          "title": "Working View",
+          "type": "string"
+        },
+        "working_image": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Working Image"
         }
       },
       "required": [

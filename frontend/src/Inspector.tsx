@@ -38,7 +38,9 @@ export default function Inspector({ sessionId, trackId, onClose }: { sessionId: 
   }, [sessionId, trackId]);
   const track = snapshot?.track;
   const frames = track?.frames || [];
-  const native = frames[frames.length - 1];
+  // Keep the native/working comparison on the same timestamp. Prefer the
+  // latest text-guided input when the track has one; the full history is below.
+  const native = [...frames].reverse().find(frame => frame.working_view === 'text_quad') || frames[frames.length - 1];
   const candidates = track?.candidates || [];
   const reconstruction = track?.reconstruction;
   return <DetailSheet title={`Track ${trackId}`} subtitle="Recognition Inspector" onClose={onClose}>
@@ -49,7 +51,12 @@ export default function Inspector({ sessionId, trackId, onClose }: { sessionId: 
       <section className="inspection-section"><div className="section-heading"><h3>Native crop</h3><button className="button quiet" onClick={() => setZoom(!zoom)} aria-pressed={zoom}>{zoom ? 'Fit crop' : 'Enlarge crop'}</button></div>
         {imageData(native?.image) ? <div className={`crop-frame ${zoom ? 'zoomed' : ''}`}><img src={imageData(native?.image)} alt="Native plate crop, unchanged source pixels" /></div> : <p className="muted">No retained native crop for this track.</p>}
         <p className="caption">{native ? `${native.width} × ${native.height} native pixels · ${formatVideoTime(native.pts_ms)}. ` : ''}Enlargement adds no image detail.</p>
+        {!!native?.crop_sources?.length && <p className="caption">Crop source: {native.crop_sources.join(' + ')}.</p>}
       </section>
+      {native?.working_view === 'text_quad' && <section className="inspection-section"><h3>Text-guided OCR input</h3>
+        {imageData(native.working_image) ? <div className="crop-frame"><img src={imageData(native.working_image)} alt="OCR working crop straightened using detected text corners" /></div> : <p className="muted">The straightened view exceeds the display limit.</p>}
+        <p className="caption">Automatically outlined and straightened. Interpolation adds no detail. This and the native crop are one source observation; the OCR character scores describe this working view.</p>
+      </section>}
       <section className="inspection-section"><h3>Acceptance checks</h3><ul className="gate-list">{(track.gate_reasons || []).map((reason, index) => <li key={index}>{reason}</li>)}</ul><p className="caption">Model acceptance does not establish an independently correct registration.</p></section>
       <section className="inspection-section"><h3>Reconstruction · derived evidence</h3><p>{reconstruction?.status || 'Not available'}{reconstruction?.reason ? ` · ${reconstruction.reason}` : ''}</p>{imageData(reconstruction?.image) && <div className="crop-frame"><img src={imageData(reconstruction?.image)} alt="Derived multi-frame reconstruction, not an independent source frame" /></div>}{reconstruction?.text && <p className="plate-text">{reconstruction.text}</p>}{!!reconstruction?.contributing_originals && <p className="caption">{reconstruction.contributing_originals} contributing originals · not an extra observation</p>}<Characters characters={reconstruction?.characters} /></section>
       <section className="inspection-section"><div className="section-heading"><h3>Ranked candidates</h3><span className="caption">{candidates.length} retained</span></div>

@@ -25,10 +25,23 @@ def main():
     vehicle.track(np.zeros((720, 1280, 3), dtype=np.uint8))
     detector.boxes(np.zeros((512, 512, 3), dtype=np.uint8))
     reader.probabilities(np.zeros((32, 120, 3), dtype=np.uint8))
+    text_status = 'disabled'
+    if os.environ.get('SENTINEL_TEXT_DETECTOR_ASSETS','').strip():
+        from concurrent.futures import ThreadPoolExecutor
+        from sentinel_edge.tracked_live_viewer import load_text_detector
+        text = load_text_detector()
+        if text is None or text.device != 'gpu':
+            raise RuntimeError('Configured text detector did not load on GPU')
+        # Mirror the collector thread, then verify coexistence with Torch/OCR.
+        with ThreadPoolExecutor(max_workers=1) as pool:
+            pool.submit(text.polygons,np.zeros((160,320,3),dtype=np.uint8)).result(timeout=60)
+        vehicle.track(np.zeros((720,1280,3),dtype=np.uint8))
+        reader.probabilities(np.zeros((32,120,3),dtype=np.uint8))
+        text_status = 'gpu'
     identity = model_identity(reader, profile, detector=detector, vehicle_model=vehicle)
     if any(identity[field] != 'gpu' for field in ('ocr_device', 'vehicle_device', 'plate_device')):
         raise RuntimeError('GPU preflight did not load all three stages on GPU')
-    print(json.dumps({'gpu_preflight': 'passed', 'models': identity}), flush=True)
+    print(json.dumps({'gpu_preflight': 'passed', 'models': identity,'text_detector':text_status}), flush=True)
 
 
 if __name__ == '__main__':

@@ -1,6 +1,6 @@
 # Automatic crops approaching manual crops
 
-This investigation leaves character recognition unchanged. It compares image
+This investigation leaves model weights and acceptance thresholds unchanged. It compares image
 geometry on the original, permitted Mumbai 4K recording and the existing 21
 manually selected targets. Results are development evidence, not unseen-video
 accuracy, exhaustive vehicle recall, or production readiness.
@@ -57,8 +57,48 @@ The main findings are:
    bounded per-frame work. Validate this on the full recording before enabling
    it in the dashboard processing pipeline.
 
-The new modules are isolated research utilities. They have **not** been enabled
-in the video session, sighting delivery, or central alert workflow.
+### Recorded runtime integration — 9 November 2026
+
+Text-guided crops are now wired into the recorded-video session behind explicit
+settings. The earlier still-frame numbers above describe the 6 November crop
+experiment, not the bounded runtime proposal policy or recognition accuracy.
+
+The collector owns and resets the extra-search budget once per sampled frame.
+Text detection runs before optional tiles, and vehicle ROI ordering rotates so
+the first vehicle cannot monopolise that budget every frame. Every eligible
+vehicle still receives the primary plate search. Configured text-model failures
+are visible instead of silently disabling this feature.
+
+Selected text corners are retained alongside the native crop. With rectification
+enabled, one straightened working view is sent to the existing OCR model. The
+native crop/hash remain the evidence identity and reconstruction source. The
+two images never count as two independent observations. Small text fragments,
+invalid quadrilaterals and two-row-shaped regions fall back to native input.
+The Inspector shows the crop sources and a separate **Text-guided OCR input**
+section; character scores describe the working view when it is present.
+
+Cache the small detector with the command below, then set in local `.env`:
+
+```dotenv
+SENTINEL_PROFILE=baseline
+SENTINEL_MULTI_SOURCE_PLATES=true
+SENTINEL_TEXT_DETECTOR_ASSETS=/text-model
+SENTINEL_TEXT_DETECTOR_DEVICE=gpu
+SENTINEL_TEXT_RECTIFY=true
+DASHBOARD_RECORDED_EVIDENCE=true
+```
+
+The baseline profile plus these overrides isolates cropping from the teammate's
+other candidate-profile changes. Compose mounts the pinned local assets read-only
+at `/text-model`. Start with
+`scripts/start-recorded-analysis.ps1 -Device gpu -SkipBuild`
+when the cached GPU image is available. Its preflight checks that the
+vehicle, plate, OCR and text models coexist on the GPU, including collector-thread
+text inference. No OCR weights are retrained and no acceptance threshold changes.
+
+Rollback cropping with `SENTINEL_MULTI_SOURCE_PLATES=false`,
+`SENTINEL_TEXT_RECTIFY=false`, and an empty `SENTINEL_TEXT_DETECTOR_ASSETS`, then
+recreate the worker. Database migration 0004 is additive; saved records are retained.
 
 ## Models and cost
 
@@ -135,9 +175,24 @@ detector. Model downloads are explicit and inference has no network access.
 
 ## Verification and next acceptance gate
 
-22 crop and existing collector tests passed. Both review pages are checked for
-21 cards, valid images, navigation, and mobile overflow. Before runtime adoption,
-add disjoint footage, exhaustive plate/non-plate region annotations, false
-proposal counts, multi-row/grouped registration examples, temporal association,
-and a full-video interruption/endurance test. Keep OCR tuning separate until
-crop coverage and boundaries are reliable.
+The earlier geometry review passed 22 crop/collector tests and checked both
+21-card review pages. The 9 November runtime integration passed 65 focused edge
+checks, then 11 affected checks after fixing text-search ordering (including one
+new regression), 47 backend checks, 40 frontend checks, contract generation and
+the production frontend build. GPU preflight loaded all four model components.
+The running dashboard displayed different native/straightened images for a real
+track; its browser check reported no page errors or horizontal mobile overflow.
+
+The Mumbai recording reached end-of-file: 62 sampled frames, with the final
+sample at 30,500 ms of a 30,933 ms file. Six distinct tracked IDs were observed
+with actual straightened text-guided OCR inputs. These are diagnostic IDs, not a
+ground-truth vehicle count or an accuracy result. One transient Inspector request
+returned 503 during monitoring; processing continued and completed. This does
+not establish interruption endurance or eliminate every dashboard failure.
+
+Aggregate runtime evidence is in
+`docs/evidence/text-cropping-runtime-20261109.json`. Native crops and readings
+remain in ignored local diagnostic files. Before enabling this policy by
+default, add disjoint footage, exhaustive plate/non-plate annotations, false
+proposal counts, multi-row/grouped examples and longer interruption tests. Keep
+OCR tuning separate until crop coverage and boundaries are reliable.

@@ -43,6 +43,7 @@ class History:
     frame_pts: int | None = None
     signatures: list = field(default_factory=list)
     confirmed_plate: str | None = None
+    crop_inputs: deque = field(default_factory=lambda: deque(maxlen=8))
 
 
 class TrackedOCR:
@@ -84,7 +85,7 @@ class TrackedOCR:
     def _new_reader(self):
         return CTCPlateReader(self.ocr.tokens, **self.options.reader_options())
 
-    def _read(self, crop, posterior_cache):
+    def _read(self, crop, posterior_cache, *, rectified=False):
         """CTC rows for one crop, shared within the original frame through the cache."""
         source = hashlib.sha256(crop.tobytes()).hexdigest()
         rows = posterior_cache.get(source) if posterior_cache is not None else None
@@ -99,6 +100,8 @@ class TrackedOCR:
             rows = self.ocr.probabilities(crop)
         self.stage_ms['ocr'] += (time.monotonic()-started)*1000
         self.metrics['ocr_calls'] += 1
+        if rectified:
+            self.metrics['text_rectified_ocr_calls'] += 1
         if posterior_cache is not None:
             posterior_cache[source] = rows
         return rows
@@ -240,7 +243,7 @@ class TrackedOCR:
                 self.metrics['ocr_gap_resets'] += 1
         self.stage_ms = dict(plate=0., ocr=0., reconstruction=0., fusion=0.)
         begin = getattr(self.detector, 'begin_frame', None)
-        if callable(begin):
+        if plate_cache is None and callable(begin):
             begin()  # Per-frame budget for pooled plate proposals.
         eligible = []
         transfers = {}
@@ -315,11 +318,20 @@ class TrackedOCR:
                 state.last_plate_failure = 'Plate proposal is smaller than 24 by 8 native pixels'
                 state.failures[state.last_plate_failure] += 1
                 continue
+            crop = prepared['crop'] if prepared is not None else crop_box(region,local)
+            sources = tuple(prepared.get('sources',(prepared.get('source','vehicle_roi'),))) if prepared is not None else tuple(getattr(self.detector,'last_sources',()))
+            quad = prepared.get('text_quad') if prepared is not None else getattr(self.detector,'last_text_quad',None)
+            relative_quad, working = None, crop
+            if self.options.text_rectify and quad:
+                from .text_boundaries import warp_polygon
+                relative = [(x-local[0],y-local[1]) for x,y in quad]
+                view = warp_polygon(crop,relative)
+                if view is not None:
+                    relative_quad, working = relative, view
             screened = None
             if self.non_plates is not None:
                 # Screen before a non-plate can move the plate centre or reset this vehicle's reader.
-                crop = prepared['crop'] if prepared is not None else crop_box(region,local)
-                screened = self._read(crop,posterior_cache)
+                screened = self._read(working,posterior_cache,rectified=relative_quad is not None)
                 score = prepared.get('confidence') if prepared is not None else getattr(self.detector,'last_confidence',None)
                 reason = self.non_plates.reason(crop,screened,score)
                 if reason:
@@ -345,6 +357,8 @@ class TrackedOCR:
             crop = prepared['crop'] if prepared is not None else crop_box(region,local)
             quality = crop_quality(crop)
             self.metrics['plate_crops'] += 1
+            if 'text' in sources:
+                self.metrics['text_supported_crops'] += 1
             self.widths.append(crop.shape[1]); self.qualities.append(quality)
             source = hashlib.sha256(crop.tobytes()).hexdigest()
             # Never count the same crop or too-close frame twice. Shared cache
@@ -366,8 +380,9 @@ class TrackedOCR:
                 del state.layouts[:-16]
                 state.max_plate_height = max(state.max_plate_height, crop.shape[0])
             if not duplicate and separated:
-                rows = screened if screened is not None else self._read(crop,posterior_cache)
+                rows = screened if screened is not None else self._read(working,posterior_cache,rectified=relative_quad is not None)
                 if state.reader.add(rows,timestamp_ms=pts_ms,source_id=source,quality=quality):
+                    state.crop_inputs.append({'source_id':source,'sources':sources,'quad':relative_quad})
                     self.metrics['distinct_ocr_observations'] += 1
                     if thumb is not None:
                         state.signatures.append(thumb)

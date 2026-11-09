@@ -55,14 +55,23 @@ def describe_track(track_id, history, samples, threshold):
     if conflict:
         accepted = None
     lookup = {sample.source_id: sample for sample in samples}
+    inputs = {item['source_id']: item for item in getattr(history,'crop_inputs',())}
     frames = []
     for pts, source, rows, _, quality in reader.samples:
         sample = lookup.get(source)
         if sample is None:
             continue
+        metadata = inputs.get(source,{})
+        working = None
+        if metadata.get('quad'):
+            from .text_boundaries import warp_polygon
+            working = warp_polygon(sample.image,metadata['quad'])
         frames.append({'pts_ms': pts, 'width': sample.image.shape[1], 'height': sample.image.shape[0],
                        'quality': round(quality, 3), 'text': greedy_text(rows, reader.tokens),
-                       'characters': characters(rows, reader.tokens), 'image': encoded(sample.image, '.png')})
+                       'characters': characters(rows, reader.tokens), 'image': encoded(sample.image, '.png'),
+                       'crop_sources': list(metadata.get('sources',())),
+                       'working_view': 'text_quad' if working is not None else 'native',
+                       'working_image': encoded(working,'.png') if working is not None else None})
     from .privacy import mask_plate
     reasons = gate_reasons(reader, ranked, threshold)
     if conflict:

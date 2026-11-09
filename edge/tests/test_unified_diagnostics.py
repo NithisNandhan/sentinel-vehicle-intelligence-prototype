@@ -36,6 +36,16 @@ def fixture():
 
 
 class UnifiedDiagnosticTests(unittest.TestCase):
+    def test_working_crop_is_bounded_and_source_labels_are_allowlisted(self):
+        data=fixture()
+        frame=data['debug']['tracks'][0]['frames'][0]
+        frame.update(working_view='text_quad',working_image=PNG,crop_sources=['text','https://secret.invalid'])
+        clean=self.view(data)['track']['frames'][0]
+        self.assertEqual(clean['working_view'],'text_quad')
+        self.assertEqual(clean['working_image'],PNG)
+        self.assertEqual(clean['crop_sources'],['text'])
+        frame['working_image']='https://secret.invalid/image.png'
+        self.assertIsNone(self.view(data)['track']['frames'][0]['working_image'])
     def view(self, data=None, **kwargs):
         return diagnostic_view(data or fixture(), {'ocr_model': 'awiros-ctc-adapted', 'ocr_device': 'cpu',
                                                   'edge_api_key': 'DO-NOT-EXPOSE'}, SESSION, 'det-1', enabled=True, **kwargs)

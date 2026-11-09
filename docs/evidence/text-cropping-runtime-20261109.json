@@ -1,0 +1,52 @@
+{
+  "date": "2026-11-09",
+  "scope": "Recorded runtime crop integration; not an OCR accuracy evaluation",
+  "base_commit": "624ad007c9fc4b9f32a39ac1994b5e80eb7f9a25",
+  "branch": "codex/enable-text-cropping",
+  "configuration": {
+    "profile": "baseline",
+    "multi_source_plates": true,
+    "text_rectify": true,
+    "text_detector": "PP-OCRv5 mobile detection network only",
+    "ocr_weights_changed": false,
+    "acceptance_thresholds_changed": false
+  },
+  "gpu_preflight": {
+    "passed": true,
+    "components": ["YOLO26s vehicle", "YOLOv9-t-512 plate", "Existing adapted OCR", "PP-OCRv5 mobile text detection"],
+    "collector_thread_text_inference_checked": true,
+    "vehicle_and_ocr_rechecked_after_text_inference": true
+  },
+  "recording": {
+    "name": "Mumbai street traffic (4K, 31 seconds)",
+    "sha256": "6b7064605b3d4d12c6c1da4566cbcec1cd2e3e3bd7b77814865fe9df22045f65",
+    "duration_ms": 30933,
+    "status": "completed",
+    "analysed_sample_frames": 62,
+    "last_sample_pts_ms": 30500,
+    "observed_unique_track_ids_with_rectified_ocr_input": 6,
+    "count_warning": "Diagnostic track IDs are not ground-truth unique vehicles or correct plate readings",
+    "total_processing_time_measured": false
+  },
+  "verification": {
+    "initial_focused_edge_checks_passed": 65,
+    "affected_edge_checks_after_search_order_fix_passed": 11,
+    "new_check_in_affected_rerun": 1,
+    "backend_checks_passed": 47,
+    "frontend_checks_passed": 40,
+    "generated_contract_check_passed": true,
+    "frontend_production_build_passed": true,
+    "native_crop_bytes_and_hash_preserved": true,
+    "derived_input_not_counted_as_second_observation": true,
+    "running_dashboard_native_and_working_images_displayed": true,
+    "browser_page_errors": 0,
+    "mobile_horizontal_overflow": false
+  },
+  "limitations": [
+    "No end-to-end OCR accuracy gain or exhaustive vehicle recall is established by this test",
+    "One transient Inspector HTTP 503 was observed during monitoring; analysis continued to completion",
+    "Text boundaries can include branding or background text; proposal precision still needs disjoint evaluation",
+    "Longer recordings and interruption endurance remain acceptance work",
+    "Raw crops, plate readings and local credentials are excluded from this aggregate evidence"
+  ]
+}

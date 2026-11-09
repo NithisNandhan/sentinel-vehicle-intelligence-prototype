@@ -65,7 +65,12 @@ def snapshot(value):
             continue
         frames.append({"pts_ms": item.get("pts_ms"), "width": item.get("width"), "height": item.get("height"),
                        "quality": number(item.get("quality")), "text": text(item.get("text")) or "",
-                       "characters": characters(item.get("characters")), "image": image(item.get("image"))})
+                       "characters": characters(item.get("characters")), "image": image(item.get("image")),
+                       "crop_sources": [source for source in item.get('crop_sources',[])[:3]
+                                        if source in ('plate','tile','text','vehicle_roi','full_image')]
+                                       if isinstance(item.get('crop_sources'),list) else [],
+                       "working_view": 'text_quad' if item.get('working_view') == 'text_quad' else 'native',
+                       "working_image": image(item.get('working_image'),80_000) if item.get('working_view') == 'text_quad' else None})
     reconstruction = None
     raw = track.get("reconstruction")
     if isinstance(raw, dict):

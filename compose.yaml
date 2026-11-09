@@ -265,6 +265,9 @@ services:
       SENTINEL_NEAR_DUPLICATE_GUARD: ${SENTINEL_NEAR_DUPLICATE_GUARD:-}
       SENTINEL_ADAPTIVE_SAMPLING: ${SENTINEL_ADAPTIVE_SAMPLING:-}
       SENTINEL_MULTI_SOURCE_PLATES: ${SENTINEL_MULTI_SOURCE_PLATES:-}
+      SENTINEL_TEXT_DETECTOR_ASSETS: ${SENTINEL_TEXT_DETECTOR_ASSETS:-}
+      SENTINEL_TEXT_DETECTOR_DEVICE: ${SENTINEL_TEXT_DETECTOR_DEVICE:-gpu}
+      SENTINEL_TEXT_RECTIFY: ${SENTINEL_TEXT_RECTIFY:-false}
       SENTINEL_SECONDARY_VETO: ${SENTINEL_SECONDARY_VETO:-}
       SENTINEL_PARTIAL_WATCHLIST: ${SENTINEL_PARTIAL_WATCHLIST:-}
       SENTINEL_REVIEW_EVIDENCE: ${SENTINEL_REVIEW_EVIDENCE:-false}
@@ -276,6 +279,7 @@ services:
       - ./edge:/workspace/edge:ro
       - ./tools:/workspace/tools:ro
       - ./data/recordings:/recordings:ro
+      - ./data/benchmarks/text-localizer-20261106:/text-model:ro
       - model_cache:/models:ro
       # Paddle creates ~/.cache/paddle on import, so ~/.cache itself must be
       # writable. Mount only the two weight folders, each read-only.

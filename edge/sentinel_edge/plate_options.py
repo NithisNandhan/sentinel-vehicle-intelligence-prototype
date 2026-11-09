@@ -35,6 +35,7 @@ ENVIRONMENT = {
     'near_duplicate_guard': 'SENTINEL_NEAR_DUPLICATE_GUARD',
     'adaptive_sampling': 'SENTINEL_ADAPTIVE_SAMPLING',
     'multi_source_plates': 'SENTINEL_MULTI_SOURCE_PLATES',
+    'text_rectify': 'SENTINEL_TEXT_RECTIFY',
     'secondary_veto': 'SENTINEL_SECONDARY_VETO',
     'partial_watchlist': 'SENTINEL_PARTIAL_WATCHLIST',
 }
@@ -63,6 +64,8 @@ class PlateOptions:
     adaptive_sampling: bool = False
     # Pool plate proposals from the vehicle-crop detector, native tiles and text regions.
     multi_source_plates: bool = False
+    # One geometric OCR working view per original crop; native evidence stays intact.
+    text_rectify: bool = False
     # Veto-only secondary OCR (disabled until evaluation supports enabling it).
     secondary_veto: bool = False
     # Edge-side partial watchlist leads (review only, never a confirmed alert).

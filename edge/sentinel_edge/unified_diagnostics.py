@@ -140,7 +140,12 @@ def diagnostic_view(snapshot, models, session_id, track_id, *, enabled):
         image = _png(row.get("image"), 80_000)
         image_omitted |= bool(row.get("image")) and image is None
         frames.append({"pts_ms": pts, "width": width, "height": height, "quality": _number(row.get("quality")),
-                       "text": _plate(row.get("text")) or "", "characters": _characters(row.get("characters")), "image": image})
+                       "text": _plate(row.get("text")) or "", "characters": _characters(row.get("characters")), "image": image,
+                       "crop_sources": [source for source in row.get('crop_sources',[])[:3]
+                                        if source in ('plate','tile','text','vehicle_roi','full_image')]
+                                       if isinstance(row.get('crop_sources'),(list,tuple)) else [],
+                       "working_view": 'text_quad' if row.get('working_view') == 'text_quad' else 'native',
+                       "working_image": _png(row.get('working_image'),80_000) if row.get('working_view') == 'text_quad' else None})
     if image_omitted:
         reasons.append("Some native crops exceed the display limit or are unavailable; original pixels were not resized")
     best = selected.get("best_guess") if isinstance(selected.get("best_guess"), dict) else {}

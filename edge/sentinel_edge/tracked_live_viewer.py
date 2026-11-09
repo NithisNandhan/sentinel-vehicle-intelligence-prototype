@@ -144,6 +144,9 @@ def observe_tracked(config,camera,model,detector,vehicle,state,stop, *, debug=Fa
                 details['full_image_detector_calls'] = getattr(tap,'full_image_calls',0)
                 details['full_image_recovered_crops'] = getattr(tap,'full_image_crops',0)
                 details['adaptive_sampling_enabled'] = plate_recovery
+                diagnostic = getattr(plate_search,'diagnostics',None)
+                if callable(diagnostic):
+                    details['crop_pipeline'] = diagnostic()
                 details['original_frame'] = encoded(frame.image,'.jpg')
             # A live frame's age starts when it was captured. A recording has
             # no capture clock; its age is the time since it was analysed.
@@ -186,8 +189,8 @@ def load_text_detector():
     """The pinned PP-OCRv5 text-region detector, or None when it is not configured.
 
     Never downloads: SENTINEL_TEXT_DETECTOR_ASSETS must name a directory holding
-    the hash-checked receipt (text_boundaries.py). Missing assets or a CPU-only
-    Paddle build simply leave the text source out of the proposal pool.
+    the hash-checked receipt (text_boundaries.py). An explicitly configured
+    model must initialise successfully; configuration failures remain visible.
     """
     import os
     from pathlib import Path
@@ -197,5 +200,5 @@ def load_text_detector():
     try:
         from .text_boundaries import TextBoundaryDetector
         return TextBoundaryDetector(Path(assets), device=os.getenv('SENTINEL_TEXT_DETECTOR_DEVICE', 'gpu'))
-    except Exception:
-        return None
+    except Exception as error:
+        raise RuntimeError('Configured text detector could not initialise: '+type(error).__name__) from None

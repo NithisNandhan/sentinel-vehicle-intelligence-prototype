@@ -42,7 +42,7 @@ class CropCollector(SampledFrames):
         self.dropped_samples += 1
 
     def _read(self):
-        offset = sequence = 0
+        offset = sequence = search_turn = 0
         last_selected_pts = active_until_pts = last_full_scan_pts = None
         self.vehicle.reset()
         try:
@@ -82,8 +82,15 @@ class CropCollector(SampledFrames):
                             eligible.append((track,box))
                     if self.adaptive_sampling and eligible:
                         active_until_pts = frame.pts_ms + 750
+                    begin = getattr(self.detector,'begin_frame',None)
+                    if callable(begin):
+                        begin()  # Collector alone owns its detector and frame budget.
                     proposals = {}
                     selected_rois = roi_schedule(len(eligible),offset,self.roi_budget)
+                    if callable(begin) and selected_rois:
+                        turn = search_turn % len(selected_rois)
+                        selected_rois = selected_rois[turn:]+selected_rois[:turn]
+                        search_turn += 1  # Rotate access to the bounded extra searches.
                     self.roi_searches += len(selected_rois)
                     self.roi_unsearched_tracks += len(eligible)-len(selected_rois)
                     for index in selected_rois:
@@ -96,7 +103,9 @@ class CropCollector(SampledFrames):
                         crop = crop_box(region,local) if local and local[2]-local[0]>=24 and local[3]-local[1]>=8 else None
                         proposals[track.track_id] = dict(box=local,crop=crop,ms=elapsed,
                             calls=getattr(self.detector,'last_calls',1),fallback=bool(getattr(self.detector,'last_fallback',False)),
-                            source='vehicle_roi')
+                            source='vehicle_roi', confidence=getattr(self.detector,'last_confidence',None),
+                            sources=tuple(getattr(self.detector,'last_sources',())) or ('vehicle_roi',),
+                            text_quad=getattr(self.detector,'last_text_quad',None))
                         self.collected_crops += crop is not None
                     # One direct full-scene search per second, only after every
                     # selected vehicle ROI failed. Attribute the plate only if

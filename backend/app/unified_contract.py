@@ -80,6 +80,9 @@ class FrameEvidence(ContractModel):
     text: str = ""
     characters: list[CharacterEvidence] = Field(default_factory=list)
     image: str | None = None
+    crop_sources: list[Literal['plate','tile','text','vehicle_roi','full_image']] = Field(default_factory=list, max_length=3)
+    working_view: Literal['native','text_quad'] = 'native'
+    working_image: str | None = None
 
 
 class ReconstructionEvidence(ContractModel):

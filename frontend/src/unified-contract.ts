@@ -29,6 +29,9 @@ export type FrameEvidence = {
   text?: string;
   characters?: Array<CharacterEvidence>;
   image?: string | null;
+  crop_sources?: Array<"plate" | "tile" | "text" | "vehicle_roi" | "full_image">;
+  working_view?: "native" | "text_quad";
+  working_image?: string | null;
 };
 
 export type LocalSessionOut = {
