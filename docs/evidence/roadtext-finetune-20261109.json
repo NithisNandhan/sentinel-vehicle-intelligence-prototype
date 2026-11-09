@@ -1,0 +1,428 @@
+{
+  "date": "2026-11-09",
+  "scope": "Bounded RoadText Indian native-crop adaptation; selected-crop regression and temporal replay, not video-wide CCTV accuracy",
+  "baseline_checkpoint_sha256": "c2ba896d994b174071c95ace0f5ffc8a61cec3fc6eecce8f0bc5feb7dec4456d",
+  "candidate_checkpoint_sha256": "ea35604d59a13ea83397cfc683d81293382dbead47fa045b8635b37e945bbe24",
+  "manifest_sha256": "fc7d7de79d0698acff3925f200034c68562bba8aaf8c77280a694013d598c897",
+  "runner_sha256": "29ff36986235e4c706121ceeae995756fc3ed7ec5a682bdb374d62abe86249fe",
+  "runtime": {
+    "paddle": "3.2.2",
+    "numpy": "1.26.4",
+    "device": "gpu:0",
+    "batch_size": 4,
+    "epochs_per_configuration": 4
+  },
+  "gpu": "NVIDIA GeForce RTX 3050 Laptop GPU, 6 GB",
+  "cohort": {
+    "train": {
+      "crops": 352,
+      "tracks": 51,
+      "registrations": 27,
+      "videos": 33
+    },
+    "validation": {
+      "crops": 91,
+      "tracks": 19,
+      "registrations": 17,
+      "videos": 12
+    },
+    "test": {
+      "crops": 106,
+      "tracks": 19,
+      "registrations": 13,
+      "videos": 11
+    }
+  },
+  "source_archive_sha256": "9523533f423aa49210fbe95869b1a3c79ba97706b21359056a19c3d3b7a3c7ca",
+  "split_policy": "Custom ordered-video 50:20:30 blocks, all cross-block registrations quarantined; not official split IDs",
+  "exclusions": {
+    "not_plate_category": 298999,
+    "illegible": 6997,
+    "missing_transcription": 963,
+    "fragment_or_uncovered_format": 13493,
+    "annotation_frame_keys_beyond_video": 32,
+    "requested_crop_observations_beyond_video": 4,
+    "videos_without_admitted_full_plate_labels": 16,
+    "unsupported_or_uncertain_text": 121,
+    "bundled_annotation_file_skipped": 1,
+    "cross_block_registrations": 14,
+    "cross_block_crops": 818
+  },
+  "selected": {
+    "configuration": "full",
+    "epoch": 4,
+    "learning_rate": 5e-06
+  },
+  "history": [
+    {
+      "configuration": "tail",
+      "scope": "bounded_image_encoder_tail_and_ctc",
+      "learning_rate": 3e-05,
+      "epoch": 1,
+      "loss": 5.474199637052317,
+      "optimizer_steps": 88,
+      "validation": {
+        "samples": 91,
+        "exact": 40,
+        "character_errors": 111,
+        "missing": 32,
+        "extra": 1,
+        "substituted": 78,
+        "characters": 901,
+        "cer": 0.12319644839067703
+      },
+      "seconds": 5.09
+    },
+    {
+      "configuration": "tail",
+      "scope": "bounded_image_encoder_tail_and_ctc",
+      "learning_rate": 3e-05,
+      "epoch": 2,
+      "loss": 5.080454101045192,
+      "optimizer_steps": 88,
+      "validation": {
+        "samples": 91,
+        "exact": 40,
+        "character_errors": 109,
+        "missing": 32,
+        "extra": 0,
+        "substituted": 77,
+        "characters": 901,
+        "cer": 0.12097669256381798
+      },
+      "seconds": 4.16
+    },
+    {
+      "configuration": "tail",
+      "scope": "bounded_image_encoder_tail_and_ctc",
+      "learning_rate": 3e-05,
+      "epoch": 3,
+      "loss": 4.711949208470866,
+      "optimizer_steps": 88,
+      "validation": {
+        "samples": 91,
+        "exact": 40,
+        "character_errors": 107,
+        "missing": 32,
+        "extra": 0,
+        "substituted": 75,
+        "characters": 901,
+        "cer": 0.11875693673695893
+      },
+      "seconds": 4.89
+    },
+    {
+      "configuration": "tail",
+      "scope": "bounded_image_encoder_tail_and_ctc",
+      "learning_rate": 3e-05,
+      "epoch": 4,
+      "loss": 4.468883017586037,
+      "optimizer_steps": 88,
+      "validation": {
+        "samples": 91,
+        "exact": 40,
+        "character_errors": 107,
+        "missing": 30,
+        "extra": 0,
+        "substituted": 77,
+        "characters": 901,
+        "cer": 0.11875693673695893
+      },
+      "seconds": 4.21
+    },
+    {
+      "configuration": "full",
+      "scope": "full_image_encoder_and_ctc",
+      "learning_rate": 5e-06,
+      "epoch": 1,
+      "loss": 5.34049451959039,
+      "optimizer_steps": 88,
+      "validation": {
+        "samples": 91,
+        "exact": 40,
+        "character_errors": 108,
+        "missing": 23,
+        "extra": 0,
+        "substituted": 85,
+        "characters": 901,
+        "cer": 0.11986681465038845
+      },
+      "seconds": 11.33
+    },
+    {
+      "configuration": "full",
+      "scope": "full_image_encoder_and_ctc",
+      "learning_rate": 5e-06,
+      "epoch": 2,
+      "loss": 4.742908645802262,
+      "optimizer_steps": 88,
+      "validation": {
+        "samples": 91,
+        "exact": 39,
+        "character_errors": 109,
+        "missing": 33,
+        "extra": 2,
+        "substituted": 74,
+        "characters": 901,
+        "cer": 0.12097669256381798
+      },
+      "seconds": 11.1
+    },
+    {
+      "configuration": "full",
+      "scope": "full_image_encoder_and_ctc",
+      "learning_rate": 5e-06,
+      "epoch": 3,
+      "loss": 4.0252558806307865,
+      "optimizer_steps": 88,
+      "validation": {
+        "samples": 91,
+        "exact": 40,
+        "character_errors": 106,
+        "missing": 23,
+        "extra": 0,
+        "substituted": 83,
+        "characters": 901,
+        "cer": 0.11764705882352941
+      },
+      "seconds": 11.18
+    },
+    {
+      "configuration": "full",
+      "scope": "full_image_encoder_and_ctc",
+      "learning_rate": 5e-06,
+      "epoch": 4,
+      "loss": 3.6175554508213694,
+      "optimizer_steps": 88,
+      "validation": {
+        "samples": 91,
+        "exact": 41,
+        "character_errors": 106,
+        "missing": 25,
+        "extra": 0,
+        "substituted": 81,
+        "characters": 901,
+        "cer": 0.11764705882352941
+      },
+      "seconds": 11.01
+    }
+  ],
+  "optimizer_steps": 704,
+  "training_epoch_seconds": 62.97,
+  "results": {
+    "baseline": {
+      "roadtext_validation": {
+        "summary": {
+          "samples": 91,
+          "exact": 39,
+          "character_errors": 113,
+          "missing": 29,
+          "extra": 1,
+          "substituted": 83,
+          "characters": 901,
+          "cer": 0.12541620421753608
+        },
+        "median_ocr_ms": 15.41599400297855,
+        "track_summary": null
+      },
+      "roadtext_test": {
+        "summary": {
+          "samples": 106,
+          "exact": 43,
+          "character_errors": 206,
+          "missing": 81,
+          "extra": 2,
+          "substituted": 123,
+          "characters": 1043,
+          "cer": 0.1975071907957814
+        },
+        "median_ocr_ms": 15.894637999736005,
+        "track_summary": {
+          "tracks": 19,
+          "exact": 9,
+          "accepted_correct": 4,
+          "accepted_wrong": 2,
+          "ever_wrong_accepted_tracks": 3,
+          "ever_correct_accepted_tracks": 4,
+          "first_acceptance_wrong": 3,
+          "fusion_lost_correct_frame": 2
+        }
+      },
+      "corpus_validation": {
+        "summary": {
+          "samples": 37,
+          "exact": 29,
+          "character_errors": 42,
+          "missing": 21,
+          "extra": 1,
+          "substituted": 20,
+          "characters": 360,
+          "cer": 0.11666666666666667
+        },
+        "median_ocr_ms": 14.873500997055089,
+        "track_summary": null
+      },
+      "corpus_test": {
+        "summary": {
+          "samples": 31,
+          "exact": 28,
+          "character_errors": 13,
+          "missing": 8,
+          "extra": 0,
+          "substituted": 5,
+          "characters": 295,
+          "cer": 0.04406779661016949
+        },
+        "median_ocr_ms": 14.378730000316864,
+        "track_summary": null
+      },
+      "external": {
+        "summary": {
+          "samples": 200,
+          "exact": 137,
+          "character_errors": 135,
+          "missing": 33,
+          "extra": 16,
+          "substituted": 86,
+          "characters": 1894,
+          "cer": 0.07127771911298839
+        },
+        "median_ocr_ms": 14.199734998328495,
+        "track_summary": null
+      },
+      "mumbai_manual": {
+        "summary": {
+          "samples": 18,
+          "exact": 14,
+          "character_errors": 13,
+          "missing": 7,
+          "extra": 1,
+          "substituted": 5,
+          "characters": 174,
+          "cer": 0.07471264367816093
+        },
+        "median_ocr_ms": 14.369873499163077,
+        "track_summary": null
+      }
+    },
+    "candidate": {
+      "roadtext_validation": {
+        "summary": {
+          "samples": 91,
+          "exact": 41,
+          "character_errors": 106,
+          "missing": 25,
+          "extra": 0,
+          "substituted": 81,
+          "characters": 901,
+          "cer": 0.11764705882352941
+        },
+        "median_ocr_ms": 15.838168001209851,
+        "track_summary": null
+      },
+      "roadtext_test": {
+        "summary": {
+          "samples": 106,
+          "exact": 46,
+          "character_errors": 195,
+          "missing": 97,
+          "extra": 0,
+          "substituted": 98,
+          "characters": 1043,
+          "cer": 0.186960690316395
+        },
+        "median_ocr_ms": 15.006314999482129,
+        "track_summary": {
+          "tracks": 19,
+          "exact": 10,
+          "accepted_correct": 4,
+          "accepted_wrong": 3,
+          "ever_wrong_accepted_tracks": 4,
+          "ever_correct_accepted_tracks": 5,
+          "first_acceptance_wrong": 4,
+          "fusion_lost_correct_frame": 1
+        }
+      },
+      "corpus_validation": {
+        "summary": {
+          "samples": 37,
+          "exact": 25,
+          "character_errors": 52,
+          "missing": 22,
+          "extra": 3,
+          "substituted": 27,
+          "characters": 360,
+          "cer": 0.14444444444444443
+        },
+        "median_ocr_ms": 14.857058002235135,
+        "track_summary": null
+      },
+      "corpus_test": {
+        "summary": {
+          "samples": 31,
+          "exact": 25,
+          "character_errors": 16,
+          "missing": 8,
+          "extra": 1,
+          "substituted": 7,
+          "characters": 295,
+          "cer": 0.05423728813559322
+        },
+        "median_ocr_ms": 14.344486000481993,
+        "track_summary": null
+      },
+      "external": {
+        "summary": {
+          "samples": 200,
+          "exact": 132,
+          "character_errors": 141,
+          "missing": 38,
+          "extra": 14,
+          "substituted": 89,
+          "characters": 1894,
+          "cer": 0.07444561774023231
+        },
+        "median_ocr_ms": 14.267611999457586,
+        "track_summary": null
+      },
+      "mumbai_manual": {
+        "summary": {
+          "samples": 18,
+          "exact": 10,
+          "character_errors": 17,
+          "missing": 7,
+          "extra": 2,
+          "substituted": 8,
+          "characters": 174,
+          "cer": 0.09770114942528736
+        },
+        "median_ocr_ms": 13.940045999333961,
+        "track_summary": null
+      }
+    }
+  },
+  "saved_reload_parity_passed": true,
+  "promotion_eligible": false,
+  "promotion_reasons": [
+    "Regression on corpus_validation",
+    "Regression on corpus_test",
+    "Regression on external",
+    "Regression on mumbai_manual",
+    "Regression on RoadText temporal track results"
+  ],
+  "production_promoted": false,
+  "next_dataset_started": false,
+  "benchmark_review_required_before_next_dataset": true,
+  "focused_tests_passed": 57,
+  "caveats": [
+    "Bounded vehicle-mounted Indian source subset; not fixed CCTV or an independent human audit of all source labels",
+    "Timestamped replay of retained native annotated crops; not end-to-end detector/tracker video accuracy",
+    "New adaptation splits are disjoint; publisher pretraining data membership cannot be established",
+    "Repeated crops/tracks are not independent vehicles.",
+    "Legacy regressions have been examined before and are not new blind tests.",
+    "OCR timings exclude decoding, detection, fusion, transfer and alert delivery.",
+    "Runtime baseline had wrong acceptances on this selected RoadText replay; scores are not calibrated correctness probabilities."
+  ],
+  "restored_runtime_gpu_preflight": "passed: OCR, vehicle, plate and text-outline models",
+  "restored_runtime_checkpoint_sha256": "c2ba896d994b174071c95ace0f5ffc8a61cec3fc6eecce8f0bc5feb7dec4456d"
+}

@@ -5,13 +5,17 @@ recognition using representative labelled traffic-video data.
 
 ## Execution order
 
-1. Fine-tune the current adapted Awiros model on the human-corrected Indian
-   traffic-video corpus associated with StreetOCRCorrect/OCR-On-the-go.
+1. Fine-tune the current adapted Awiros model on a verified Indian plate subset
+   of **RoadText-3K**, replacing the unavailable StreetOCRCorrect corpus.
 2. If the Indian evaluation is insufficient, fine-tune on UFPR-SR-Plates alone.
 3. Fine-tune on RodoSol-ALPR alone.
 4. Fine-tune on UFPR-SR-Plates and RodoSol together, using balanced sampling.
 5. Compare all completed candidates with the unchanged current model and use
    the best candidate that passes Indian CCTV evaluation and runtime checks.
+
+**User review gate:** after fine-tuning on each dataset, run regression tests,
+report the benchmarks, and stop for the user's review before starting the next
+dataset. Do not automatically continue to UFPR, RodoSol or their combination.
 
 Independent dataset experiments start from the same preserved current baseline
 so an earlier failed run does not contaminate the next. Additional sequential
@@ -22,9 +26,35 @@ The existing baseline SHA256 is
 ## Access audit
 
 Checked the publishers' repositories and author project page on 9 November 2026.
-Only public demonstration figures and the StreetOCRCorrect paper are available
-locally from this investigation. None of the three complete training datasets
-has been acquired or used for a new training run.
+The StreetOCRCorrect public figures are demonstrations, not a training set.
+The new first stage acquires one Indian RoadText archive and its matching public
+annotations. Record actual source coverage in the experiment receipt rather
+than describing a bounded subset as all 1,000 Indian videos.
+
+### RoadText-3K — active first stage
+
+- Publisher: https://datasets.cvc.uab.es/roadtext3k/
+- Paper: https://marcalr.github.io/pdfs/DAS22.pdf
+- Source includes 1,000 Indian ten-second, 1280x720 vehicle-mounted-camera clips.
+  It is not fixed CCTV. Source text annotations include a dedicated plate enum,
+  line transcriptions and track IDs. Some registrations occupy multiple lines.
+- The public JSON has missing/null transcriptions for some clips. Check plate
+  text coverage before downloading the corresponding large video archive.
+- Only readable, nonempty publisher plate transcriptions can supervise OCR.
+  Keep complete-registration-shaped source lines for this first experiment;
+  quarantine fragments, conflicting track labels and unsupported formats.
+  Never generate a missing registration from our model or a format rule.
+- Indian membership comes from an official `I_*.tar.gz` member path. Do not
+  infer country solely from numeric annotation IDs.
+- If official split IDs are unavailable, declare custom ordered-video blocks
+  and quarantine registrations crossing blocks. Preserve an untouched RoadText test cohort and the
+  existing Mumbai, corpus and external-source regression sets.
+- The paper expressly provides training partitions for academic model research.
+  A separate RoadText-3K licence was not found. Do not assume permission to
+  redistribute source media or claim commercial-use rights.
+- Proposed bounded training comparison: warm-start the unchanged current model;
+  compare an encoder-tail/CTC update with a lower-rate full encoder/CTC update.
+  Select the checkpoint on RoadText validation only, then run all regressions.
 
 ### StreetOCRCorrect / OCR-On-the-go
 
@@ -89,11 +119,11 @@ has been acquired or used for a new training run.
 
 ## Immediate blocker and useful next action
 
-The Indian experiment is blocked on obtaining the corrected corpus and terms.
-Request it from the author, specifically naming the StreetOCRCorrect plate
-annotations and OCR-On-the-go recognition data. Submit the other dataset access
-requests while waiting if desired, without changing the approved training order.
-No model, camera, crop, dashboard or alert setting is changed by this plan.
+RoadText-3K replaces the StreetOCRCorrect access dependency. UFPR-SR-Plates and
+RodoSol still require their publisher access processes before those later stages.
+This stage must finish with a RoadText benchmark/regression report and a user
+review gate. No automatic deployment or subsequent-dataset run is authorised by
+completion of the first fine-tuning experiment alone.
 
 These experiments address an important remaining gap. They do not demonstrate
 that all possible OCR improvements have been exhausted, and no target accuracy

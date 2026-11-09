@@ -192,6 +192,7 @@ docs/          Current guides, model experiments and historical reports
 - **[Recorded footage](docs/RECORDED_VIDEO.md):** receipt format, labels, evaluation, and session semantics. Use the results section above for subsequent recorded measurements.
 - **[Dashboard validation](docs/UNIFIED_DASHBOARD_VALIDATION.md):** archived tests and implementation limits.
 - **[Model/data audit](docs/DETECTOR_DATASETS.md):** detector sources, licences, and evidence tiers.
+- **[RoadText OCR experiment](docs/ROADTEXT_OCR_EXPERIMENT_20261109.md):** dataset-specific fine-tuning, regression results and the review gate before another dataset.
 - **[Historical engineering validation](VALIDATION.md):** earlier live/diagnostic measurements; these do not define the current dashboard's scope.
 
 Older task reports, `CURRENT_STATUS.md`, handoff notes, and demonstration videos are dated records of earlier iterations. They do not override the current dashboard guide or this recorded-mode setup. Model weights and source datasets retain their respective licences and attribution requirements.
