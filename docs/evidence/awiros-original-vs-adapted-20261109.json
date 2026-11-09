@@ -1,0 +1,293 @@
+{
+  "schema_version": 1,
+  "goal": "Measure the effect of our existing fine-tuning against its unchanged original Awiros parent",
+  "original_sha256": "f9f1264e0c115a239ca6d6700a74ceffab17168b75dafc6c169c232012c68e47",
+  "adapted_sha256": "c2ba896d994b174071c95ace0f5ffc8a61cec3fc6eecce8f0bc5feb7dec4456d",
+  "publisher_revision": "eadbc5ae4faa8284c8a547a60142fd555c3059ca",
+  "source_sha256": "4801ac79fbf82db250a84caf10f3c4f611061574e445d8e07982df2aa8a1d247",
+  "manifest_hashes": {
+    "corpus": "89fe372395b5ceb6c8aabd1ed24bca9274137485a6ecce1c190cc0a0c8ee37d0",
+    "external": "048703fed7286d96de50abe02d312d4648e477dbe794dc4df8abcff1520fc1ba",
+    "manual": "f78f979935ef5316e0e639208c8836f49f466c6a0e4a688bac5504ae3321b0a1",
+    "roadtext": "fc7d7de79d0698acff3925f200034c68562bba8aaf8c77280a694013d598c897"
+  },
+  "original_adaptation": {
+    "training_photographs": 802,
+    "training_synthetic": 300,
+    "scope": "bounded_image_encoder_tail_and_ctc",
+    "epochs_run": 12,
+    "selected_epoch": 8
+  },
+  "protocol": "Same frozen native crops, input_array, dictionary and greedy CTC; alternating model order; no retraining or threshold selection",
+  "runtime": {
+    "device": "gpu:0",
+    "paddle": "3.2.2",
+    "numpy": "1.26.4"
+  },
+  "training_overlap_checks": "All 1,102 adaptation training registrations and crop hashes checked against each evaluation slice",
+  "source_caveats": {
+    "corpus": "AI visual review, publisher agreement and legacy reviews; not independent human test truth; pretraining overlap unknown",
+    "roadtext": "Bounded vehicle-mounted Indian source subset; not fixed CCTV or an independent human audit of all source labels"
+  },
+  "caveats": [
+    "Training control is in-sample and cannot establish generalisation.",
+    "Corpus validation selected our original checkpoint; it is not an untouched test.",
+    "Other regression sets have been examined before; publisher original pretraining membership is unknown.",
+    "Crop OCR comparison does not measure automatic detection or full-video accuracy.",
+    "OCR latency excludes decode, detection, candidate fusion and alert delivery."
+  ],
+  "production_changed": false,
+  "new_training": false,
+  "date": "2026-11-09",
+  "focused_tests_passed": 9,
+  "datasets": {
+    "training_photographs_control": {
+      "original": {
+        "samples": 802,
+        "exact": 483,
+        "character_errors": 807,
+        "missing": 300,
+        "extra": 51,
+        "substituted": 456,
+        "characters": 7803,
+        "cer": 0.10342176086120723
+      },
+      "adapted": {
+        "samples": 802,
+        "exact": 621,
+        "character_errors": 470,
+        "missing": 174,
+        "extra": 17,
+        "substituted": 279,
+        "characters": 7803,
+        "cer": 0.06023324362424708
+      },
+      "recovered": 141,
+      "regressed": 3,
+      "unchanged_readings": 536,
+      "distinct_registrations": 725,
+      "in_sample_control": true,
+      "timing": {
+        "original": {
+          "median_ocr_ms": 13.919290498961345,
+          "p95_ocr_ms": 28.106212098100503
+        },
+        "adapted": {
+          "median_ocr_ms": 13.84352949935419,
+          "p95_ocr_ms": 27.97874039988528
+        }
+      }
+    },
+    "corpus_validation": {
+      "original": {
+        "samples": 37,
+        "exact": 24,
+        "character_errors": 60,
+        "missing": 27,
+        "extra": 2,
+        "substituted": 31,
+        "characters": 360,
+        "cer": 0.16666666666666666
+      },
+      "adapted": {
+        "samples": 37,
+        "exact": 29,
+        "character_errors": 42,
+        "missing": 21,
+        "extra": 1,
+        "substituted": 20,
+        "characters": 360,
+        "cer": 0.11666666666666667
+      },
+      "recovered": 5,
+      "regressed": 0,
+      "unchanged_readings": 24,
+      "distinct_registrations": 33,
+      "in_sample_control": false,
+      "timing": {
+        "original": {
+          "median_ocr_ms": 13.084395999612752,
+          "p95_ocr_ms": 16.964694399939614
+        },
+        "adapted": {
+          "median_ocr_ms": 12.866402001236565,
+          "p95_ocr_ms": 18.68686040033931
+        }
+      }
+    },
+    "corpus_test": {
+      "original": {
+        "samples": 31,
+        "exact": 22,
+        "character_errors": 23,
+        "missing": 14,
+        "extra": 1,
+        "substituted": 8,
+        "characters": 295,
+        "cer": 0.07796610169491526
+      },
+      "adapted": {
+        "samples": 31,
+        "exact": 28,
+        "character_errors": 13,
+        "missing": 8,
+        "extra": 0,
+        "substituted": 5,
+        "characters": 295,
+        "cer": 0.04406779661016949
+      },
+      "recovered": 6,
+      "regressed": 0,
+      "unchanged_readings": 23,
+      "distinct_registrations": 31,
+      "in_sample_control": false,
+      "timing": {
+        "original": {
+          "median_ocr_ms": 13.550743999076076,
+          "p95_ocr_ms": 25.870370998745784
+        },
+        "adapted": {
+          "median_ocr_ms": 13.658859999850392,
+          "p95_ocr_ms": 25.062941000214778
+        }
+      }
+    },
+    "external_regression": {
+      "original": {
+        "samples": 200,
+        "exact": 121,
+        "character_errors": 173,
+        "missing": 36,
+        "extra": 40,
+        "substituted": 97,
+        "characters": 1894,
+        "cer": 0.09134107708553327
+      },
+      "adapted": {
+        "samples": 200,
+        "exact": 137,
+        "character_errors": 135,
+        "missing": 33,
+        "extra": 16,
+        "substituted": 86,
+        "characters": 1894,
+        "cer": 0.07127771911298839
+      },
+      "recovered": 17,
+      "regressed": 1,
+      "unchanged_readings": 150,
+      "distinct_registrations": 200,
+      "in_sample_control": false,
+      "timing": {
+        "original": {
+          "median_ocr_ms": 13.443493498925818,
+          "p95_ocr_ms": 27.39477840150357
+        },
+        "adapted": {
+          "median_ocr_ms": 13.507500498235459,
+          "p95_ocr_ms": 26.94445565011847
+        }
+      }
+    },
+    "mumbai_manual": {
+      "original": {
+        "samples": 18,
+        "exact": 11,
+        "character_errors": 17,
+        "missing": 6,
+        "extra": 3,
+        "substituted": 8,
+        "characters": 174,
+        "cer": 0.09770114942528736
+      },
+      "adapted": {
+        "samples": 18,
+        "exact": 14,
+        "character_errors": 13,
+        "missing": 7,
+        "extra": 1,
+        "substituted": 5,
+        "characters": 174,
+        "cer": 0.07471264367816093
+      },
+      "recovered": 3,
+      "regressed": 0,
+      "unchanged_readings": 13,
+      "distinct_registrations": 18,
+      "in_sample_control": false,
+      "timing": {
+        "original": {
+          "median_ocr_ms": 29.84871049920912,
+          "p95_ocr_ms": 61.18738625027615
+        },
+        "adapted": {
+          "median_ocr_ms": 31.67660600047384,
+          "p95_ocr_ms": 79.5610408009452
+        }
+      },
+      "same_single_frame_candidate_decoder": {
+        "original": {
+          "samples": 18,
+          "exact": 13,
+          "character_errors": 14,
+          "missing": 4,
+          "extra": 1,
+          "substituted": 9,
+          "characters": 174,
+          "cer": 0.08045977011494253
+        },
+        "adapted": {
+          "samples": 18,
+          "exact": 15,
+          "character_errors": 12,
+          "missing": 2,
+          "extra": 0,
+          "substituted": 10,
+          "characters": 174,
+          "cer": 0.06896551724137931
+        },
+        "recovered": 2,
+        "regressed": 0,
+        "unchanged_readings": 13
+      }
+    },
+    "roadtext_test": {
+      "original": {
+        "samples": 106,
+        "exact": 42,
+        "character_errors": 230,
+        "missing": 80,
+        "extra": 1,
+        "substituted": 149,
+        "characters": 1043,
+        "cer": 0.22051773729626079
+      },
+      "adapted": {
+        "samples": 106,
+        "exact": 43,
+        "character_errors": 206,
+        "missing": 81,
+        "extra": 2,
+        "substituted": 123,
+        "characters": 1043,
+        "cer": 0.1975071907957814
+      },
+      "recovered": 2,
+      "regressed": 1,
+      "unchanged_readings": 69,
+      "distinct_registrations": 13,
+      "in_sample_control": false,
+      "timing": {
+        "original": {
+          "median_ocr_ms": 13.476362501023686,
+          "p95_ocr_ms": 27.84097100084182
+        },
+        "adapted": {
+          "median_ocr_ms": 13.47983499908878,
+          "p95_ocr_ms": 27.495016749526258
+        }
+      }
+    }
+  },
+  "decision": "Keep deployed adaptation: improvement on each evaluated slice, with limited RoadText gain; no universal CCTV accuracy claim."
+}
