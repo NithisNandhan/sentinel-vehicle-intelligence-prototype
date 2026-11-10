@@ -164,6 +164,141 @@ class TrackedOCRTests(unittest.TestCase):
         np.testing.assert_array_equal(images[-1],self.image(2))
 
 
+class PlateContinuityIntegrationTests(unittest.TestCase):
+    engine = TrackedOCRTests.engine
+    image = TrackedOCRTests.image
+    tracks = TrackedOCRTests.tracks
+
+    def process(self, engine, image, tracks, stamp, **kwargs):
+        # These plumbing tests isolate continuity from the image-quality heuristic.
+        with patch('sentinel_edge.tracked_ocr.crop_quality', return_value=.9):
+            return engine.process(image, tracks, stamp, **kwargs)
+
+    def test_known_global_box_pair_at_exact_2500ms_starts_fresh_reader(self):
+        engine = self.engine()
+        boxes = iter([(1946,1690,2150,1775), (1336,1567,1469,1632)])
+        engine.detector.box = lambda image: next(boxes)
+        image = np.zeros((1800,2200,3),np.uint8)
+        tracks = [VehicleTrack('117',(0,0,2200,1800),2)]
+        self.process(engine,image,tracks,28000)
+        old = engine.histories['117'].reader
+        self.process(engine,image,tracks,30500)
+        state = engine.histories['117']
+        self.assertIsNot(state.reader,old)
+        self.assertEqual(state.reader.observation_count,1)
+        self.assertEqual(state.last_plate_box,(1336,1567,1469,1632))
+        self.assertEqual(engine.metrics['plate_continuity_reset_gap'],1)
+
+    def test_normal_motion_and_1000ms_gap_keep_three_observations(self):
+        engine = self.engine()
+        for i,stamp in enumerate((0,500,1500)):
+            self.process(engine,self.image(i),self.tracks(),stamp)
+        self.assertEqual(engine.histories['1'].reader.observation_count,3)
+        self.assertEqual(engine.metrics['plate_continuity_resets'],0)
+
+    def test_interleaved_tracks_retain_independent_evidence(self):
+        engine = self.engine()
+        tracks = [VehicleTrack(key,(0,0,180,60),2) for key in ('1','2')]
+        for i in range(6):
+            image = self.image(i)
+            key = str(1+i%2)
+            prepared = {'box':(5,5,150,35), 'crop':image[5:35,5:150],
+                        'calls':0, 'fallback':False, 'ms':0}
+            self.process(engine,image,tracks,i*500,plate_cache={key:prepared})
+        self.assertEqual([engine.histories[key].reader.observation_count for key in ('1','2')],[3,3])
+        self.assertIsNot(engine.histories['1'].reader,engine.histories['2'].reader)
+        self.assertEqual(engine.metrics['plate_continuity_resets'],0)
+
+    def test_geometric_split_drops_reconstruction_confirmation_and_all_retained_evidence(self):
+        engine = self.engine()
+        from sentinel_edge.reconstruction import CropBank
+        engine.crop_bank = CropBank()
+        self.process(engine,self.image(1),self.tracks(),0)
+        old = engine.histories['1']
+        old.reconstruction = object()
+        old.confirmed_plate = TEXT
+        old.signatures = [np.zeros((2,2))]
+        old.evidence = [{'crop':self.image(1),'pts_ms':0,'quality':1.}]
+        old.layouts = ['one_line']
+        old.max_plate_height = 99
+        old.frame_jpeg, old.frame_pts = b'old',0
+        # Same vehicle ROI, but a much smaller global plate proposal.
+        engine.detector.box = lambda image:(5,5,35,15)
+        with patch.object(engine,'_finalize') as finalized:
+            self.process(engine,self.image(2),self.tracks(),500)
+        state = engine.histories['1']
+        finalized.assert_called_once()
+        key,previous,cause = finalized.call_args.args
+        self.assertEqual((key,cause),('1','plate_continuity_scale_change'))
+        self.assertEqual((previous.vehicle_samples,previous.searches,previous.seen_pts),(1,1,0))
+        self.assertEqual((state.vehicle_samples,state.searches,state.plate_detections),(1,1,1))
+        self.assertIsNone(state.reconstruction)
+        self.assertIsNone(state.confirmed_plate)
+        self.assertEqual((state.signatures,state.evidence,state.layouts),([],[],[]))
+        self.assertEqual(state.max_plate_height,0)
+        self.assertEqual((state.frame_jpeg,state.frame_pts),(None,None))
+        self.assertEqual(len(state.crop_inputs),1)
+        self.assertEqual([sample.pts_ms for sample in engine.crop_bank.get('1')],[500])
+        self.assertNotEqual(state.passage_id,old.passage_id)
+
+    def test_plate_miss_expires_all_evidence_without_waiting_for_next_hit(self):
+        engine = self.engine()
+        self.process(engine,self.image(1),self.tracks(),0)
+        old = engine.histories['1']
+        old.confirmed_plate = TEXT
+        old.reconstruction = object()
+        old.signatures = [np.zeros((2,2))]
+        engine.detector.box = lambda image:None
+        self.process(engine,self.image(2),self.tracks(),1001)
+        state = engine.histories['1']
+        self.assertEqual(state.reader.observation_count,0)
+        self.assertIsNone(state.confirmed_plate)
+        self.assertIsNone(state.reconstruction)
+        self.assertEqual(state.signatures,[])
+        self.assertIsNone(state.last_plate_pts_ms)
+        self.assertFalse(engine.needs_more_evidence())
+
+    def test_plate_region_split_counts_new_detection_only_in_fresh_passage(self):
+        engine = self.engine()
+        self.process(engine,self.image(1),self.tracks(),0)
+        # This vertical move exceeds the existing ROI-relative centre guard,
+        # while remaining within global geometry/scale continuity bounds.
+        engine.detector.box = lambda image:(5,26,150,56)
+        with patch.object(engine,'_finalize') as finalized:
+            self.process(engine,self.image(2),self.tracks(),500)
+        finalized.assert_called_once()
+        key,previous,cause = finalized.call_args.args
+        self.assertEqual((key,cause),('1','plate_region'))
+        self.assertEqual((previous.vehicle_samples,previous.searches,previous.plate_detections),(1,1,1))
+        self.assertEqual(previous.seen_pts,0)
+        current = engine.histories['1']
+        self.assertEqual((current.vehicle_samples,current.searches,current.plate_detections),(1,1,1))
+        self.assertEqual((current.reader.observation_count,current.last_plate_pts_ms),(1,500))
+        self.assertEqual(engine.metrics['plate_region_resets'],1)
+        self.assertEqual(engine.metrics['plate_continuity_resets'],0)
+
+    def test_duplicate_geometry_clock_does_not_make_new_votes_or_keep_stale_ocr(self):
+        engine = self.engine()
+        for stamp in range(0,3001,500):
+            self.process(engine,self.image(1),self.tracks(),stamp)
+        self.assertEqual(engine.histories['1'].reader.observation_count,1)
+        self.assertEqual(engine.histories['1'].last_plate_pts_ms,3000)
+        self.assertEqual(engine.metrics['plate_continuity_resets'],0)
+        self.assertEqual(engine.metrics['ocr_gap_resets'],1)
+        self.assertEqual(engine.metrics['distinct_ocr_observations'],2)
+
+    def test_flush_drops_retained_crop_bank(self):
+        engine = self.engine()
+        from sentinel_edge.reconstruction import CropBank
+        engine.crop_bank = CropBank()
+        self.process(engine,self.image(1),self.tracks(),0)
+        self.assertGreater(engine.crop_bank.bytes_used,0)
+        engine.flush()
+        self.assertEqual(engine.crop_bank.bytes_used,0)
+        self.assertEqual(engine.histories,{})
+        self.assertIsNone(engine.last_sample)
+
+
 class DetectorContractTests(unittest.TestCase):
     def test_vehicle_boxes_without_bytetrack_ids_are_retained_with_local_association(self):
         def detection(box,identity=None):

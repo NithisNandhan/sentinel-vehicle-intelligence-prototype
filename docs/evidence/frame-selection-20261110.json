@@ -1,0 +1,271 @@
+{
+  "scope": "Fixed-policy development diagnostic on previously inspected reference anchors; not full-video accuracy",
+  "trace_sha256": "926067d17adad4721a2f8c6ea4fc0fd506e4c81d2a21438d4fc657ae29ae9c64",
+  "features_sha256": "e6b7484e40ecb57e2fc3f4420eb682658fd5093e626a97860d91089fc5bf1f72",
+  "original_report_sha256": "6e6d964df6f7ecff34583f794a9090d58dd6de4784964bd9e3039d41f3c24402",
+  "models": {
+    "ocr_model": "awiros-ctc-adapted",
+    "ocr_checkpoint_sha256": "c2ba896d994b174071c95ace0f5ffc8a61cec3fc6eecce8f0bc5feb7dec4456d",
+    "ocr_device": "gpu",
+    "detector_profile": "general",
+    "vehicle_model": "yolo26s",
+    "vehicle_model_sha256": "646f8bc3fe0a656803d95c294f7852321748cb29d13466a1af8862e2db384a1b",
+    "plate_model": "parent",
+    "plate_model_sha256": "746fdd358ec110418775d7c9d8d07910d48b1a21471f92bf4421f6510d6daade",
+    "plate_device": "gpu",
+    "vehicle_device": "gpu",
+    "detector_device": "gpu"
+  },
+  "policy": {
+    "min_width": 48,
+    "min_height": 12,
+    "min_sharpness": 40.0,
+    "min_contrast": 12.0,
+    "max_extreme_fraction": 0.9,
+    "minimum_separation_ms": 150
+  },
+  "continuity_policy": {
+    "max_gap_ms": 1000,
+    "max_scale_change": 2.5,
+    "max_relative_jump": 1.5
+  },
+  "selector_sha256": "b6c3a232a69dbaecfd84a05f6637467ad5de9542e02e7a5fb33542297af08d5e",
+  "continuity_sha256": "c62b0054706fb10453b5c25ce2e76228f3ca01611001a89f9a519c3a1f98097f",
+  "runner_sha256": "436375ed6fdb6ddef016ccd8c0b66e621fe7cad132d9bbc5131aa805b2eaea10",
+  "summary": {
+    "current_reconstruction": {
+      "exact": 2,
+      "targets": 18,
+      "matched_exact": 2,
+      "matched_targets": 6,
+      "clean_multi_exact": 0,
+      "clean_multi_targets": 2,
+      "outputs": 6,
+      "recovered": [],
+      "regressed": [],
+      "selected_at_reference": 6,
+      "final_gate_correct": 0,
+      "final_gate_wrong": 0
+    },
+    "legacy_best": {
+      "exact": 3,
+      "targets": 18,
+      "matched_exact": 3,
+      "matched_targets": 6,
+      "clean_multi_exact": 0,
+      "clean_multi_targets": 2,
+      "outputs": 6,
+      "recovered": [
+        "19"
+      ],
+      "regressed": [],
+      "selected_at_reference": 3,
+      "final_gate_correct": 0,
+      "final_gate_wrong": 0
+    },
+    "continuity_all": {
+      "exact": 3,
+      "targets": 18,
+      "matched_exact": 3,
+      "matched_targets": 6,
+      "clean_multi_exact": 0,
+      "clean_multi_targets": 2,
+      "outputs": 6,
+      "recovered": [
+        "19"
+      ],
+      "regressed": [],
+      "selected_at_reference": 6,
+      "final_gate_correct": 0,
+      "final_gate_wrong": 0
+    },
+    "quality_best": {
+      "exact": 3,
+      "targets": 18,
+      "matched_exact": 3,
+      "matched_targets": 6,
+      "clean_multi_exact": 0,
+      "clean_multi_targets": 2,
+      "outputs": 6,
+      "recovered": [
+        "19"
+      ],
+      "regressed": [],
+      "selected_at_reference": 5,
+      "final_gate_correct": 0,
+      "final_gate_wrong": 0
+    },
+    "quality_top3_fusion": {
+      "exact": 3,
+      "targets": 18,
+      "matched_exact": 3,
+      "matched_targets": 6,
+      "clean_multi_exact": 0,
+      "clean_multi_targets": 2,
+      "outputs": 6,
+      "recovered": [
+        "19"
+      ],
+      "regressed": [],
+      "selected_at_reference": 6,
+      "final_gate_correct": 0,
+      "final_gate_wrong": 0
+    },
+    "quality_assisted": {
+      "exact": 3,
+      "targets": 18,
+      "matched_exact": 3,
+      "matched_targets": 6,
+      "clean_multi_exact": 0,
+      "clean_multi_targets": 2,
+      "outputs": 6,
+      "recovered": [
+        "19"
+      ],
+      "regressed": [],
+      "selected_at_reference": 5,
+      "final_gate_correct": 0,
+      "final_gate_wrong": 0
+    }
+  },
+  "winners": [
+    "legacy_best",
+    "continuity_all",
+    "quality_best",
+    "quality_top3_fusion",
+    "quality_assisted"
+  ],
+  "limitations": [
+    "Only admitted observations are present in frozen trace; missing/duplicate detector observations can affect live continuity, requiring full-pipeline validation.",
+    "Edge contact and tilt indicators do not prove a complete or readable plate.",
+    "Final gate metrics are endpoint diagnostics, not a count of all earlier operational acceptances."
+  ],
+  "date": "2026-11-10",
+  "feature_counts": {
+    "distinct_frames": 171,
+    "eligible": 158
+  },
+  "full_gpu_validation": {
+    "source_sha256": "6b7064605b3d4d12c6c1da4566cbcec1cd2e3e3bd7b77814865fe9df22045f65",
+    "trace_sha256": "711eaa69ea819a8868b68a20f16a9384cbc27087eb302cbb391cca23ef364553",
+    "reached_eof": true,
+    "decoded_frames": 928,
+    "analysed_frames": 62,
+    "wall_seconds": 147.8,
+    "observations": 174,
+    "ocr_reader_segments": 126,
+    "known_pair_separated": true,
+    "known_pair_locations": {
+      "28000": [
+        "ocr-0115"
+      ],
+      "30500": [
+        "ocr-0126"
+      ]
+    },
+    "models": {
+      "ocr_model": "awiros-ctc-adapted",
+      "ocr_checkpoint_sha256": "c2ba896d994b174071c95ace0f5ffc8a61cec3fc6eecce8f0bc5feb7dec4456d",
+      "ocr_device": "gpu",
+      "detector_profile": "general",
+      "vehicle_model": "yolo26s",
+      "vehicle_model_sha256": "646f8bc3fe0a656803d95c294f7852321748cb29d13466a1af8862e2db384a1b",
+      "plate_model": "parent",
+      "plate_model_sha256": "746fdd358ec110418775d7c9d8d07910d48b1a21471f92bf4421f6510d6daade",
+      "plate_device": "gpu",
+      "vehicle_device": "gpu",
+      "detector_device": "gpu"
+    },
+    "pipeline_summary": {
+      "analysed_frames": 62,
+      "vehicle_box_instances": 356,
+      "vehicle_frames": 62,
+      "peak_vehicle_boxes": 13,
+      "vehicle_track_segments": 111,
+      "eligible_vehicle_tracks": 356,
+      "plate_roi_searches": 356,
+      "plate_roi_unsearched_tracks": 0,
+      "vehicle_crop_calls": 356,
+      "plate_detector_calls": 1050,
+      "targeted_searches": 157,
+      "plate_crops": 174,
+      "ocr_calls": 174,
+      "distinct_ocr_observations": 174,
+      "eligible_fusion_windows": 29,
+      "candidate_windows": 28,
+      "plate_continuity_resets": 103,
+      "plate_continuity_reset_relative_jump": 27,
+      "plate_continuity_reset_gap": 69,
+      "text_supported_crops": 22,
+      "reconstruction_attempts": 22,
+      "reconstructed_windows": 18,
+      "reconstruction_failures": 0,
+      "plate_continuity_reset_scale_change": 7,
+      "consistency_resets": 33,
+      "text_rectified_ocr_calls": 17,
+      "plate_region_resets": 1,
+      "unique_model_accepted_unverified": 3,
+      "maximum_distinct_observations": 8,
+      "maximum_plate_span_ms": 3500,
+      "median_plate_width": 109.0,
+      "median_crop_quality": 0.954
+    },
+    "scored_summary": {
+      "single_quality": {
+        "exact": 3,
+        "targets": 18,
+        "matched_exact": 3,
+        "matched_targets": 6,
+        "multi_frame_exact": 0,
+        "multi_frame_targets": 2,
+        "outputs": 6,
+        "accepted_correct": null,
+        "accepted_wrong": null
+      },
+      "multi_originals": {
+        "exact": 3,
+        "targets": 18,
+        "matched_exact": 3,
+        "matched_targets": 6,
+        "multi_frame_exact": 0,
+        "multi_frame_targets": 2,
+        "outputs": 6,
+        "accepted_correct": 0,
+        "accepted_wrong": 0
+      },
+      "multi_reconstruction": {
+        "exact": 3,
+        "targets": 18,
+        "matched_exact": 3,
+        "matched_targets": 6,
+        "multi_frame_exact": 0,
+        "multi_frame_targets": 2,
+        "outputs": 6,
+        "accepted_correct": 0,
+        "accepted_wrong": 0
+      }
+    },
+    "runtime_sources": {
+      "description": "Source preserved after the complete GPU capture and before any follow-up edits. Runtime source required no counter fix; regression test added only.",
+      "sha256": {
+        "edge/sentinel_edge/tracked_ocr.py": "6242daecf9320c78d4f1142723e9d432be1cf807856f4aa9bc46c0f705a3841f",
+        "data/benchmarks/frame-guard-validation-20261110/tracked_ocr.capture.py": "6242daecf9320c78d4f1142723e9d432be1cf807856f4aa9bc46c0f705a3841f",
+        "edge/sentinel_edge/plate_continuity.py": "c62b0054706fb10453b5c25ce2e76228f3ca01611001a89f9a519c3a1f98097f"
+      }
+    }
+  },
+  "verification": {
+    "continuity_and_tracked_tests": 50,
+    "selector_and_dependencies_tests": 29,
+    "worker_status_after_restart": "paused",
+    "source_hash_matches_validation": true,
+    "independent_qa": true
+  },
+  "deployment": {
+    "continuity_guard": "enabled",
+    "new_frame_selection_rules": "experimental, not promoted",
+    "model_weights_changed": false,
+    "acceptance_thresholds_changed": false
+  },
+  "raw_video_crops_predictions_and_labels_published": false
+}

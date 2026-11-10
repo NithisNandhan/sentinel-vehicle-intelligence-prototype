@@ -1,5 +1,5 @@
 """Bounded per-vehicle CTC histories; pixels and plate strings stay in memory."""
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from collections import Counter, deque
 import hashlib
 import hmac
@@ -10,6 +10,7 @@ import time
 from .ctc_fusion import CTCPlateReader
 from .live_detection_viewer import clipped_box, crop_box, roi_schedule
 from .plate_options import PlateOptions
+from .plate_continuity import DEFAULT_POLICY, continuity_reason
 from .plate_quality import crop_quality
 from .privacy import mask_plate
 from .two_line import row_aware_probabilities, two_line_split
@@ -25,6 +26,10 @@ class History:
     vehicle_class: int
     seen_pts: int
     plate_center: tuple | None = None
+    # Geometry/liveness clock: screened plate observations, including duplicates.
+    # reader.samples retain only independent OCR evidence and its separate clock.
+    last_plate_box: tuple | None = None
+    last_plate_pts_ms: int | None = None
     searches: int = 0
     plate_detections: int = 0
     last_plate_failure: str | None = None
@@ -110,6 +115,32 @@ class TrackedOCR:
         """End every open passage (end of a recording or an operator stop)."""
         for key in list(self.histories):
             self._finalize(key, self.histories.pop(key), cause)
+        if self.crop_bank is not None:
+            self.crop_bank.clear()
+        self.last_sample = None
+
+    def _restart_history(self, key, state, cause, *, current=False):
+        """Finalize before dropping all evidence, including retained confirmation.
+
+        A fresh passage prevents stale crops, signatures or a confirmed reading
+        from following a reused vehicle ID into a different plate segment.
+        """
+        from .passages import new_passage_id
+        # The selected frame was already charged as a vehicle sample/search.
+        # Attribute it only to the fresh passage when its plate splits the old
+        # segment; the old outcome ends at its last continuity-admitted plate.
+        previous = (replace(state, vehicle_samples=max(0, state.vehicle_samples-1),
+                            searches=max(0, state.searches-1),
+                            seen_pts=state.last_plate_pts_ms if state.last_plate_pts_ms is not None else state.seen_pts)
+                    if current else state)
+        self._finalize(key, previous, cause)
+        if self.crop_bank is not None:
+            self.crop_bank.drop(key)
+        fresh = History(self._new_reader(), state.box, state.vehicle_class, state.seen_pts,
+                        passage_id=new_passage_id(), track_ids=[key], first_pts=state.seen_pts,
+                        first_box=state.box, vehicle_samples=int(current), searches=int(current))
+        self.histories[key] = fresh
+        return fresh
 
     def needs_more_evidence(self):
         """True while a vehicle seen in the latest sample has a plate but too little evidence."""
@@ -234,12 +265,13 @@ class TrackedOCR:
                     self.crop_bank.drop(key)
         # A tracked vehicle may remain visible while no plate is found. Expire
         # its OCR evidence even on such misses, not only on the next plate hit.
-        for key, history in self.histories.items():
-            if history.reader.samples and pts_ms-history.reader.samples[-1][0] > self.gap_ms:
-                history.reader = self._new_reader()
-                history.reconstruction = None
-                if self.crop_bank is not None:
-                    self.crop_bank.drop(key)
+        for key, history in list(self.histories.items()):
+            if history.last_plate_pts_ms is not None and pts_ms-history.last_plate_pts_ms > DEFAULT_POLICY.max_gap_ms:
+                self._restart_history(key, history, 'plate_continuity_gap')
+                self.metrics['plate_continuity_resets'] += 1
+                self.metrics['plate_continuity_reset_gap'] += 1
+            elif history.reader.samples and pts_ms-history.reader.samples[-1][0] > self.gap_ms:
+                self._restart_history(key, history, 'ocr_gap')
                 self.metrics['ocr_gap_resets'] += 1
         self.stage_ms = dict(plate=0., ocr=0., reconstruction=0., fusion=0.)
         begin = getattr(self.detector, 'begin_frame', None)
@@ -266,6 +298,7 @@ class TrackedOCR:
                 continue
             old = self.histories.get(track.track_id)
             if old and not track_consistent(old.box,box,old.vehicle_class,track.vehicle_class):
+                self._finalize(track.track_id, old, 'vehicle_inconsistent')
                 del self.histories[track.track_id]
                 if self.crop_bank is not None:
                     self.crop_bank.drop(track.track_id)
@@ -274,6 +307,7 @@ class TrackedOCR:
             if state is None:
                 if len(self.histories) >= MAX_TRACK_HISTORIES:
                     oldest = min(self.histories,key=lambda key:self.histories[key].seen_pts)
+                    self._finalize(oldest, self.histories[oldest], 'capacity')
                     del self.histories[oldest]
                     if self.crop_bank is not None:
                         self.crop_bank.drop(oldest)
@@ -339,21 +373,21 @@ class TrackedOCR:
                     state.last_plate_failure = reason
                     state.failures[reason] += 1
                     continue
-            state.plate_detections += 1
+            global_box = (local[0]+state.box[0],local[1]+state.box[1],local[2]+state.box[0],local[3]+state.box[1])
+            reason = continuity_reason(state.last_plate_box, state.last_plate_pts_ms, global_box, pts_ms)
+            if reason:
+                state = self._restart_history(track.track_id, state, 'plate_continuity_'+reason, current=True)
+                self.metrics['plate_continuity_resets'] += 1
+                self.metrics['plate_continuity_reset_'+reason] += 1
             center = ((local[0]+local[2])/(2*region.shape[1]),(local[1]+local[3])/(2*region.shape[0]))
             if state.plate_center and sum((a-b)**2 for a,b in zip(center,state.plate_center)) > .12:
-                state.reader = self._new_reader()
-                state.reconstruction = None
-                if self.crop_bank is not None:
-                    self.crop_bank.drop(track.track_id)
+                state = self._restart_history(track.track_id, state, 'plate_region', current=True)
                 self.metrics['plate_region_resets'] += 1
+            state.plate_detections += 1
             state.plate_center = center
-            if state.reader.samples and pts_ms-state.reader.samples[-1][0] > self.gap_ms:
-                state.reader = self._new_reader()
-                state.reconstruction = None
-                if self.crop_bank is not None:
-                    self.crop_bank.drop(track.track_id)
-                self.metrics['ocr_gap_resets'] += 1
+            # A screened duplicate is still a geometric observation, but never
+            # another OCR/reconstruction vote. Rejected proposals cannot refresh it.
+            state.last_plate_box, state.last_plate_pts_ms = global_box, pts_ms
             crop = prepared['crop'] if prepared is not None else crop_box(region,local)
             quality = crop_quality(crop)
             self.metrics['plate_crops'] += 1
@@ -429,7 +463,6 @@ class TrackedOCR:
                 if self.on_accepted is not None:
                     self.on_accepted(track.track_id, accepted, pts_ms)
             status = 'accepted by model — NOT verified' if accepted else 'uncertain' if candidates else 'collecting distinct frames' if count < 3 else 'no complete candidate'
-            global_box = (local[0]+state.box[0],local[1]+state.box[1],local[2]+state.box[0],local[3]+state.box[1])
             displays.append({'box':global_box,'crop':crop,'observations':count,'ocr_status':status,
                 'masked_plate':mask_plate(candidates[0].plate) if candidates else None,
                 'candidate_count':len(candidates),'track_id':track.track_id,

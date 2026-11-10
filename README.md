@@ -196,6 +196,7 @@ docs/          Current guides, model experiments and historical reports
 - **[Original versus adapted OCR](docs/OCR_ORIGINAL_VS_ADAPTED_20261109.md):** controlled comparison of the publisher's original weights and our deployed fine-tuning.
 - **[Full-video human review](docs/FULL_VIDEO_REVIEW_20261110.md):** label the complete Mumbai clip, merge track fragments, add misses, and calculate an auditable accuracy report.
 - **[Temporal OCR comparison](docs/TEMPORAL_APPROACH_COMPARISON_20261110.md):** measured single-frame, multi-frame and reconstruction results, including a verified mixed-vehicle evidence failure.
+- **[Evidence continuity and frame selection](docs/FRAME_SELECTION_20261110.md):** deployed guard, full-recording validation and fixed-input image-selection experiments.
 - **[Historical engineering validation](VALIDATION.md):** earlier live/diagnostic measurements; these do not define the current dashboard's scope.
 
 Older task reports, `CURRENT_STATUS.md`, handoff notes, and demonstration videos are dated records of earlier iterations. They do not override the current dashboard guide or this recorded-mode setup. Model weights and source datasets retain their respective licences and attribution requirements.
