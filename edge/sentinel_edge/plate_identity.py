@@ -95,8 +95,10 @@ class PlateIdentityTracker:
     max_gap_ms = 1000
     max_active = 512
 
-    def __init__(self, excluded=()):
+    def __init__(self, excluded=(), *, retain_owned=False):
         self.excluded = set(excluded)
+        self.retain_owned = retain_owned
+        self.retained_parent_ids = set()
         self.counters = Counter()
         self.groups = {}
         self.last_pts = None
@@ -135,7 +137,7 @@ class PlateIdentityTracker:
             return .7*(1-motion)+.3*distance/limit
         return .7 * distance / limit + .3 * (1 - cosine if cosine >= .75 else 0.)
 
-    def _owner(self, proposal, vehicles):
+    def _owner(self, proposal, vehicles, group=None, pts_ms=None):
         b = proposal['box']
         area = (b[2] - b[0]) * (b[3] - b[1])
         overlaps = []
@@ -165,8 +167,14 @@ class PlateIdentityTracker:
         if len(set(ids)) != len(ids) or any(not _valid_box(v.get('box')) for v in vehicles):
             raise ValueError('Unique vehicle IDs and valid global boxes required')
         self.last_pts = pts_ms
+        retained_owners={v['id'] for v in vehicles if v.get('status') in ('visible','predicted','lost_unresolved')}
+        retained_owners.update(self.retained_parent_ids)
         for identity, group in list(self.groups.items()):
             if pts_ms - group.observations[-1][1] > self.max_gap_ms:
+                if (self.retain_owned and group.owner_votes>=2 and group.candidate in retained_owners
+                        and pts_ms-group.observations[-1][1]<=5000):
+                    self.counters['retained_through_parent_gap']+=1
+                    continue
                 del self.groups[identity]
                 self.counters['expired_groups'] += 1
         prepared = []
@@ -222,7 +230,7 @@ class PlateIdentityTracker:
             else:
                 self.counters['matched_observations'] += 1
             group = self.groups[identity]
-            candidate, status = self._owner(proposal, vehicles)
+            candidate, status = self._owner(proposal, vehicles, group, pts_ms)
             self.counters[status] += 1
             if candidate is not None:
                 if candidate != group.candidate:

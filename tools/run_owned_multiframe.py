@@ -20,6 +20,8 @@ from sentinel_edge.owned_plate import OwnedPlateRouter
 from sentinel_edge.plate_identity import PlateIdentityTracker
 from sentinel_edge.plate_context import context_proposals
 from sentinel_edge.plate_motion import PlateMotion
+from sentinel_edge.vehicle_lifecycle import VehicleLifecycle
+from sentinel_edge.vehicle_plate import VehiclePlateRouter,deduplicate_views,one_view_per_timestamp,vehicle_signature,SceneBoundary
 from sentinel_edge.ctc_fusion import CTCPlateReader,greedy_reading
 from sentinel_edge.plate_quality import crop_quality,select_frames
 from sentinel_edge.reconstruction import CropBank
@@ -38,7 +40,7 @@ def run(args):
     args.output.mkdir(parents=True);(args.output/'assets').mkdir()
     (args.output/'runner.py').write_bytes(Path(__file__).read_bytes())
     source_hashes={}
-    for name in ('owned_plate','plate_context','plate_identity','plate_motion'):
+    for name in ('owned_plate','plate_context','plate_identity','plate_motion','vehicle_lifecycle','vehicle_plate'):
         payload=(Path(__file__).resolve().parents[1]/'edge/sentinel_edge'/(name+'.py')).read_bytes()
         (args.output/('source-'+name+'.py')).write_bytes(payload)
         source_hashes[name]=hashlib.sha256(payload).hexdigest()
@@ -70,26 +72,62 @@ def run(args):
     models=model_identity(ocr,'general',detector=detector,vehicle_model=unused_vehicle)
     search=ProposalPool(TargetedPlateSearch(detector),tile_detector=detector,text_detector=load_text_detector())
     del unused_vehicle
-    router=PlateIdentityTracker(excluded) if args.plate_first else OwnedPlateRouter(excluded)
+    router=VehiclePlateRouter() if args.vehicle_lifecycle else PlateIdentityTracker(excluded) if args.plate_first else OwnedPlateRouter(excluded)
     bank=CropBank(max_bytes=128*1024*1024,max_frames=6,max_tracks=512,retain_best=True)
     posterior_cache={};context_metrics=Counter();identity_ocr_calls=0
     motion=PlateMotion() if args.plate_flow else None
+    lifecycle=VehicleLifecycle((tracking['height'],tracking['width']),excluded=excluded) if args.vehicle_lifecycle else None
+    vehicle_motion=PlateMotion(max_active=128) if lifecycle else None
+    scene=SceneBoundary() if lifecycle else None
+    vehicle_frames=[];signature_cache={};parents=[]
     groups={};decoded=sampled=roi_calls=0;last_slot=None;began=time.monotonic()
     for _,frame in read_recording(source,threading.Event(),paced=False):
         index=decoded;decoded+=1;pts=frame.pts_ms-source.start_pts_ms
         if index>=len(timeline) or abs(timeline[index]['t']-pts)>1:raise ValueError('Video/tracker timestamp mismatch')
+        reset=scene.changed(frame.image) if scene else False
+        if reset:
+            router.groups.clear();motion.states.clear();vehicle_motion.states.clear()
+            signature_cache.clear()
         if motion:motion.advance(frame.image,pts)
+        if lifecycle:
+            vehicle_motion.advance(frame.image,pts)
+            raw=[]
+            for t in timeline[index]['q']:
+                box=clipped_box(frame.image,t[1:5])
+                if box[2]<=box[0] or box[3]<=box[1]:continue
+                if t[0] not in signature_cache or pts-signature_cache[t[0]][0]>=250:
+                    signature_cache[t[0]]=(pts,vehicle_signature(frame.image,box))
+                raw.append(dict(id=t[0],box=box,qualified=bool(t[7]),vehicle_class=int(t[5]),
+                    signature=signature_cache[t[0]][1],motion_support=vehicle_motion.support(box)))
+            signature_cache={k:v for k,v in signature_cache.items() if pts-v[0]<=5000}
+            parents=lifecycle.update(raw,pts,scene_reset=reset)
+            for parent in parents:
+                if parent['observed']:vehicle_motion.observe(parent['id'],parent['box'])
+            vehicle_frames.append(dict(t=pts,tracks=[{k:v for k,v in parent.items() if k in
+                ('id','box','status','observed','vehicle_class','native_ids')} for parent in parents]))
+            router.retained_parent_ids={p['id'] for p in parents}
         slot=pts//250
         if slot==last_slot:continue
         last_slot=slot;sampled+=1
         vehicles=[dict(id=t[0],box=clipped_box(frame.image,t[1:5]),qualified=bool(t[7])) for t in timeline[index]['q']]
+        if lifecycle:
+            vehicles=[{**p,'box':clipped_box(frame.image,p['box']),'qualified':p['qualified'] and p['observed']}
+                      for p in parents if p['box'] is not None]
+            vehicles=[p for p in vehicles if p['box'][2]>p['box'][0] and p['box'][3]>p['box'][1]]
+            aliases=lifecycle.native_aliases
+            vehicles.extend(dict(id='veto:'+t['id'],box=t['box'],qualified=False,observed=True,
+                                 status='tentative',ownership_veto=t['id'] in excluded)
+                            for t in raw if (not t['qualified'] or t['id'] in excluded) and t['id'] not in aliases)
         proposals=[];search.begin_frame()
         eligible=[v for v in vehicles if v['qualified'] and v['id'] not in excluded]
+        if lifecycle:eligible=[v for v in vehicles if v.get('status') in ('visible','predicted')]
         if eligible:
             turn=sampled%len(eligible);eligible=eligible[turn:]+eligible[:turn]
         if args.plate_first:
             proposals,metrics=context_proposals(frame.image,eligible,search)
             context_metrics.update(metrics);roi_calls+=metrics['padded_search']+metrics['fragment_redetection']
+            if lifecycle:
+                proposals,metrics=deduplicate_views(proposals);context_metrics.update(metrics)
             # Deduplicate overlapping vehicle ROIs before running identity OCR.
             unique=[]
             for proposal in sorted(proposals,key=lambda p:-p['confidence']):
@@ -160,7 +198,8 @@ def run(args):
             multi.add(rows,timestamp_ms=sample.pts_ms,source_id=sample.source_id,quality=sample.quality)
             relative=f"assets/{group['id']}-{i}.png"
             if not cv2.imwrite(str(args.output/relative),sample.image):raise ValueError('Native PNG save failed')
-            observations.append(dict(position_ms=sample.pts_ms,source_id=sample.source_id,quality=sample.quality,
+            ownership=next((o['owner'] for o in group['observed'] if o['source_id']==sample.source_id and o.get('owner_locked')),None)
+            observations.append(dict(position_ms=sample.pts_ms,source_id=sample.source_id,quality=sample.quality,vehicle_id=ownership,
                 box=metadata['box'],path=relative,rows=rows,working_quad=metadata['quad']))
         best=max(observations,key=lambda o:(o['quality'],-o['position_ms']))
         single=CTCPlateReader(ocr.tokens);single.add(best['rows'],timestamp_ms=best['position_ms'],source_id=best['source_id'])
@@ -176,19 +215,45 @@ def run(args):
         public_samples=[{k:v for k,v in o.items() if k!='rows'} for o in observations]
         for value in values.values():
             value['accepted_for_vehicle']=value['accepted'] if group.get('owner_locked') else None
+        historical_parents={o['owner'] for o in group['observed'] if o.get('owner_locked') and o['owner']}
         predictions.append(dict(id=group['id'],owner=group['owner'],owner_locked=group.get('owner_locked'),observed=group['observed'],
+            parent_vehicle_id=next(iter(historical_parents)) if len(historical_parents)==1 else None,
+            parent_conflict=len(historical_parents)>1,
             samples=public_samples,observations=len(samples),methods=values,reconstruction_status=state.status))
         posteriors.append(dict(id=group['id'],observations=observations))
         if len(predictions)%10==0:
             write_json(args.output/'progress.json',dict(stage='recognizing',groups_done=len(predictions),groups=len(groups),ocr_calls=ocr_calls+identity_ocr_calls))
             print(json.dumps(dict(stage='recognizing',groups_done=len(predictions),ocr_calls=ocr_calls+identity_ocr_calls)),flush=True)
     with gzip.open(args.output/'posteriors.json.gz','wt',encoding='utf-8') as f:json.dump(dict(tokens=ocr.tokens,groups=posteriors),f,allow_nan=False)
+    vehicle_results=[]
+    if lifecycle:
+        evidence={};children={}
+        for group in predictions:
+            parent=group['parent_vehicle_id']
+            if parent:children.setdefault(parent,[]).append(group['id'])
+        for group in posteriors:
+            for observation in group['observations']:
+                if observation['vehicle_id']:
+                    evidence.setdefault(observation['vehicle_id'],[]).append(observation)
+        for parent,items in evidence.items():
+            selected,diagnostics=one_view_per_timestamp(items,ocr.tokens)
+            selected=sorted(selected,key=lambda o:(-o['quality'],o['position_ms']))[:6]
+            selected.sort(key=lambda o:o['position_ms']);reader=CTCPlateReader(ocr.tokens)
+            for observation in selected:reader.add(observation['rows'],timestamp_ms=observation['position_ms'],source_id=observation['source_id'],quality=observation['quality'])
+            values=result(reader)
+            if diagnostics['conflicting_plate_views']:values['accepted']=None
+            vehicle_results.append(dict(id=parent,children=children.get(parent,[]),methods=values,
+                samples=[{k:v for k,v in o.items() if k!='rows'} for o in selected],observations=len(selected),**diagnostics))
+        write_json(args.output/'vehicle-timeline.json',dict(width=tracking['width'],height=tracking['height'],frames=vehicle_frames))
     document=dict(schema_version=1,source_sha256=source.sha256,tracking_report_sha256=sha(tracking_path),
         timeline_sha256=sha(args.tracking/'timeline.json'),review_sha256=hashlib.sha256(review_bytes).hexdigest() if review else None,
         excluded_review_ids=sorted(excluded),models=models,decoded_frames=decoded,sampled_frames=sampled,
         sample_interval_ms=250,maximum_retained_originals=6,roi_calls=roi_calls,ocr_calls=ocr_calls+identity_ocr_calls,
         plate_first=args.plate_first,plate_flow=args.plate_flow,motion_diagnostics=dict(motion.metrics) if motion else None,
         identity_ocr_calls=identity_ocr_calls,context_diagnostics=dict(context_metrics),
+        vehicle_lifecycle=bool(lifecycle),vehicle_lifecycle_counters=dict(lifecycle.counters) if lifecycle else None,
+        vehicle_motion_diagnostics=dict(vehicle_motion.metrics) if lifecycle else None,
+        vehicles=list(lifecycle.records.values()) if lifecycle else [],vehicle_results=vehicle_results,
         router=dict(router.counters),search_diagnostics=search.diagnostics(),groups_with_owned_crops=len(groups),
         groups_with_ocr=len(predictions),groups_evicted_before_ocr=len(groups)-len(predictions),
         wall_seconds=round(time.monotonic()-began,2),reached_eof=True,labels_used_during_inference=False,
@@ -238,8 +303,26 @@ def score(args):
         recovered_vs_single=[c['id'] for c in cases if not c['methods']['single']['exact'] and c['methods'][m]['exact']],
         regressed_vs_single=[c['id'] for c in cases if c['methods']['single']['exact'] and not c['methods'][m]['exact']]) for m in METHODS}
     report=dict(scope='Previously reviewed reference targets; not full-video accuracy',predictions_sha256=sha(path),
+        scorer_sha256=sha(Path(__file__)),
         labels_sha256=sha(args.review/'labels.json'),summary=summary,conflicting_groups=list(bad),cases=cases,
         processing={k:v for k,v in d.items() if k!='groups'})
+    if d.get('vehicle_lifecycle'):
+        parents={v['id']:v for v in d['vehicle_results']};vehicle_cases=[];parent_truth={}
+        for case in cases:
+            group=byid.get(case['group']);pid=group.get('parent_vehicle_id') if group else None
+            parent=parents.get(pid)
+            if pid:parent_truth.setdefault(pid,set()).add(case['expected'])
+            top=parent['methods']['top'] if parent and not parent['conflicting_plate_views'] else None
+            vehicle_cases.append(dict(id=case['id'],vehicle_id=pid,top=top,expected=case['expected'],
+                exact=bool(top and top==case['expected']),accepted=parent['methods']['accepted'] if parent else None))
+        mixed={pid for pid,truths in parent_truth.items() if len(truths)>1}
+        for case in vehicle_cases:
+            if case['vehicle_id'] in mixed:case.update(top=None,exact=False,accepted=None)
+        report['vehicle_cases']=vehicle_cases
+        report['vehicle_summary']=dict(exact=sum(c['exact'] for c in vehicle_cases),targets=len(vehicle_cases),
+            matched_targets=sum(c['top'] is not None for c in vehicle_cases),conflicting_parents_quarantined=sorted(mixed),
+            accepted_correct=sum(bool(c['accepted']) and c['accepted']==c['expected'] for c in vehicle_cases),
+            accepted_wrong=sum(bool(c['accepted']) and c['accepted']!=c['expected'] for c in vehicle_cases))
     write_json(args.output/'accuracy.json',report);render(args.output,d,report)
     print(json.dumps(dict(stage='scored',summary=summary)),flush=True)
 
@@ -267,6 +350,9 @@ def render(root,d,report):
             page=page.replace('Plate-first multi-frame recognition','Motion-supported plate recognition').replace(
                 'Plate identities use geometry, appearance and OCR disagreement gates.',
                 'Plate identities use geometry, appearance, OCR disagreement gates and forward/backward checked motion between decoded video frames. Optical flow supplies no additional OCR votes.')
+    if d.get('vehicle_lifecycle'):
+        from vehicle_lifecycle_view import augment
+        page=augment(page,d,report)
     (root/'index.html').write_bytes(page.encode('utf-8'))
 
 
@@ -275,8 +361,10 @@ if __name__=='__main__':
     p.add_argument('--output',type=Path,required=True);p.add_argument('--tracking',type=Path,default=Path('/workspace/data/benchmarks/vehicle-tracking-960-20261110'))
     p.add_argument('--plate-first',action='store_true',help='Padded native search and independent conservative plate identities')
     p.add_argument('--plate-flow',action='store_true',help='Forward/backward checked motion support between sampled plate detections')
+    p.add_argument('--vehicle-lifecycle',action='store_true',help='Persistent vehicle parents, occlusion states and multiple plate views')
     p.add_argument('--recordings-dir',type=Path,default=Path('/recordings'));p.add_argument('--cache',type=Path,default=Path('/models/experiments/awiros'))
     p.add_argument('--review',type=Path,default=Path('data/benchmarks/recorded-footage-20261104/manual-review'))
     args=p.parse_args()
     if args.plate_flow and not args.plate_first:p.error('--plate-flow requires --plate-first')
+    if args.vehicle_lifecycle and not args.plate_flow:p.error('--vehicle-lifecycle requires --plate-flow')
     run(args) if args.phase=='run' else score(args)
