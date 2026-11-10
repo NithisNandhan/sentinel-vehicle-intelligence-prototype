@@ -1,0 +1,189 @@
+{
+  "date": "2026-11-10",
+  "scope": "Selected assistant-reviewed source-frame bounding boxes; not human-verified MOT ground truth or full-video accuracy",
+  "source_sha256": "6b7064605b3d4d12c6c1da4566cbcec1cd2e3e3bd7b77814865fe9df22045f65",
+  "frozen_detections_sha256": "b85247816098319fb5db84f4e2ad26166acfcfec3a25fd67ca50303897b4fcb1",
+  "detector_sha256": "646f8bc3fe0a656803d95c294f7852321748cb29d13466a1af8862e2db384a1b",
+  "frames": 928,
+  "selected_review_annotations_sha256": "d41c1992eefc1768b008a9df788cc20993e68ab0ca006a1af0e28153592950af",
+  "review_annotations_used_during_inference": false,
+  "match_iou": 0.5,
+  "unique_match_margin": 0.05,
+  "selected_tracker": "existing ByteTrack retained for integration",
+  "reason": "No candidate improved the selected identity checks. Lower/higher track counts alone do not measure identity accuracy.",
+  "limitations": [
+    "Only eight assistant-reviewed approximate source-frame rectangles across four vehicle cases; no human-verified MOT ground truth.",
+    "All methods match these eight anchors, preserve two of three repeatedly observed cases and fragment the silver-car case; the fourth vehicle is a single-anchor negative check only. No selected cross-vehicle ID merge was observed.",
+    "The Ultralytics encoder diagnostic is pedestrian-trained (MSMT17 metadata), at its installed default224; it is not a vehicle-trained model comparison.",
+    "The vehicle encoder uses the publisher RGB raw208x208 contract and a VeRi-776 vehicle model. Domain coverage of Indian autorickshaws is not established.",
+    "Observed timings include native decode/crop work on this laptop and are not capacity or real-time claims."
+  ],
+  "strategies": {
+    "bytetrack_screened": {
+      "native_track_ids": 260,
+      "passage_records": 269,
+      "qualified_passages": 186,
+      "tracker_config": {
+        "tracker_type": "bytetrack",
+        "track_high_thresh": 0.25,
+        "track_low_thresh": 0.1,
+        "new_track_thresh": 0.4,
+        "track_buffer": 30,
+        "match_thresh": 0.8,
+        "fuse_score": true
+      },
+      "tracker_config_sha256": "1e403ce981c5c6061dd613396803f6a586026ff940e75d2d9c496a3f55d51c45",
+      "replay_wall_seconds": 40.419,
+      "median_tracker_ms": 1.132,
+      "p95_tracker_ms": 1.577,
+      "encoded_features": 0,
+      "feature_dimension": null,
+      "appearance": null,
+      "selected_identity_checks": {
+        "anchors": 8,
+        "matched_anchors": 8,
+        "selected_vehicle_cases": 4,
+        "fragmented_cases": 1,
+        "repeated_vehicle_cases": 3,
+        "fully_consistent_cases": 2,
+        "cross_vehicle_ids": 0
+      }
+    },
+    "botsort_motion": {
+      "native_track_ids": 239,
+      "passage_records": 250,
+      "qualified_passages": 172,
+      "tracker_config": {
+        "tracker_type": "botsort",
+        "track_high_thresh": 0.25,
+        "track_low_thresh": 0.1,
+        "new_track_thresh": 0.4,
+        "track_buffer": 30,
+        "match_thresh": 0.8,
+        "fuse_score": true,
+        "gmc_method": "none",
+        "proximity_thresh": 0.5,
+        "appearance_thresh": 0.8,
+        "with_reid": false,
+        "model": "auto",
+        "device": "cuda:0"
+      },
+      "tracker_config_sha256": "6e7e5808b0407cd6237797287e9252ef3667212d0d6eb21f3428af8d71ea0297",
+      "replay_wall_seconds": 38.853,
+      "median_tracker_ms": 1.117,
+      "p95_tracker_ms": 1.492,
+      "encoded_features": 0,
+      "feature_dimension": null,
+      "appearance": null,
+      "selected_identity_checks": {
+        "anchors": 8,
+        "matched_anchors": 8,
+        "selected_vehicle_cases": 4,
+        "fragmented_cases": 1,
+        "repeated_vehicle_cases": 3,
+        "fully_consistent_cases": 2,
+        "cross_vehicle_ids": 0
+      }
+    },
+    "botsort_person_encoder_diagnostic": {
+      "native_track_ids": 304,
+      "passage_records": 312,
+      "qualified_passages": 183,
+      "tracker_config": {
+        "tracker_type": "botsort",
+        "track_high_thresh": 0.25,
+        "track_low_thresh": 0.1,
+        "new_track_thresh": 0.4,
+        "track_buffer": 30,
+        "match_thresh": 0.8,
+        "fuse_score": true,
+        "gmc_method": "none",
+        "proximity_thresh": 0.5,
+        "appearance_thresh": 0.8,
+        "with_reid": true,
+        "model": "/new-models/yolo26n-reid.onnx",
+        "device": "cuda:0"
+      },
+      "tracker_config_sha256": "7cc7212822c09eba68f718a7367f86a1b795f7cabc3a2eb0272beac91d443dc2",
+      "replay_wall_seconds": 120.652,
+      "median_tracker_ms": 93.822,
+      "p95_tracker_ms": 128.48,
+      "encoded_features": 13938,
+      "feature_dimension": 512,
+      "appearance": {
+        "path": "/new-models/yolo26n-reid.onnx",
+        "sha256": "8529c383197ae4c468eda535d1b165f8b4162cf17bf5fbcff49c7cb6455bc0bb",
+        "kind": "ReID",
+        "backend": "AutoBackend",
+        "device": "cuda:0",
+        "providers": [
+          "CUDAExecutionProvider",
+          "CPUExecutionProvider"
+        ],
+        "is_pt": false,
+        "input_size": 224,
+        "note": "Learned appearance embedding model; not a second vehicle detection pass."
+      },
+      "selected_identity_checks": {
+        "anchors": 8,
+        "matched_anchors": 8,
+        "selected_vehicle_cases": 4,
+        "fragmented_cases": 1,
+        "repeated_vehicle_cases": 3,
+        "fully_consistent_cases": 2,
+        "cross_vehicle_ids": 0
+      }
+    },
+    "botsort_vehicle_encoder": {
+      "native_track_ids": 309,
+      "passage_records": 316,
+      "qualified_passages": 176,
+      "tracker_config": {
+        "tracker_type": "botsort",
+        "track_high_thresh": 0.25,
+        "track_low_thresh": 0.1,
+        "new_track_thresh": 0.4,
+        "track_buffer": 30,
+        "match_thresh": 0.8,
+        "fuse_score": true,
+        "gmc_method": "none",
+        "proximity_thresh": 0.5,
+        "appearance_thresh": 0.8,
+        "with_reid": true,
+        "model": "/new-models/osnet_ain_x1_0_vehicle_reid.onnx",
+        "device": "cuda:0"
+      },
+      "tracker_config_sha256": "246b615623066a1a3e10ffc9af1641e33637cef1e8abf31a161e3247f85a43d5",
+      "replay_wall_seconds": 221.303,
+      "median_tracker_ms": 213.203,
+      "p95_tracker_ms": 298.992,
+      "encoded_features": 13938,
+      "feature_dimension": 512,
+      "appearance": {
+        "path": "/new-models/osnet_ain_x1_0_vehicle_reid.onnx",
+        "sha256": "4aaad3e5db648618b0df3d2ff21c61323985ff9e50194c3d2edd4fb87c92d91f",
+        "kind": "VehicleAppearanceEncoder",
+        "backend": "ONNXRuntime",
+        "device": "cuda:0",
+        "providers": [
+          "CUDAExecutionProvider",
+          "CPUExecutionProvider"
+        ],
+        "input_size": 208,
+        "preprocessing": "Original RGB float32 0..255, no external normalization",
+        "source": "https://github.com/openvinotoolkit/open_model_zoo/tree/master/models/public/vehicle-reid-0001"
+      },
+      "selected_identity_checks": {
+        "anchors": 8,
+        "matched_anchors": 8,
+        "selected_vehicle_cases": 4,
+        "fragmented_cases": 1,
+        "repeated_vehicle_cases": 3,
+        "fully_consistent_cases": 2,
+        "cross_vehicle_ids": 0
+      }
+    }
+  },
+  "central_events_sent": 0,
+  "ocr_loaded": false
+}

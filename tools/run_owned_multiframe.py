@@ -22,6 +22,7 @@ from sentinel_edge.plate_context import context_proposals
 from sentinel_edge.plate_motion import PlateMotion
 from sentinel_edge.vehicle_lifecycle import VehicleLifecycle
 from sentinel_edge.vehicle_plate import VehiclePlateRouter,deduplicate_views,one_view_per_timestamp,vehicle_signature,SceneBoundary
+from sentinel_edge.plate_sampling import PlateBurstSchedule
 from sentinel_edge.ctc_fusion import CTCPlateReader,greedy_reading
 from sentinel_edge.plate_quality import crop_quality,select_frames
 from sentinel_edge.reconstruction import CropBank
@@ -40,7 +41,7 @@ def run(args):
     args.output.mkdir(parents=True);(args.output/'assets').mkdir()
     (args.output/'runner.py').write_bytes(Path(__file__).read_bytes())
     source_hashes={}
-    for name in ('owned_plate','plate_context','plate_identity','plate_motion','vehicle_lifecycle','vehicle_plate'):
+    for name in ('owned_plate','plate_context','plate_identity','plate_motion','vehicle_lifecycle','vehicle_plate','plate_sampling'):
         payload=(Path(__file__).resolve().parents[1]/'edge/sentinel_edge'/(name+'.py')).read_bytes()
         (args.output/('source-'+name+'.py')).write_bytes(payload)
         source_hashes[name]=hashlib.sha256(payload).hexdigest()
@@ -72,13 +73,15 @@ def run(args):
     models=model_identity(ocr,'general',detector=detector,vehicle_model=unused_vehicle)
     search=ProposalPool(TargetedPlateSearch(detector),tile_detector=detector,text_detector=load_text_detector())
     del unused_vehicle
-    router=VehiclePlateRouter() if args.vehicle_lifecycle else PlateIdentityTracker(excluded) if args.plate_first else OwnedPlateRouter(excluded)
+    router=VehiclePlateRouter(visual_identity=args.visual_identity) if args.vehicle_lifecycle else PlateIdentityTracker(excluded) if args.plate_first else OwnedPlateRouter(excluded)
     bank=CropBank(max_bytes=128*1024*1024,max_frames=6,max_tracks=512,retain_best=True)
     posterior_cache={};context_metrics=Counter();identity_ocr_calls=0
     motion=PlateMotion() if args.plate_flow else None
     lifecycle=VehicleLifecycle((tracking['height'],tracking['width']),excluded=excluded) if args.vehicle_lifecycle else None
     vehicle_motion=PlateMotion(max_active=128) if lifecycle else None
     scene=SceneBoundary() if lifecycle else None
+    bursts=PlateBurstSchedule() if args.adaptive_plates else None
+    burst_frames=0
     vehicle_frames=[];signature_cache={};parents=[]
     groups={};decoded=sampled=roi_calls=0;last_slot=None;began=time.monotonic()
     for _,frame in read_recording(source,threading.Event(),paced=False):
@@ -106,8 +109,12 @@ def run(args):
             vehicle_frames.append(dict(t=pts,tracks=[{k:v for k,v in parent.items() if k in
                 ('id','box','status','observed','vehicle_class','native_ids')} for parent in parents]))
             router.retained_parent_ids={p['id'] for p in parents}
+            if bursts:bursts.advance(parents,pts,reset=reset)
         slot=pts//250
-        if slot==last_slot:continue
+        base_due=slot!=last_slot
+        burst_due=bursts.due() if bursts else set()
+        if not base_due and not burst_due:continue
+        if not base_due:burst_frames+=1
         last_slot=slot;sampled+=1
         vehicles=[dict(id=t[0],box=clipped_box(frame.image,t[1:5]),qualified=bool(t[7])) for t in timeline[index]['q']]
         if lifecycle:
@@ -121,6 +128,8 @@ def run(args):
         proposals=[];search.begin_frame()
         eligible=[v for v in vehicles if v['qualified'] and v['id'] not in excluded]
         if lifecycle:eligible=[v for v in vehicles if v.get('status') in ('visible','predicted')]
+        if not base_due:eligible=[v for v in eligible if v['id'] in burst_due and v.get('observed')]
+        if bursts:bursts.searched({v['id'] for v in eligible})
         if eligible:
             turn=sampled%len(eligible);eligible=eligible[turn:]+eligible[:turn]
         if args.plate_first:
@@ -169,6 +178,7 @@ def run(args):
             group=groups.setdefault(gid,dict(id=gid,owner=proposal['owner'],observed=[],metadata={}))
             group['owner']=proposal['owner']
             group['owner_locked']=proposal.get('owner_locked',True)
+            group['recognition_conflict']=proposal.get('recognition_conflict',False)
             group['observed'].append(dict(position_ms=pts,box=b,source_id=digest,
                 owner=proposal['owner'],owner_candidate=proposal.get('owner_candidate',proposal['owner']),
                 owner_locked=proposal.get('owner_locked',True),crop_origin=proposal.get('crop_origin','tight_vehicle')))
@@ -212,6 +222,8 @@ def run(args):
         values['reconstruction']=result(multi)
         accepted=multi.accepted(.85)
         if disagreement(state,accepted,.85):values['reconstruction']['accepted']=None
+        if args.visual_identity and group.get('recognition_conflict'):
+            for value in values.values():value['accepted']=None
         public_samples=[{k:v for k,v in o.items() if k!='rows'} for o in observations]
         for value in values.values():
             value['accepted_for_vehicle']=value['accepted'] if group.get('owner_locked') else None
@@ -219,6 +231,7 @@ def run(args):
         predictions.append(dict(id=group['id'],owner=group['owner'],owner_locked=group.get('owner_locked'),observed=group['observed'],
             parent_vehicle_id=next(iter(historical_parents)) if len(historical_parents)==1 else None,
             parent_conflict=len(historical_parents)>1,
+            recognition_conflict=group.get('recognition_conflict',False),
             samples=public_samples,observations=len(samples),methods=values,reconstruction_status=state.status))
         posteriors.append(dict(id=group['id'],observations=observations))
         if len(predictions)%10==0:
@@ -248,10 +261,12 @@ def run(args):
     document=dict(schema_version=1,source_sha256=source.sha256,tracking_report_sha256=sha(tracking_path),
         timeline_sha256=sha(args.tracking/'timeline.json'),review_sha256=hashlib.sha256(review_bytes).hexdigest() if review else None,
         excluded_review_ids=sorted(excluded),models=models,decoded_frames=decoded,sampled_frames=sampled,
-        sample_interval_ms=250,maximum_retained_originals=6,roi_calls=roi_calls,ocr_calls=ocr_calls+identity_ocr_calls,
+        sample_interval_ms=250,adaptive_plates=bool(bursts),additional_burst_frames=burst_frames,
+        maximum_retained_originals=6,roi_calls=roi_calls,ocr_calls=ocr_calls+identity_ocr_calls,
         plate_first=args.plate_first,plate_flow=args.plate_flow,motion_diagnostics=dict(motion.metrics) if motion else None,
         identity_ocr_calls=identity_ocr_calls,context_diagnostics=dict(context_metrics),
         vehicle_lifecycle=bool(lifecycle),vehicle_lifecycle_counters=dict(lifecycle.counters) if lifecycle else None,
+        visual_identity=args.visual_identity,
         vehicle_motion_diagnostics=dict(vehicle_motion.metrics) if lifecycle else None,
         vehicles=list(lifecycle.records.values()) if lifecycle else [],vehicle_results=vehicle_results,
         router=dict(router.counters),search_diagnostics=search.diagnostics(),groups_with_owned_crops=len(groups),
@@ -334,6 +349,8 @@ def render(root,d,report):
         c=cases.get(g['id']);pictures=''.join('<figure><img src="'+html.escape(o['path'])+'" alt="Native plate crop"><figcaption>'+str(o['position_ms']/1000)+' s</figcaption></figure>' for o in g['samples'])
         readings=''.join('<tr><td>'+m+'</td><td>'+html.escape(g['methods'][m]['top'] or 'No complete hypothesis')+'</td><td>'+html.escape(g['methods'][m]['accepted'] or 'Unconfirmed')+'</td><td>'+(', '.join(html.escape(x['plate']) for x in g['methods'][m]['candidates'][:5]) or 'None')+'</td></tr>' for m in METHODS)
         truth='<p>Existing human reference '+c['id']+': '+html.escape(c['expected'])+'</p>' if c else '<p>Unlabelled passage: correctness unmeasured.</p>'
+        if g.get('recognition_conflict'):
+            truth+='<p><strong>Conflicting OCR readings.</strong> The visual identity is retained; text acceptance is blocked. Inspect the alternative readings and original crops.</p>'
         cards.append('<section id="'+html.escape(g['id'])+'"><h2>'+html.escape(g['id'])+' · owner '+html.escape(g['owner'] or 'uncertain')+'</h2>'+truth+'<div class="frames">'+pictures+'</div><div class="scroll"><table><tr><th>Method</th><th>Top hypothesis</th><th>Model gate (text only)</th><th>Top five candidates</th></tr>'+readings+'</table></div></section>')
     summary=''.join('<tr><td>'+m+'</td><td>'+str(s['matched_exact'])+'/'+str(s['matched_targets'])+'</td><td>'+str(s['multi_frame_exact'])+'/'+str(s['multi_frame_targets'])+'</td></tr>' for m,s in report['summary'].items())
     page='<!doctype html><html lang="en"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Sentinel · Owned multi-frame OCR</title><style>body{font:16px system-ui;background:#f6f7f2;color:#18352e;max-width:1350px;margin:30px auto;padding:0 18px}h1,h2{color:#0f766e}section{padding:18px;margin:20px 0;border:1px solid #cbd9ce;border-radius:10px;background:white}.frames{display:flex;gap:10px;overflow:auto}figure{margin:5px;flex:none}img{max-width:280px;max-height:130px}table{border-collapse:collapse;width:100%}td,th{padding:10px;border:1px solid #cbd9ce;text-align:left}.scroll{overflow:auto}</style><h1>Owned multi-frame recognition</h1><p>Same OCR weights, same native evidence. Ambiguous plate ownership is rejected before fusion. All hypotheses and model scores remain unverified until labelled.</p><p>'+str(d['decoded_frames'])+' source frames · '+str(d['sampled_frames'])+' plate-search samples · '+str(d['groups_with_ocr'])+' evidence groups. <a href="http://127.0.0.1:7798/">Vehicle tracking viewer</a></p><table><tr><th>Method</th><th>Matched exact</th><th>≥3-frame exact</th></tr>'+summary+'</table><p>These are selected development references, not full-video accuracy. Unmatched references remain misses in the all-18 denominator. No watchlist events were emitted.</p>'+''.join(cards)+'</html>'
@@ -356,15 +373,38 @@ def render(root,d,report):
     (root/'index.html').write_bytes(page.encode('utf-8'))
 
 
+def render_saved(args):
+    prediction=args.output/'predictions.json';document=json.loads(prediction.read_bytes())
+    report=json.loads((args.output/'accuracy.json').read_bytes())
+    if report['predictions_sha256']!=sha(prediction):raise ValueError('Score does not bind this capture')
+    summary=json.loads(args.review_summary.read_bytes()) if args.review_summary else None
+    if summary is not None and summary['predictions_sha256']!=sha(prediction):raise ValueError('Review mapping does not bind this capture')
+    if summary is not None and not document.get('vehicle_lifecycle'):raise ValueError('Vehicle review mapping requires a vehicle-lifecycle capture')
+    render(args.output,document,report)
+    if summary is not None:
+        from vehicle_lifecycle_view import case_panel
+        page=args.output/'index.html';text=page.read_text(encoding='utf-8');marker='<section id="vehicle-lifecycle">'
+        page.write_text(text.replace(marker,case_panel(summary)+marker,1),encoding='utf-8')
+    print(json.dumps(dict(stage='viewer_rendered',inference_rerun=False)))
+
+
 if __name__=='__main__':
-    p=argparse.ArgumentParser(description=__doc__);p.add_argument('--phase',choices=('run','score'),required=True)
+    p=argparse.ArgumentParser(description=__doc__);p.add_argument('--phase',choices=('run','score','render'),required=True)
     p.add_argument('--output',type=Path,required=True);p.add_argument('--tracking',type=Path,default=Path('/workspace/data/benchmarks/vehicle-tracking-960-20261110'))
     p.add_argument('--plate-first',action='store_true',help='Padded native search and independent conservative plate identities')
     p.add_argument('--plate-flow',action='store_true',help='Forward/backward checked motion support between sampled plate detections')
     p.add_argument('--vehicle-lifecycle',action='store_true',help='Persistent vehicle parents, occlusion states and multiple plate views')
+    p.add_argument('--visual-identity',action='store_true',help='Retain visually established identity through OCR conflicts; block uncertain text acceptance')
+    p.add_argument('--adaptive-plates',action='store_true',help='Bounded extra plate searches for new or reappearing vehicles')
     p.add_argument('--recordings-dir',type=Path,default=Path('/recordings'));p.add_argument('--cache',type=Path,default=Path('/models/experiments/awiros'))
     p.add_argument('--review',type=Path,default=Path('data/benchmarks/recorded-footage-20261104/manual-review'))
+    p.add_argument('--review-summary',type=Path,help='After-inference vehicle mapping for --phase render only')
     args=p.parse_args()
     if args.plate_flow and not args.plate_first:p.error('--plate-flow requires --plate-first')
     if args.vehicle_lifecycle and not args.plate_flow:p.error('--vehicle-lifecycle requires --plate-flow')
-    run(args) if args.phase=='run' else score(args)
+    if args.visual_identity and not args.vehicle_lifecycle:p.error('--visual-identity requires --vehicle-lifecycle')
+    if args.adaptive_plates and not args.vehicle_lifecycle:p.error('--adaptive-plates requires --vehicle-lifecycle')
+    if args.review_summary and args.phase!='render':p.error('--review-summary is only for after-inference rendering')
+    if args.phase=='run':run(args)
+    elif args.phase=='score':score(args)
+    else:render_saved(args)

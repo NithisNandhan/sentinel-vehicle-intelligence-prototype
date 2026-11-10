@@ -1,0 +1,305 @@
+{
+  "date": "2026-11-10",
+  "scope": "Same selected development references; no full-video accuracy claim",
+  "models": {
+    "ocr_model": "awiros-ctc-adapted",
+    "ocr_checkpoint_sha256": "c2ba896d994b174071c95ace0f5ffc8a61cec3fc6eecce8f0bc5feb7dec4456d",
+    "ocr_device": "gpu",
+    "detector_profile": "general",
+    "vehicle_model": "yolo26s",
+    "vehicle_model_sha256": "646f8bc3fe0a656803d95c294f7852321748cb29d13466a1af8862e2db384a1b",
+    "plate_model": "parent",
+    "plate_model_sha256": "746fdd358ec110418775d7c9d8d07910d48b1a21471f92bf4421f6510d6daade",
+    "plate_device": "gpu",
+    "vehicle_device": "gpu",
+    "detector_device": "gpu"
+  },
+  "source_sha256": "6b7064605b3d4d12c6c1da4566cbcec1cd2e3e3bd7b77814865fe9df22045f65",
+  "baseline_summary": {
+    "single": {
+      "exact": 7,
+      "targets": 18,
+      "matched_exact": 7,
+      "matched_targets": 11,
+      "multi_frame_exact": 6,
+      "multi_frame_targets": 9,
+      "recovered_vs_single": [],
+      "regressed_vs_single": []
+    },
+    "multi": {
+      "exact": 10,
+      "targets": 18,
+      "matched_exact": 10,
+      "matched_targets": 11,
+      "multi_frame_exact": 9,
+      "multi_frame_targets": 9,
+      "recovered_vs_single": [
+        "02",
+        "06",
+        "15"
+      ],
+      "regressed_vs_single": []
+    },
+    "reconstruction": {
+      "exact": 10,
+      "targets": 18,
+      "matched_exact": 10,
+      "matched_targets": 11,
+      "multi_frame_exact": 9,
+      "multi_frame_targets": 9,
+      "recovered_vs_single": [
+        "02",
+        "06",
+        "15"
+      ],
+      "regressed_vs_single": []
+    }
+  },
+  "summary": {
+    "single": {
+      "exact": 7,
+      "targets": 18,
+      "matched_exact": 7,
+      "matched_targets": 11,
+      "multi_frame_exact": 6,
+      "multi_frame_targets": 9,
+      "recovered_vs_single": [],
+      "regressed_vs_single": []
+    },
+    "multi": {
+      "exact": 10,
+      "targets": 18,
+      "matched_exact": 10,
+      "matched_targets": 11,
+      "multi_frame_exact": 9,
+      "multi_frame_targets": 9,
+      "recovered_vs_single": [
+        "02",
+        "06",
+        "15"
+      ],
+      "regressed_vs_single": []
+    },
+    "reconstruction": {
+      "exact": 10,
+      "targets": 18,
+      "matched_exact": 10,
+      "matched_targets": 11,
+      "multi_frame_exact": 9,
+      "multi_frame_targets": 9,
+      "recovered_vs_single": [
+        "02",
+        "06",
+        "15"
+      ],
+      "regressed_vs_single": []
+    }
+  },
+  "changes_vs_baseline": {
+    "single": {
+      "gained": [],
+      "lost": []
+    },
+    "multi": {
+      "gained": [],
+      "lost": []
+    },
+    "reconstruction": {
+      "gained": [],
+      "lost": []
+    }
+  },
+  "vehicle_summary": {
+    "exact": 6,
+    "targets": 18,
+    "matched_targets": 7,
+    "conflicting_parents_quarantined": [],
+    "accepted_correct": 4,
+    "accepted_wrong": 0
+  },
+  "decoded_frames": 928,
+  "sampled_frames": 124,
+  "wall_seconds": 455.68,
+  "baseline_wall_seconds": 434.46,
+  "plate_histories": 304,
+  "vehicle_histories": 185,
+  "lifecycle": {
+    "excluded_observations": 281,
+    "created": 185,
+    "boundary_exit": 39,
+    "unresolved_timeout": 119,
+    "ambiguous_associations": 6
+  },
+  "motion": {
+    "supported_updates": 8981,
+    "lost_geometry": 1924,
+    "lost_support": 168,
+    "reseed_without_features": 8
+  },
+  "router": {
+    "plate_observations": 582,
+    "new_groups": 304,
+    "unique_owner": 113,
+    "association_displacement": 3041,
+    "association_scale_change": 3649,
+    "ambiguous_owner": 193,
+    "association_appearance": 351,
+    "unassigned_owner": 69,
+    "motion_supported_edges": 214,
+    "association_text_conflict": 245,
+    "matched_observations": 278,
+    "motion_unique_owner": 186,
+    "expired_groups": 293,
+    "parent_anchored_visual_checks": 181,
+    "parent_conflict": 1725,
+    "ambiguous_association": 13,
+    "unqualified_owner": 20,
+    "retained_through_parent_gap": 396,
+    "reviewed_overlap_veto": 1,
+    "owner_conflict": 1
+  },
+  "context": {
+    "padded_search": 1949,
+    "nested_or_overlapping_plate_views": 186
+  },
+  "vehicle_histories_with_confirmed_ocr_evidence": 34,
+  "model_accepted_matched_correct": 5,
+  "model_accepted_matched_wrong": 0,
+  "reported_case_checks": [
+    {
+      "previous_cluster": [
+        "PT0004",
+        "PT0006",
+        "PT0007"
+      ],
+      "mapping": {
+        "PT0004": [
+          {
+            "plate_history": "PT0003",
+            "vehicle": null
+          }
+        ],
+        "PT0006": [
+          {
+            "plate_history": "PT0005",
+            "vehicle": "VT0009"
+          }
+        ],
+        "PT0007": [
+          {
+            "plate_history": "PT0005",
+            "vehicle": "VT0009"
+          }
+        ]
+      },
+      "single_confirmed_parent": false
+    },
+    {
+      "previous_cluster": [
+        "PT0015",
+        "PT0016"
+      ],
+      "mapping": {
+        "PT0015": [
+          {
+            "plate_history": "PT0013",
+            "vehicle": null
+          }
+        ],
+        "PT0016": [
+          {
+            "plate_history": "PT0015",
+            "vehicle": null
+          }
+        ]
+      },
+      "single_confirmed_parent": false
+    },
+    {
+      "previous_cluster": [
+        "PT0036",
+        "PT0041"
+      ],
+      "mapping": {
+        "PT0036": [
+          {
+            "plate_history": "PT0049",
+            "vehicle": "VT0039"
+          }
+        ],
+        "PT0041": [
+          {
+            "plate_history": "PT0049",
+            "vehicle": "VT0039"
+          }
+        ]
+      },
+      "single_confirmed_parent": true
+    },
+    {
+      "previous_cluster": [
+        "PT0047",
+        "PT0049",
+        "PT0050"
+      ],
+      "mapping": {
+        "PT0047": [
+          {
+            "plate_history": "PT0050",
+            "vehicle": "VT0033"
+          }
+        ],
+        "PT0049": [
+          {
+            "plate_history": "PT0069",
+            "vehicle": null
+          }
+        ],
+        "PT0050": [
+          {
+            "plate_history": "PT0069",
+            "vehicle": null
+          }
+        ]
+      },
+      "single_confirmed_parent": false
+    },
+    {
+      "previous_cluster": [
+        "PT0068",
+        "PT0069"
+      ],
+      "mapping": {
+        "PT0068": [
+          {
+            "plate_history": "PT0096",
+            "vehicle": "VT0013"
+          }
+        ],
+        "PT0069": [
+          {
+            "plate_history": "PT0096",
+            "vehicle": "VT0013"
+          }
+        ]
+      },
+      "single_confirmed_parent": true
+    }
+  ],
+  "car_vs_autorickshaw_parent_conflict": false,
+  "reported_case_baseline_predictions_sha256": "16e5f78f635a3cb879b6d6e9e2c7f946be2e00e83810ac4e2729434ae15de727",
+  "car_vs_autorickshaw_both_assigned": false,
+  "predictions_sha256": "ea1adc3274858b0e6e4581689d77697b3da45d6758e2713ea824e599a5d3aa3f",
+  "inference_source_sha256": {
+    "owned_plate": "dde09a4f82f26f2b536d68ac5189d969c8f9094cdf6becb432a6f1f550843495",
+    "plate_context": "86a4a22aa4a40221b6a4070419d80809ef5919f42d57fa939475ede9e65efeab",
+    "plate_identity": "115149760fcf54a4bb7e3296f0b09203b531eee5957c67c855e7e34222078ea3",
+    "plate_motion": "dc0c117b62008c2caf049a7052cc6c69a022c9be9a61367f72185844da3ae6ba",
+    "vehicle_lifecycle": "86960943fdb45c99bdd44b0249a845f9fa86d2b3f40590c71bbe9045ed387bfe",
+    "vehicle_plate": "29add02ebb32ee02aa4a5b9499cbaab7d9dfcdfd7e99bb9b79599fcd50bae824",
+    "plate_sampling": "d516254b8712dd527f93f126aa864851b98f91b4276621fd1ac22a76ae83976e"
+  },
+  "native_id_parent_switches": 0,
+  "central_events_sent": 0,
+  "labels_used_during_inference": false
+}

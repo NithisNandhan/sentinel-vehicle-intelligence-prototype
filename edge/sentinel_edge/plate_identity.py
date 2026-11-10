@@ -78,6 +78,7 @@ class _Group:
     anchor: tuple
     candidate: object = None
     owner_votes: int = 0
+    recognition_conflict: bool = False
 
 
 class PlateIdentityTracker:
@@ -95,9 +96,10 @@ class PlateIdentityTracker:
     max_gap_ms = 1000
     max_active = 512
 
-    def __init__(self, excluded=(), *, retain_owned=False):
+    def __init__(self, excluded=(), *, retain_owned=False, visual_identity=False):
         self.excluded = set(excluded)
         self.retain_owned = retain_owned
+        self.visual_identity = visual_identity
         self.retained_parent_ids = set()
         self.counters = Counter()
         self.groups = {}
@@ -107,8 +109,10 @@ class PlateIdentityTracker:
     def _edge(self, group, current, pts_ms, identity):
         previous, previous_pts = group.observations[-1]
         if _conflict(previous['reading'], current['reading']) or _conflict(group.anchor, current['reading']):
-            self.counters['association_text_conflict'] += 1
-            return None
+            if not self.visual_identity or not self._visual_conflict_supported(group,current,pts_ms,identity):
+                self.counters['association_text_conflict'] += 1
+                return None
+            self.counters['visually_supported_ocr_conflict_checks']+=1
         pw, ph, px, py = _geometry(previous['box'])
         cw, ch, cx, cy = _geometry(current['box'])
         if max(pw / cw, cw / pw, ph / ch, ch / ph) > 2.5:
@@ -127,15 +131,25 @@ class PlateIdentityTracker:
         left, right = previous['signature'], current['signature']
         cosine = sum(a * b for a, b in zip(left, right)) if len(left) == len(right) else -1.
         cosine = max(-1., min(1., cosine))
-        text_match = _same_text(previous['reading'], current['reading'])
+        text_match = not self.visual_identity and _same_text(previous['reading'], current['reading'])
         motion=current.get('motion_support',{}).get(identity,0.)
-        if cosine < .75 and not text_match and motion < .30:
+        parent_link=self._parent_association_supported(group,current,pts_ms)
+        if cosine < .75 and not text_match and motion < .30 and not parent_link:
             self.counters['association_appearance'] += 1
             return None
         if motion>=.30:
             self.counters['motion_supported_edges']+=1
             return .7*(1-motion)+.3*distance/limit
         return .7 * distance / limit + .3 * (1 - cosine if cosine >= .75 else 0.)
+
+    def _parent_association_supported(self,group,current,pts_ms):
+        return False
+
+    def _visual_conflict_supported(self,group,current,pts_ms,identity):
+        previous=group.observations[-1][0]
+        a,b=previous['signature'],current['signature']
+        cosine=sum(x*y for x,y in zip(a,b)) if len(a)==len(b) else -1
+        return current.get('motion_support',{}).get(identity,0.)>=.5 and cosine>=.6
 
     def _owner(self, proposal, vehicles, group=None, pts_ms=None):
         b = proposal['box']
@@ -230,6 +244,7 @@ class PlateIdentityTracker:
             else:
                 self.counters['matched_observations'] += 1
             group = self.groups[identity]
+            group.recognition_conflict |= _conflict(group.anchor,proposal['reading'])
             candidate, status = self._owner(proposal, vehicles, group, pts_ms)
             self.counters[status] += 1
             if candidate is not None:
@@ -242,12 +257,18 @@ class PlateIdentityTracker:
             locked = candidate is not None and candidate == group.candidate and group.owner_votes >= 2
             evidence = {'box': tuple(proposal['box']), 'signature': proposal['signature'],
                         'reading': proposal['reading']}
+            parent=next((v for v in vehicles if v['id']==candidate and v.get('observed',True)),None)
+            if parent:
+                pb=parent['box'];b=proposal['box']
+                evidence['parent_relative']=(((b[0]+b[2])/2-pb[0])/(pb[2]-pb[0]),
+                                             ((b[1]+b[3])/2-pb[1])/(pb[3]-pb[1]))
             group.observations = (group.observations + [(evidence, pts_ms)])[-2:]
             if _strength(proposal['reading']) > _strength(group.anchor):
                 group.anchor = proposal['reading']
             output.append({**proposal, 'group': identity, 'position_ms': pts_ms,
                            'owner': candidate if locked else None, 'owner_candidate': candidate,
-                           'owner_locked': locked, 'ownership_status': status})
+                           'owner_locked': locked, 'ownership_status': status,
+                           'recognition_conflict':group.recognition_conflict})
         while len(self.groups) > self.max_active:
             oldest = min(self.groups, key=lambda name: (self.groups[name].observations[-1][1], name))
             del self.groups[oldest]

@@ -32,8 +32,8 @@ This does not infer ownership on predicted-only vehicle positions. Owner locking
 still requires two distinct visible plate observations. Existing strong OCR
 conflict and ambiguity gates remain active for plate association.
 """
-    def __init__(self):
-        super().__init__(retain_owned=True)
+    def __init__(self,*,visual_identity=False):
+        super().__init__(retain_owned=True,visual_identity=visual_identity)
         self._vehicles=[]
 
     def route(self,proposals,vehicles,pts_ms):
@@ -50,6 +50,8 @@ conflict and ambiguity gates remain active for plate association.
         ordinary=super()._owner(proposal,vehicles,group,pts_ms)
         if not group or not group.observations:return ordinary
         previous,then=group.observations[-1];dt=pts_ms-then
+        if dt<150 and len(group.observations)>1:
+            previous,then=group.observations[0];dt=pts_ms-then
         if not 150<=dt<=1000:return ordinary
         b=proposal['box'];a=previous['box']
         velocity=[((b[i]+b[i+2])-(a[i]+a[i+2]))/(2*dt) for i in (0,1)]
@@ -77,6 +79,28 @@ conflict and ambiguity gates remain active for plate association.
         if group.owner_votes>=2 and hint is not None and group.candidate!=hint:
             self.counters['parent_conflict']+=1;return None
         return super()._edge(group,current,pts_ms,identity)
+
+    def _visual_conflict_supported(self,group,current,pts_ms,identity):
+        if super()._visual_conflict_supported(group,current,pts_ms,identity):return True
+        hint,_=self._owner(current,self._vehicles,group,pts_ms)
+        if group.owner_votes<2 or hint is None or hint!=group.candidate:return False
+        previous=group.observations[-1][0]
+        a,b=previous['signature'],current['signature']
+        cosine=sum(x*y for x,y in zip(a,b)) if len(a)==len(b) else -1
+        return cosine>=.75 or current.get('motion_support',{}).get(identity,0.)>=.3
+
+    def _parent_association_supported(self,group,current,pts_ms):
+        if not self.visual_identity or not group.candidate or group.owner_votes<1:return False
+        hint,_=self._owner(current,self._vehicles,group,pts_ms)
+        if hint!=group.candidate:return False
+        previous=group.observations[-1][0];relative=previous.get('parent_relative')
+        parent=next((v for v in self._vehicles if v['id']==hint and v.get('observed',True)),None)
+        if relative is None or parent is None or parent.get('observation_span_ms',0)<150:return False
+        p=parent['box'];b=current['box']
+        location=(((b[0]+b[2])/2-p[0])/(p[2]-p[0]),((b[1]+b[3])/2-p[1])/(p[3]-p[1]))
+        if math.hypot(location[0]-relative[0],location[1]-relative[1])>.20:return False
+        self.counters['parent_anchored_visual_checks']+=1
+        return True
 
 
 def one_view_per_timestamp(observations,tokens):

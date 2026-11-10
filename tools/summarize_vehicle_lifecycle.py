@@ -33,7 +33,7 @@ def parent_switches(root):
     return transitions
 
 
-def summarize(baseline,current):
+def summarize(baseline,current,review_baseline=None):
     old,old_score=load(baseline);new,new_score=load(current)
     for key in ('source_sha256','tracking_report_sha256','review_sha256','models','decoded_frames'):
         if old[key]!=new[key]:raise ValueError('Incompatible '+key)
@@ -44,7 +44,11 @@ def summarize(baseline,current):
                     lost=[k for k,c in new_cases.items() if not c['methods'][m]['exact'] and old_cases[k]['methods'][m]['exact']])
              for m in ('single','multi','reconstruction')}
     reported=[['PT0004','PT0006','PT0007'],['PT0015','PT0016'],['PT0036','PT0041'],['PT0047','PT0049','PT0050'],['PT0068','PT0069']]
-    old_groups={g['id']:g for g in old['groups']};checks=[]
+    reviewed,review_score=load(review_baseline or baseline)
+    if (reviewed['source_sha256']!=new['source_sha256'] or review_score['predictions_sha256']!=
+            '16e5f78f635a3cb879b6d6e9e2c7f946be2e00e83810ac4e2729434ae15de727'):
+        raise ValueError('Reported example IDs belong to the original plate-flow-checked run; supply --review-baseline')
+    old_groups={g['id']:g for g in reviewed['groups']};checks=[]
     for cluster in reported:
         mapped={}
         for key in cluster:
@@ -79,6 +83,7 @@ def summarize(baseline,current):
         vehicle_histories_with_confirmed_ocr_evidence=len(new['vehicle_results']),model_accepted_matched_correct=sum(bool(v) and v==c['expected'] for c,v in accepted),
         model_accepted_matched_wrong=sum(bool(v) and v!=c['expected'] for c,v in accepted),
         reported_case_checks=checks,car_vs_autorickshaw_parent_conflict=bool(negative[0]&negative[1]),
+        reported_case_baseline_predictions_sha256=review_score['predictions_sha256'],
         car_vs_autorickshaw_both_assigned=bool(negative[0] and negative[1]),
         predictions_sha256=new_score['predictions_sha256'],inference_source_sha256=new['inference_source_sha256'],
         native_id_parent_switches=parent_switches(current),central_events_sent=0,labels_used_during_inference=False)
@@ -87,8 +92,9 @@ def summarize(baseline,current):
 if __name__=='__main__':
     parser=argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--baseline',type=Path,required=True);parser.add_argument('--current',type=Path,required=True)
-    parser.add_argument('--output',type=Path,required=True);args=parser.parse_args()
-    document=summarize(args.baseline,args.current)
+    parser.add_argument('--output',type=Path,required=True);parser.add_argument('--review-baseline',type=Path)
+    args=parser.parse_args()
+    document=summarize(args.baseline,args.current,args.review_baseline)
     args.output.write_text(json.dumps(document,indent=2)+'\n',encoding='utf-8')
     print(json.dumps(dict(summary=document['summary'],vehicle_summary=document['vehicle_summary'],
         reported_clusters_resolved=sum(c['single_confirmed_parent'] for c in document['reported_case_checks']))))

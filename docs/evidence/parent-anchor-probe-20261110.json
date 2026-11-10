@@ -1,0 +1,12 @@
+{
+  "scope": "Selected frozen crop replay for the user-reported truck example; not full-video accuracy",
+  "baseline_predictions_sha256": "d5f4d38af40b1e0062219e9cb07a3cc49950e30f49120a91a65aab0490ec1e57",
+  "probe_script_sha256": "2aa0f9ea732f89dd753019980cf4a72b1add70bdb04200adabf9ad5384418513",
+  "original_observations": 5,
+  "control_plate_histories": 2,
+  "corrected_plate_histories": 1,
+  "all_corrected_observations_have_same_candidate": true,
+  "new_ocr_inferences": 0,
+  "new_model_training": false,
+  "plate_transcriptions_used": false
+}

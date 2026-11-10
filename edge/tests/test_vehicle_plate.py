@@ -12,6 +12,51 @@ def parent(name='VT1',velocity=(0.,0.),observed=True,box=(0,0,400,400)):
 
 
 class VehiclePlateTests(unittest.TestCase):
+    def test_visual_identity_survives_wrong_ocr_with_established_same_parent(self):
+        router=VehiclePlateRouter(visual_identity=True)
+        first=router.route([proposal()],[parent()],0)[0]
+        router.route([proposal()],[parent()],250)
+        changed=router.route([proposal(text='TN99XY5678')],[parent()],500)[0]
+        self.assertEqual(changed['group'],first['group'])
+        self.assertTrue(changed['recognition_conflict'])
+        self.assertEqual(changed['owner'],'VT1')
+
+    def test_visual_identity_still_forks_for_different_parent(self):
+        router=VehiclePlateRouter(visual_identity=True)
+        first=router.route([proposal()],[parent('A')],0)[0]
+        router.route([proposal()],[parent('A')],250)
+        changed=router.route([proposal(text='TN99XY5678')],[parent('B')],500)[0]
+        self.assertNotEqual(changed['group'],first['group'])
+
+    def test_same_ocr_is_not_a_visual_identity_link(self):
+        router=VehiclePlateRouter(visual_identity=True)
+        first=router.route([proposal()],[],0)[0]
+        other=proposal();other['signature']=[0.,1.]
+        second=router.route([other],[],250)[0]
+        self.assertNotEqual(first['group'],second['group'])
+
+    def test_same_parent_and_relative_location_support_changed_crop_appearance(self):
+        router=VehiclePlateRouter(visual_identity=True)
+        first=router.route([proposal()],[parent()],0)[0]
+        changed=proposal(text='KA01');changed['signature']=[.4,.916515]
+        second=router.route([changed],[parent()],250)[0]
+        self.assertEqual(first['group'],second['group']);self.assertEqual(second['owner'],'VT1')
+
+    def test_parent_anchor_does_not_join_distant_plate_surface(self):
+        router=VehiclePlateRouter(visual_identity=True)
+        first=router.route([proposal()],[parent()],0)[0]
+        changed=proposal((210,100,310,150),text='KA01');changed['signature']=[.4,.916515]
+        second=router.route([changed],[parent()],250)[0]
+        self.assertNotEqual(first['group'],second['group'])
+
+    def test_strong_checked_flow_can_keep_unowned_visual_identity(self):
+        router=VehiclePlateRouter(visual_identity=True)
+        first=router.route([proposal()],[],0)[0]
+        changed=proposal(text='TN99XY5678');changed['motion_support']={first['group']:.95}
+        second=router.route([changed],[],250)[0]
+        self.assertEqual(first['group'],second['group']);self.assertTrue(second['recognition_conflict'])
+        self.assertIsNone(second['owner'])
+
     def test_nested_partial_crop_removed_but_separate_side_view_survives(self):
         full=proposal();fragment=proposal((110,100,135,150),text='KA')
         side=proposal((300,100,380,150))

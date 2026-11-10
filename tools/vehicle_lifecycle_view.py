@@ -1,5 +1,34 @@
 """Local vehicle-parent review; no mutation of inference, labels or scores."""
 import html
+import re
+
+
+def group_vehicle_cards(page,document):
+    """Reorganize evidence without changing identity assignments or dropping crops."""
+    esc=lambda value:html.escape(str(value),quote=True)
+    pattern=r'<section id="(PT\d+)">.*?</section>'
+    matches=list(re.finditer(pattern,page,re.S))
+    cards={match.group(1):match.group(0) for match in matches}
+    expected={g['id'] for g in document['groups']}
+    if set(cards)!=expected or len(matches)!=len(cards):raise ValueError('Every plate history needs exactly one original evidence card')
+    page=re.sub(pattern,'',page,flags=re.S)
+    vehicles={v['id']:v for v in document['vehicles']};results={v['id']:v for v in document['vehicle_results']}
+    attached={};unassigned=[]
+    for group in document['groups']:
+        parent=group.get('parent_vehicle_id')
+        if parent in vehicles:attached.setdefault(parent,[]).append(group['id'])
+        else:unassigned.append(group['id'])
+    parent_cards=[]
+    for parent,children in attached.items():
+        result=results.get(parent);reading=result['methods']['top'] if result else None
+        heading=esc(parent)+' · '+esc(vehicles[parent]['status'])+' · '+str(len(children))+' plate histories · '+esc(reading or 'No combined reading')
+        parent_cards.append('<details class="vehicle-card" id="'+esc(parent)+'"><summary>'+heading+'</summary><p>Confirmed ownership groups these views. PT labels describe evidence histories, not additional vehicles.</p>'+''.join(cards[c] for c in children)+'</details>')
+    body='<section id="vehicle-evidence"><h2>Vehicles with confirmed plate ownership</h2><p>'+str(len(attached))+' vehicle histories contain assigned plate views; '+str(len(unassigned))+' plate histories remain unassigned. These are histories, not verified unique vehicle counts.</p>'+''.join(parent_cards)+'</section>'
+    body+='<details id="unassigned-plate-views"><summary>Review '+str(len(unassigned))+' unassigned plate histories</summary><p>Ownership is unresolved. These crops remain available and have not been silently merged.</p>'+''.join(cards[c] for c in unassigned)+'</details>'
+    body+='''<style>.vehicle-card,#unassigned-plate-views{padding:14px;margin:12px 0;border:1px solid #cbd9ce;border-radius:10px}summary{cursor:pointer;font-weight:650}section[id]{scroll-margin-top:20px}</style>
+<script>(()=>{function reveal(){let id;try{id=decodeURIComponent(location.hash.slice(1));}catch{return;}const target=document.getElementById(id);for(let node=target;node;node=node.parentElement){if(node.tagName==='DETAILS')node.open=true;}}window.addEventListener('hashchange',reveal);reveal();})();</script>'''
+    marker='<section><h2>All 18 development references</h2>'
+    return page.replace(marker,body+marker,1)
 
 
 def case_panel(summary):
@@ -39,7 +68,7 @@ def augment(page,document,report=None):
 <p>Several plate views may belong to one vehicle. Only confirmed ownership contributes to its combined reading; one timestamp supplies at most one OCR observation. Vehicle and plate IDs are specific to this run.</p>
 <div style="position:relative;background:#132b29"><video id="lifecycle-video" controls preload="metadata" style="display:block;width:100%" src="http://127.0.0.1:7798/video"></video><canvas id="lifecycle-overlay" style="position:absolute;left:0;top:0;width:100%;height:100%;pointer-events:none"></canvas></div>
 <p id="lifecycle-state" aria-live="polite">Loading completed analysis…</p><p>Solid teal: observed vehicle. Dashed amber: predicted position. Dormant histories have no drawn box. This is a replay of completed analysis.</p>
-<div class="scroll"><table><tr><th>Vehicle</th><th>Final state</th><th>Closing reason</th><th>Actual observations</th><th>Plate histories</th><th>Combined hypothesis</th><th>Text gate</th></tr>'''+''.join(rows)+'''</table></div></section>
+<details><summary>Inspect all '''+str(len(document['vehicles']))+''' vehicle history records</summary><div class="scroll"><table><tr><th>Vehicle</th><th>Final state</th><th>Closing reason</th><th>Actual observations</th><th>Plate histories</th><th>Combined hypothesis</th><th>Text gate</th></tr>'''+''.join(rows)+'''</table></div></details></section>
 <script>
 (() => {
  const video=document.querySelector('#lifecycle-video'), canvas=document.querySelector('#lifecycle-overlay'), label=document.querySelector('#lifecycle-state');
@@ -70,4 +99,4 @@ def augment(page,document,report=None):
 </script>'''
     page=page.replace('Motion-supported plate recognition','Vehicle-led plate recognition')
     marker='<section><h2>All 18 development references</h2>'
-    return page.replace(marker,panel+marker,1)
+    return group_vehicle_cards(page.replace(marker,panel+marker,1),document)
