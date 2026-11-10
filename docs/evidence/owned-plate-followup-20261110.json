@@ -1,0 +1,33 @@
+{
+  "date": "2026-11-10",
+  "source": "User findings verified against native crops and tracking metadata",
+  "cross_owner_plate_duplicates": [
+    "V004-P002",
+    "V006-P002",
+    "V011-P002"
+  ],
+  "vehicle_IDs_must_not_be_blindly_merged": true,
+  "partial_rival_coverage_examples": {
+    "V004-P002_at_767ms": 0.204,
+    "V006-P002_at_2000ms": 0.752
+  },
+  "same_frame_fragments": [
+    "V031-P001",
+    "V011-P003"
+  ],
+  "source_position_ms": 3267,
+  "native_union_box": [
+    2297,
+    1890,
+    2921,
+    2160
+  ],
+  "recovered_native_size": [
+    624,
+    270
+  ],
+  "independent_observations": 1,
+  "OCR_rerun_on_recovered_crop": false,
+  "general_ownership_or_fragment_merging_fix_implemented": false,
+  "original_benchmark_unchanged": true
+}

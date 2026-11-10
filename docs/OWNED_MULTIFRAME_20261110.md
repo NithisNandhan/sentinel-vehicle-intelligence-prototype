@@ -1,5 +1,31 @@
 # Multi-frame OCR with explicit vehicle ownership
 
+## Follow-up ownership and crop-completeness defects
+
+User inspection found the same physical plate in V004, V006 and V011 outputs.
+The corresponding vehicle previews cover an autorickshaw, truck and silver car;
+these IDs must not be merged merely because OCR sees the same plate. Overlapping
+vehicle crops allow a neighbouring plate to enter a different owner's history.
+The existing 90% containment check is insufficient: a wrong-owner proposal at
+767 ms overlaps another candidate vehicle by 20.4%, and one at 2000 ms by 75.2%.
+Those partial rival overlaps are currently ignored. A correct text prediction
+does not validate the inferred owning vehicle.
+
+V031-P001 and V011-P003 are adjacent fragments from the exact same frame at
+3267 ms. Their boxes [2493,1890,2921,2160] and [2297,1935,2510,2047] can be
+recropped together from the original source at [2297,1890,2921,2160]. This
+recovers a complete native 624x270 image without generating pixels or combining
+OCR strings. It counts as one source observation, not two confirming frames.
+The diagnostic crop is local under `user-ownership-review/`; OCR was not rerun
+on it during this follow-up.
+
+These findings are unresolved general pipeline defects, not a claim that all
+plate ownership is now correct. Preserve raw benchmark results as text-reading
+diagnostics. Next changes must address rival partial overlaps, plate-level
+temporal association and plate detection beyond overly tight vehicle ROIs.
+Automatic merging of adjacent fragments requires evidence that they belong to
+one physical plate; joining every nearby pair would create new contamination.
+
 ## Measured result
 
 One bounded GPU run completed all 928 decoded frames, 124 plate-search samples
