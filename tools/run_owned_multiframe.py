@@ -36,12 +36,43 @@ def pack(candidate):
     return dict(plate=candidate.plate,score=candidate.score,minimum_character_score=candidate.minimum_character_score)
 
 
+def reading_result(reader):
+    ranked=reader.candidates();accepted=reader.accepted(.85)
+    return dict(top=ranked[0].plate if ranked else None,candidates=[pack(c) for c in ranked[:20]],
+                accepted=accepted.plate if accepted else None)
+
+
+def build_vehicle_results(predictions,posteriors,tokens):
+    """Rebuild parent evidence; quarantined crops never supply OCR votes."""
+    evidence={};children={}
+    excluded={g['id'] for g in predictions if g.get('plate_validation',{}).get('excluded_from_fusion')}
+    for group in predictions:
+        parent=group['parent_vehicle_id']
+        if parent and group['id'] not in excluded:children.setdefault(parent,[]).append(group['id'])
+    for group in posteriors:
+        if group['id'] in excluded:continue
+        for observation in group['observations']:
+            if observation['vehicle_id']:
+                evidence.setdefault(observation['vehicle_id'],[]).append(observation)
+    results=[]
+    for parent,items in evidence.items():
+        selected,diagnostics=one_view_per_timestamp(items,tokens)
+        selected=sorted(selected,key=lambda o:(-o['quality'],o['position_ms']))[:6]
+        selected.sort(key=lambda o:o['position_ms']);reader=CTCPlateReader(tokens)
+        for observation in selected:reader.add(observation['rows'],timestamp_ms=observation['position_ms'],source_id=observation['source_id'],quality=observation['quality'])
+        values=reading_result(reader)
+        if diagnostics['conflicting_plate_views']:values['accepted']=None
+        results.append(dict(id=parent,children=children.get(parent,[]),methods=values,
+            samples=[{k:v for k,v in o.items() if k!='rows'} for o in selected],observations=len(selected),**diagnostics))
+    return results
+
+
 def run(args):
     if args.output.exists():raise ValueError('Use a fresh run folder')
     args.output.mkdir(parents=True);(args.output/'assets').mkdir()
     (args.output/'runner.py').write_bytes(Path(__file__).read_bytes())
     source_hashes={}
-    for name in ('owned_plate','plate_context','plate_identity','plate_motion','vehicle_lifecycle','vehicle_plate','plate_sampling'):
+    for name in ('owned_plate','plate_context','plate_identity','plate_motion','vehicle_lifecycle','vehicle_plate','plate_sampling','plate_evidence','plate_filter'):
         payload=(Path(__file__).resolve().parents[1]/'edge/sentinel_edge'/(name+'.py')).read_bytes()
         (args.output/('source-'+name+'.py')).write_bytes(payload)
         source_hashes[name]=hashlib.sha256(payload).hexdigest()
@@ -213,13 +244,9 @@ def run(args):
                 box=metadata['box'],path=relative,rows=rows,working_quad=metadata['quad']))
         best=max(observations,key=lambda o:(o['quality'],-o['position_ms']))
         single=CTCPlateReader(ocr.tokens);single.add(best['rows'],timestamp_ms=best['position_ms'],source_id=best['source_id'])
-        def result(reader):
-            ranked=reader.candidates();accepted=reader.accepted(.85)
-            return dict(top=ranked[0].plate if ranked else None,candidates=[pack(c) for c in ranked[:20]],
-                        accepted=accepted.plate if accepted else None)
-        values=dict(single=result(single),multi=result(multi))
+        values=dict(single=reading_result(single),multi=reading_result(multi))
         state=ReconstructionState();update(state,multi,samples,ocr,samples[-1].pts_ms)
-        values['reconstruction']=result(multi)
+        values['reconstruction']=reading_result(multi)
         accepted=multi.accepted(.85)
         if disagreement(state,accepted,.85):values['reconstruction']['accepted']=None
         if args.visual_identity and group.get('recognition_conflict'):
@@ -238,25 +265,14 @@ def run(args):
             write_json(args.output/'progress.json',dict(stage='recognizing',groups_done=len(predictions),groups=len(groups),ocr_calls=ocr_calls+identity_ocr_calls))
             print(json.dumps(dict(stage='recognizing',groups_done=len(predictions),ocr_calls=ocr_calls+identity_ocr_calls)),flush=True)
     with gzip.open(args.output/'posteriors.json.gz','wt',encoding='utf-8') as f:json.dump(dict(tokens=ocr.tokens,groups=posteriors),f,allow_nan=False)
+    validation=None
+    if args.validate_plates:
+        from sentinel_edge.plate_evidence import annotate_plate_evidence
+        validation=annotate_plate_evidence(predictions,posteriors,ocr.tokens,dict(frames=vehicle_frames),
+            lambda sample:cv2.imread(str(args.output/sample['path'])))
     vehicle_results=[]
     if lifecycle:
-        evidence={};children={}
-        for group in predictions:
-            parent=group['parent_vehicle_id']
-            if parent:children.setdefault(parent,[]).append(group['id'])
-        for group in posteriors:
-            for observation in group['observations']:
-                if observation['vehicle_id']:
-                    evidence.setdefault(observation['vehicle_id'],[]).append(observation)
-        for parent,items in evidence.items():
-            selected,diagnostics=one_view_per_timestamp(items,ocr.tokens)
-            selected=sorted(selected,key=lambda o:(-o['quality'],o['position_ms']))[:6]
-            selected.sort(key=lambda o:o['position_ms']);reader=CTCPlateReader(ocr.tokens)
-            for observation in selected:reader.add(observation['rows'],timestamp_ms=observation['position_ms'],source_id=observation['source_id'],quality=observation['quality'])
-            values=result(reader)
-            if diagnostics['conflicting_plate_views']:values['accepted']=None
-            vehicle_results.append(dict(id=parent,children=children.get(parent,[]),methods=values,
-                samples=[{k:v for k,v in o.items() if k!='rows'} for o in selected],observations=len(selected),**diagnostics))
+        vehicle_results=build_vehicle_results(predictions,posteriors,ocr.tokens)
         write_json(args.output/'vehicle-timeline.json',dict(width=tracking['width'],height=tracking['height'],frames=vehicle_frames))
     document=dict(schema_version=1,source_sha256=source.sha256,tracking_report_sha256=sha(tracking_path),
         timeline_sha256=sha(args.tracking/'timeline.json'),review_sha256=hashlib.sha256(review_bytes).hexdigest() if review else None,
@@ -266,7 +282,7 @@ def run(args):
         plate_first=args.plate_first,plate_flow=args.plate_flow,motion_diagnostics=dict(motion.metrics) if motion else None,
         identity_ocr_calls=identity_ocr_calls,context_diagnostics=dict(context_metrics),
         vehicle_lifecycle=bool(lifecycle),vehicle_lifecycle_counters=dict(lifecycle.counters) if lifecycle else None,
-        visual_identity=args.visual_identity,
+        visual_identity=args.visual_identity,plate_validation=validation,
         vehicle_motion_diagnostics=dict(vehicle_motion.metrics) if lifecycle else None,
         vehicles=list(lifecycle.records.values()) if lifecycle else [],vehicle_results=vehicle_results,
         router=dict(router.counters),search_diagnostics=search.diagnostics(),groups_with_owned_crops=len(groups),
@@ -296,6 +312,7 @@ def score(args):
         expected_box=reference_box(reference,corners)
         choices=[]
         for group in d['groups']:
+            if group.get('plate_validation',{}).get('excluded_from_fusion'):continue
             overlap=max((box_iou(expected_box,o['box']) for o in group['observed'] if abs(o['position_ms']-reference['position_ms'])<=20),default=0)
             if overlap>=.3:choices.append((overlap,group))
         choices.sort(key=lambda pair:-pair[0])
@@ -351,6 +368,12 @@ def render(root,d,report):
         truth='<p>Existing human reference '+c['id']+': '+html.escape(c['expected'])+'</p>' if c else '<p>Unlabelled passage: correctness unmeasured.</p>'
         if g.get('recognition_conflict'):
             truth+='<p><strong>Conflicting OCR readings.</strong> The visual identity is retained; text acceptance is blocked. Inspect the alternative readings and original crops.</p>'
+        validation=g.get('plate_validation')
+        if validation:
+            message=('Suspected non-plate: excluded from vehicle OCR fusion. Original crops and raw hypotheses are preserved below.'
+                     if validation['excluded_from_fusion'] else 'Character evidence present; plate identity and reading remain unverified.'
+                     if validation['status']=='text_evidence_present' else 'Plate evidence uncertain; retained for review.')
+            truth+='<p class="plate-validation"><strong>'+html.escape(message)+'</strong> '+html.escape('; '.join(validation['reasons']))+'</p>'
         cards.append('<section id="'+html.escape(g['id'])+'"><h2>'+html.escape(g['id'])+' · owner '+html.escape(g['owner'] or 'uncertain')+'</h2>'+truth+'<div class="frames">'+pictures+'</div><div class="scroll"><table><tr><th>Method</th><th>Top hypothesis</th><th>Model gate (text only)</th><th>Top five candidates</th></tr>'+readings+'</table></div></section>')
     summary=''.join('<tr><td>'+m+'</td><td>'+str(s['matched_exact'])+'/'+str(s['matched_targets'])+'</td><td>'+str(s['multi_frame_exact'])+'/'+str(s['multi_frame_targets'])+'</td></tr>' for m,s in report['summary'].items())
     page='<!doctype html><html lang="en"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Sentinel · Owned multi-frame OCR</title><style>body{font:16px system-ui;background:#f6f7f2;color:#18352e;max-width:1350px;margin:30px auto;padding:0 18px}h1,h2{color:#0f766e}section{padding:18px;margin:20px 0;border:1px solid #cbd9ce;border-radius:10px;background:white}.frames{display:flex;gap:10px;overflow:auto}figure{margin:5px;flex:none}img{max-width:280px;max-height:130px}table{border-collapse:collapse;width:100%}td,th{padding:10px;border:1px solid #cbd9ce;text-align:left}.scroll{overflow:auto}</style><h1>Owned multi-frame recognition</h1><p>Same OCR weights, same native evidence. Ambiguous plate ownership is rejected before fusion. All hypotheses and model scores remain unverified until labelled.</p><p>'+str(d['decoded_frames'])+' source frames · '+str(d['sampled_frames'])+' plate-search samples · '+str(d['groups_with_ocr'])+' evidence groups. <a href="http://127.0.0.1:7798/">Vehicle tracking viewer</a></p><table><tr><th>Method</th><th>Matched exact</th><th>≥3-frame exact</th></tr>'+summary+'</table><p>These are selected development references, not full-video accuracy. Unmatched references remain misses in the all-18 denominator. No watchlist events were emitted.</p>'+''.join(cards)+'</html>'
@@ -370,6 +393,10 @@ def render(root,d,report):
     if d.get('vehicle_lifecycle'):
         from vehicle_lifecycle_view import augment
         page=augment(page,d,report)
+    if d.get('plate_validation'):
+        counts=d['plate_validation']['history_counts']
+        note='<p><strong>Plate evidence validation:</strong> '+str(counts.get('suspected_non_plate',0))+' suspected non-plate histories are excluded from vehicle OCR fusion and kept in a separate inspection queue. '+str(counts.get('uncertain',0))+' histories remain uncertain. This development heuristic can miss false detections; it does not verify plate text.</p>'
+        page=page.replace('<section id="vehicle-lifecycle">',note+'<section id="vehicle-lifecycle">',1)
     (root/'index.html').write_bytes(page.encode('utf-8'))
 
 
@@ -396,6 +423,7 @@ if __name__=='__main__':
     p.add_argument('--vehicle-lifecycle',action='store_true',help='Persistent vehicle parents, occlusion states and multiple plate views')
     p.add_argument('--visual-identity',action='store_true',help='Retain visually established identity through OCR conflicts; block uncertain text acceptance')
     p.add_argument('--adaptive-plates',action='store_true',help='Bounded extra plate searches for new or reappearing vehicles')
+    p.add_argument('--validate-plates',action='store_true',help='Conservative crop-level non-plate triage before parent OCR fusion')
     p.add_argument('--recordings-dir',type=Path,default=Path('/recordings'));p.add_argument('--cache',type=Path,default=Path('/models/experiments/awiros'))
     p.add_argument('--review',type=Path,default=Path('data/benchmarks/recorded-footage-20261104/manual-review'))
     p.add_argument('--review-summary',type=Path,help='After-inference vehicle mapping for --phase render only')
@@ -404,6 +432,7 @@ if __name__=='__main__':
     if args.vehicle_lifecycle and not args.plate_flow:p.error('--vehicle-lifecycle requires --plate-flow')
     if args.visual_identity and not args.vehicle_lifecycle:p.error('--visual-identity requires --vehicle-lifecycle')
     if args.adaptive_plates and not args.vehicle_lifecycle:p.error('--adaptive-plates requires --vehicle-lifecycle')
+    if args.validate_plates and not args.vehicle_lifecycle:p.error('--validate-plates requires --vehicle-lifecycle')
     if args.review_summary and args.phase!='render':p.error('--review-summary is only for after-inference rendering')
     if args.phase=='run':run(args)
     elif args.phase=='score':score(args)

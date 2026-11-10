@@ -13,8 +13,10 @@ def group_vehicle_cards(page,document):
     if set(cards)!=expected or len(matches)!=len(cards):raise ValueError('Every plate history needs exactly one original evidence card')
     page=re.sub(pattern,'',page,flags=re.S)
     vehicles={v['id']:v for v in document['vehicles']};results={v['id']:v for v in document['vehicle_results']}
-    attached={};unassigned=[]
+    attached={};unassigned=[];quarantined=[]
     for group in document['groups']:
+        if group.get('plate_validation',{}).get('excluded_from_fusion'):
+            quarantined.append(group['id']);continue
         parent=group.get('parent_vehicle_id')
         if parent in vehicles:attached.setdefault(parent,[]).append(group['id'])
         else:unassigned.append(group['id'])
@@ -25,6 +27,8 @@ def group_vehicle_cards(page,document):
         parent_cards.append('<details class="vehicle-card" id="'+esc(parent)+'"><summary>'+heading+'</summary><p>Confirmed ownership groups these views. PT labels describe evidence histories, not additional vehicles.</p>'+''.join(cards[c] for c in children)+'</details>')
     body='<section id="vehicle-evidence"><h2>Vehicles with confirmed plate ownership</h2><p>'+str(len(attached))+' vehicle histories contain assigned plate views; '+str(len(unassigned))+' plate histories remain unassigned. These are histories, not verified unique vehicle counts.</p>'+''.join(parent_cards)+'</section>'
     body+='<details id="unassigned-plate-views"><summary>Review '+str(len(unassigned))+' unassigned plate histories</summary><p>Ownership is unresolved. These crops remain available and have not been silently merged.</p>'+''.join(cards[c] for c in unassigned)+'</details>'
+    if quarantined:
+        body+='<details id="suspected-non-plates"><summary>Inspect '+str(len(quarantined))+' suspected non-plate histories</summary><p>Excluded from vehicle OCR fusion by a conservative development heuristic. These may include unreadable real plates; original crops and hypotheses remain available. Ownership records are preserved.</p>'+''.join(cards[c] for c in quarantined)+'</details>'
     body+='''<style>.vehicle-card,#unassigned-plate-views{padding:14px;margin:12px 0;border:1px solid #cbd9ce;border-radius:10px}summary{cursor:pointer;font-weight:650}section[id]{scroll-margin-top:20px}</style>
 <script>(()=>{function reveal(){let id;try{id=decodeURIComponent(location.hash.slice(1));}catch{return;}const target=document.getElementById(id);for(let node=target;node;node=node.parentElement){if(node.tagName==='DETAILS')node.open=true;}}window.addEventListener('hashchange',reveal);reveal();})();</script>'''
     marker='<section><h2>All 18 development references</h2>'

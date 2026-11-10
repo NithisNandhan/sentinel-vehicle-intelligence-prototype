@@ -1,0 +1,152 @@
+{
+  "scope": "Frozen saved-evidence development diagnostic; not full-video precision/recall",
+  "baseline_predictions_sha256": "ea1adc3274858b0e6e4581689d77697b3da45d6758e2713ea824e599a5d3aa3f",
+  "predictions_sha256": "6f01bd5121d965c87150a6f4429b0f93326ac98e7743c00f83579d4516101611",
+  "source_sha256": "6b7064605b3d4d12c6c1da4566cbcec1cd2e3e3bd7b77814865fe9df22045f65",
+  "validation": {
+    "rule_version": 1,
+    "history_counts": {
+      "text_evidence_present": 153,
+      "uncertain": 149,
+      "suspected_non_plate": 2
+    },
+    "histories": 304,
+    "thresholds": {
+      "ctc_character_peak": 0.6,
+      "minimum_components": 3,
+      "upper_body_limit": 0.5,
+      "minimum_gap_ms": 150
+    },
+    "scope": "Saved-native-evidence triage; no ground-truth labels used"
+  },
+  "provenance": {
+    "input_predictions_sha256": "ea1adc3274858b0e6e4581689d77697b3da45d6758e2713ea824e599a5d3aa3f",
+    "input_posteriors_sha256": "be4e743c729ed109f5a249fd7c622f47a3e1facdbd14b269a6a532b7a5980c3d",
+    "input_vehicle_timeline_sha256": "289626af8a30cca45a319d6d82fc6530136545cb4e74546b6b34bb90a1b5d36b",
+    "runner_sha256": "0023d17cd45017e438515aa102bbf0a5002f19945c4ca8ed60f713de5fd1bcf0",
+    "validator_sha256": "8e8e09f8452b7983f66584774b81be078f69393e67d6ec943bca22e501fbc51a",
+    "fusion_runner_sha256": "09799fc25d489e367a4ae1970fef1b6d14ee5c24fcb5fc8f4e08920c2ee6cce3",
+    "postprocessing_source_sha256": {
+      "validate_plate_evidence.py": "0023d17cd45017e438515aa102bbf0a5002f19945c4ca8ed60f713de5fd1bcf0",
+      "plate_evidence.py": "8e8e09f8452b7983f66584774b81be078f69393e67d6ec943bca22e501fbc51a",
+      "plate_filter.py": "ebb3e8f323d39cd918f8845b9715b6d7d5bfa5ab4c9a87e059e9cae405768872",
+      "vehicle_plate.py": "29add02ebb32ee02aa4a5b9499cbaab7d9dfcdfd7e99bb9b79599fcd50bae824",
+      "ctc_fusion.py": "a7fc9f0105c8d4f5826413b5242b8d2813e4f1965900ed67603c41a8b81d1cbf",
+      "run_owned_multiframe.py": "09799fc25d489e367a4ae1970fef1b6d14ee5c24fcb5fc8f4e08920c2ee6cce3"
+    },
+    "baseline_parent_replay_identical": true,
+    "models_rerun": false,
+    "labels_used": false
+  },
+  "original_histories": 304,
+  "retained_native_crops": 493,
+  "suspected_non_plate_ids": [
+    "PT0192",
+    "PT0258"
+  ],
+  "active_plate_histories": 302,
+  "raw_hypotheses_and_native_evidence_unchanged": true,
+  "parent_readings_changed": [
+    "VT0117"
+  ],
+  "baseline_summary": {
+    "single": {
+      "exact": 7,
+      "targets": 18,
+      "matched_exact": 7,
+      "matched_targets": 11,
+      "multi_frame_exact": 6,
+      "multi_frame_targets": 9,
+      "recovered_vs_single": [],
+      "regressed_vs_single": []
+    },
+    "multi": {
+      "exact": 10,
+      "targets": 18,
+      "matched_exact": 10,
+      "matched_targets": 11,
+      "multi_frame_exact": 9,
+      "multi_frame_targets": 9,
+      "recovered_vs_single": [
+        "02",
+        "06",
+        "15"
+      ],
+      "regressed_vs_single": []
+    },
+    "reconstruction": {
+      "exact": 10,
+      "targets": 18,
+      "matched_exact": 10,
+      "matched_targets": 11,
+      "multi_frame_exact": 9,
+      "multi_frame_targets": 9,
+      "recovered_vs_single": [
+        "02",
+        "06",
+        "15"
+      ],
+      "regressed_vs_single": []
+    }
+  },
+  "summary": {
+    "single": {
+      "exact": 7,
+      "targets": 18,
+      "matched_exact": 7,
+      "matched_targets": 11,
+      "multi_frame_exact": 6,
+      "multi_frame_targets": 9,
+      "recovered_vs_single": [],
+      "regressed_vs_single": []
+    },
+    "multi": {
+      "exact": 10,
+      "targets": 18,
+      "matched_exact": 10,
+      "matched_targets": 11,
+      "multi_frame_exact": 9,
+      "multi_frame_targets": 9,
+      "recovered_vs_single": [
+        "02",
+        "06",
+        "15"
+      ],
+      "regressed_vs_single": []
+    },
+    "reconstruction": {
+      "exact": 10,
+      "targets": 18,
+      "matched_exact": 10,
+      "matched_targets": 11,
+      "multi_frame_exact": 9,
+      "multi_frame_targets": 9,
+      "recovered_vs_single": [
+        "02",
+        "06",
+        "15"
+      ],
+      "regressed_vs_single": []
+    }
+  },
+  "baseline_vehicle_summary": {
+    "exact": 6,
+    "targets": 18,
+    "matched_targets": 7,
+    "conflicting_parents_quarantined": [],
+    "accepted_correct": 4,
+    "accepted_wrong": 0
+  },
+  "vehicle_summary": {
+    "exact": 6,
+    "targets": 18,
+    "matched_targets": 7,
+    "conflicting_parents_quarantined": [],
+    "accepted_correct": 4,
+    "accepted_wrong": 0
+  },
+  "lost_exact_development_targets": [],
+  "postprocess_seconds": 87.305,
+  "models_rerun": false,
+  "central_events_sent": 0
+}

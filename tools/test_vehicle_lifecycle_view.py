@@ -18,6 +18,18 @@ class VehicleViewTests(unittest.TestCase):
         document=dict(groups=[dict(id='PT0001')],vehicles=[],vehicle_results=[])
         with self.assertRaises(ValueError):group_vehicle_cards('',document)
 
+    def test_suspect_window_leaves_vehicle_card_but_keeps_all_evidence(self):
+        document=dict(groups=[dict(id='PT0001',parent_vehicle_id='VT0001'),
+                             dict(id='PT0002',parent_vehicle_id='VT0001',plate_validation=dict(excluded_from_fusion=True))],
+                      vehicles=[dict(id='VT0001',status='visible')],vehicle_results=[])
+        page='<section><h2>All 18 development references</h2></section><section id="PT0001"><img src="plate.png"></section><section id="PT0002"><img src="window.png"></section>'
+        result=group_vehicle_cards(page,document)
+        vehicle=result.split('<details class="vehicle-card"')[1].split('</details>')[0]
+        self.assertIn('plate.png',vehicle);self.assertNotIn('window.png',vehicle)
+        self.assertIn('1 suspected non-plate histories',result)
+        self.assertLess(result.index('id="suspected-non-plates"'),result.index('window.png'))
+        self.assertEqual(result.count('id="PT0002"'),1)
+
     def test_duplicate_identity_cards_fail_instead_of_dropping_evidence(self):
         document=dict(groups=[dict(id='PT0001')],vehicles=[],vehicle_results=[])
         page='<section id="PT0001">first</section><section id="PT0001">second</section>'

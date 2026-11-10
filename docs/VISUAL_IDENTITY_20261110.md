@@ -1,5 +1,9 @@
 # Visual identity, tracker comparison and vehicle-first review
 
+For the subsequent opt-in crop validation that quarantines the reported window
+histories without deleting evidence, see
+[Plate evidence validation](PLATE_EVIDENCE_VALIDATION_20261110.md).
+
 The change keeps a visually established plate identity through conflicting OCR
 readings, while flagging the recognition as uncertain. It also adds bounded
 plate-search bursts and groups confirmed plate evidence under vehicle cards.
