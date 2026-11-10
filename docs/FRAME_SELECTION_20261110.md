@@ -1,5 +1,24 @@
 # Safer evidence continuity and frame-selection experiments
 
+## Subsequent integrity correction: reference 07
+
+User review identified three different plates at 9.5, 10 and 11 seconds in
+reference 07. Assistant inspection confirms this, and the guarded GPU trace
+still places all three native image hashes in one reader segment (`ocr-0033`).
+The guard fixes reference 19's long-gap failure; **it does not establish plate
+identity or eliminate cross-vehicle mixing**. Frame-quality selection alone
+cannot repair this association failure.
+
+The original three-method integrity analysis must exclude both references 07
+and 19: all methods then tie at **2/4 exact**, with **0/1** on the remaining
+target with three or more observations. In the selection-policy sensitivity
+analysis excluding 07, the earlier pipeline scores 2/5 and each candidate 3/5;
+the only recovery remains 19. The original raw reports are preserved. The local
+viewer flags 07 explicitly; `docs/evidence/frame-selection-integrity-20261110.json`
+records this correction. Tables below describe the earlier frozen run and must
+not be read as verified same-vehicle groups. Plate-level association and visual
+identity validation remain required before trusting multi-frame confirmation.
+
 ## Result and deployment decision
 
 The known mixed-vehicle failure is fixed in the recorded worker. OCR histories

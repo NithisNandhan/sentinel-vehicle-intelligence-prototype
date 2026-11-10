@@ -1,0 +1,68 @@
+{
+  "status": "residual_cross_vehicle_contamination_verified",
+  "reference": "07",
+  "times_ms": [
+    9500,
+    10000,
+    11000
+  ],
+  "original_segment": "ocr-0024",
+  "guarded_segments_still_mixed": [
+    "ocr-0033"
+  ],
+  "original_trace_sha256": "926067d17adad4721a2f8c6ea4fc0fd506e4c81d2a21438d4fc657ae29ae9c64",
+  "guarded_trace_sha256": "711eaa69ea819a8868b68a20f16a9384cbc27087eb302cbb391cca23ef364553",
+  "assessment": "User identified three different plates; assistant verified native images. Geometry and time continuity do not establish identity.",
+  "prior_comparison_clean_exclusions": [
+    "07",
+    "19"
+  ],
+  "prior_clean_summary": {
+    "single_quality": {
+      "exact": 2,
+      "targets": 4,
+      "multi_frame_exact": 0,
+      "multi_frame_targets": 1
+    },
+    "multi_originals": {
+      "exact": 2,
+      "targets": 4,
+      "multi_frame_exact": 0,
+      "multi_frame_targets": 1
+    },
+    "multi_reconstruction": {
+      "exact": 2,
+      "targets": 4,
+      "multi_frame_exact": 0,
+      "multi_frame_targets": 1
+    }
+  },
+  "selection_sensitivity_excluding_07": {
+    "current_reconstruction": {
+      "exact": 2,
+      "targets": 5
+    },
+    "legacy_best": {
+      "exact": 3,
+      "targets": 5
+    },
+    "continuity_all": {
+      "exact": 3,
+      "targets": 5
+    },
+    "quality_best": {
+      "exact": 3,
+      "targets": 5
+    },
+    "quality_top3_fusion": {
+      "exact": 3,
+      "targets": 5
+    },
+    "quality_assisted": {
+      "exact": 3,
+      "targets": 5
+    }
+  },
+  "production_guard_solves_all_mixing": false,
+  "raw_reports_changed": false
+}

@@ -1,5 +1,12 @@
 # Comparing one frame, temporal OCR and reconstruction
 
+**Later integrity correction:** reference 07 also contains different plates.
+The earlier exclusion of reference 19 alone is insufficient. Excluding both
+07 and 19 leaves 2/4 exact for all methods and 0/1 on the remaining target with
+at least three observations. Raw reports below remain historical measurements;
+see `FRAME_SELECTION_20261110.md` and the version-two integrity audit for the
+confirmed residual association failure.
+
 This experiment answers whether temporal combination improves the deployed OCR
 on already human-reviewed Mumbai targets. It changes no model weights, detector
 settings, sampling, deployed gates or dashboard behaviour.
