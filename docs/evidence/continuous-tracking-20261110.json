@@ -1,0 +1,863 @@
+{
+  "date": "2026-11-10",
+  "scope": "Recorded tracking-only development comparison; not physical identity or vehicle accuracy validation",
+  "runs": {
+    "640": {
+      "schema_version": 1,
+      "source_sha256": "6b7064605b3d4d12c6c1da4566cbcec1cd2e3e3bd7b77814865fe9df22045f65",
+      "recording_id": "rec-6b7064605b3d",
+      "source_name": "footage.mp4",
+      "duration_ms": 30933,
+      "width": 3840,
+      "height": 2160,
+      "reached_eof": true,
+      "decoded_frames": 928,
+      "vehicle_inference_frames": 928,
+      "model": "yolo26s",
+      "model_sha256": "646f8bc3fe0a656803d95c294f7852321748cb29d13466a1af8862e2db384a1b",
+      "classes": [
+        2,
+        3,
+        5,
+        7
+      ],
+      "confidence": 0.25,
+      "nms_iou": 0.45,
+      "inference_size": 640,
+      "actual_device": "cuda:0",
+      "ultralytics_version": "8.4.162",
+      "capture_script_sha256": "36e64d06fb8a6edb6e725032d6236979a6392cb37585ca9648bd4dbaa32159e8",
+      "wall_seconds": 58.791,
+      "median_detector_ms": 23.96,
+      "p95_detector_ms": 28.878,
+      "detector_seconds": 22.811473952993765,
+      "ocr_loaded": false,
+      "plate_model_loaded": false,
+      "central_delivery": false,
+      "detections_sha256": "83ab586e0b938be55c581a83507f1d01f2e22fe2e1c165342ab5fa43facd6ea3",
+      "tracker_config": {
+        "tracker_type": "bytetrack",
+        "track_high_thresh": 0.25,
+        "track_low_thresh": 0.1,
+        "new_track_thresh": 0.25,
+        "track_buffer": 30,
+        "match_thresh": 0.8,
+        "fuse_score": true
+      },
+      "tracker_config_sha256": "395701d947a749179dee3e327b1181b730c4ca98e7cac5a2ab05280aae573b8b",
+      "policy_source_sha256": "d801dffa29812b731b95f7b770453b5def133c655a04037cb2150e77ada52cd5",
+      "replay_script_sha256": "891cabe3fb6a91d0401418de9bb2c571a237214dbcd6a473e19318b696d90356",
+      "anchors": [
+        {
+          "position_ms": 9500,
+          "plate_box": [
+            1805,
+            1711,
+            1916,
+            1795
+          ],
+          "sparse": {
+            "candidate_owners": [
+              "V040"
+            ],
+            "status": "unique"
+          },
+          "dense": {
+            "candidate_owners": [
+              "V083"
+            ],
+            "status": "unique"
+          },
+          "screened": {
+            "candidate_owners": [
+              "V053"
+            ],
+            "status": "unique"
+          }
+        },
+        {
+          "position_ms": 10000,
+          "plate_box": [
+            1886,
+            1769,
+            2028,
+            1814
+          ],
+          "sparse": {
+            "candidate_owners": [
+              "V040"
+            ],
+            "status": "unique"
+          },
+          "dense": {
+            "candidate_owners": [],
+            "status": "unassigned"
+          },
+          "screened": {
+            "candidate_owners": [],
+            "status": "unassigned"
+          }
+        },
+        {
+          "position_ms": 11000,
+          "plate_box": [
+            1693,
+            1767,
+            1834,
+            1817
+          ],
+          "sparse": {
+            "candidate_owners": [
+              "V040"
+            ],
+            "status": "unique"
+          },
+          "dense": {
+            "candidate_owners": [
+              "V105"
+            ],
+            "status": "unique"
+          },
+          "screened": {
+            "candidate_owners": [
+              "V065"
+            ],
+            "status": "unique"
+          }
+        },
+        {
+          "position_ms": 28000,
+          "plate_box": [
+            1946,
+            1690,
+            2150,
+            1775
+          ],
+          "sparse": {
+            "candidate_owners": [
+              "V110"
+            ],
+            "status": "unique"
+          },
+          "dense": {
+            "candidate_owners": [
+              "V219"
+            ],
+            "status": "unique"
+          },
+          "screened": {
+            "candidate_owners": [
+              "V140"
+            ],
+            "status": "unique"
+          }
+        },
+        {
+          "position_ms": 30500,
+          "plate_box": [
+            1336,
+            1567,
+            1469,
+            1632
+          ],
+          "sparse": {
+            "candidate_owners": [
+              "V119"
+            ],
+            "status": "unique"
+          },
+          "dense": {
+            "candidate_owners": [
+              "V292",
+              "V311"
+            ],
+            "status": "ambiguous"
+          },
+          "screened": {
+            "candidate_owners": [
+              "V194",
+              "V209"
+            ],
+            "status": "ambiguous"
+          }
+        }
+      ],
+      "identity_accuracy": null,
+      "detection_precision": null,
+      "recall": null,
+      "limitations": [
+        "No human vehicle inventory or track identities supplied; no IDF1, precision, recall or identity-switch accuracy claim.",
+        "Qualified means repeated model evidence, not a verified vehicle. Persistent false positives may qualify.",
+        "Sparse boxes are held between 500ms updates, explicitly labelled in the viewer; dense boxes use actual per-frame tracker outputs.",
+        "ByteTrack buffer counts updates: same 30-update setting represents different durations in sparse versus dense modes. The outer passage policy independently uses PTS.",
+        "Only motorized COCO classes 2,3,5,7 are included; bicycles are excluded from this plate-workload demonstration."
+      ],
+      "strategies": {
+        "sparse": {
+          "updates": 62,
+          "tracker_config": {
+            "tracker_type": "bytetrack",
+            "track_high_thresh": 0.25,
+            "track_low_thresh": 0.1,
+            "new_track_thresh": 0.25,
+            "track_buffer": 30,
+            "match_thresh": 0.8,
+            "fuse_score": true
+          },
+          "native_track_ids": 51,
+          "passage_records": 119,
+          "qualified_passages": 42,
+          "tentative_only_passages": 77,
+          "tracked_observation_instances": 356,
+          "qualified_observation_instances": 162,
+          "qualification_excluded_instances": 194,
+          "cpu_replay_seconds": 0.069,
+          "policy_counters": {
+            "source_timestamps": 62,
+            "passages_started": 119,
+            "accepted_observations": 356,
+            "passages_qualified": 42,
+            "ended_gap": 109,
+            "ended_discontinuity": 1,
+            "ended_eof": 9
+          }
+        },
+        "dense": {
+          "updates": 928,
+          "tracker_config": {
+            "tracker_type": "bytetrack",
+            "track_high_thresh": 0.25,
+            "track_low_thresh": 0.1,
+            "new_track_thresh": 0.25,
+            "track_buffer": 30,
+            "match_thresh": 0.8,
+            "fuse_score": true
+          },
+          "native_track_ids": 310,
+          "passage_records": 314,
+          "qualified_passages": 161,
+          "tentative_only_passages": 153,
+          "tracked_observation_instances": 8769,
+          "qualified_observation_instances": 7299,
+          "qualification_excluded_instances": 1470,
+          "cpu_replay_seconds": 0.887,
+          "policy_counters": {
+            "source_timestamps": 928,
+            "passages_started": 314,
+            "accepted_observations": 8769,
+            "passages_qualified": 161,
+            "ended_gap": 293,
+            "ended_discontinuity": 3,
+            "ended_eof": 18
+          }
+        },
+        "screened": {
+          "updates": 928,
+          "tracker_config": {
+            "tracker_type": "bytetrack",
+            "track_high_thresh": 0.25,
+            "track_low_thresh": 0.1,
+            "new_track_thresh": 0.4,
+            "track_buffer": 30,
+            "match_thresh": 0.8,
+            "fuse_score": true
+          },
+          "native_track_ids": 204,
+          "passage_records": 211,
+          "qualified_passages": 130,
+          "tentative_only_passages": 81,
+          "tracked_observation_instances": 7954,
+          "qualified_observation_instances": 7025,
+          "qualification_excluded_instances": 929,
+          "cpu_replay_seconds": 0.824,
+          "policy_counters": {
+            "source_timestamps": 928,
+            "passages_started": 211,
+            "accepted_observations": 7954,
+            "passages_qualified": 130,
+            "ended_gap": 190,
+            "ended_discontinuity": 6,
+            "ended_eof": 15
+          }
+        }
+      }
+    },
+    "960": {
+      "schema_version": 1,
+      "source_sha256": "6b7064605b3d4d12c6c1da4566cbcec1cd2e3e3bd7b77814865fe9df22045f65",
+      "recording_id": "rec-6b7064605b3d",
+      "source_name": "footage.mp4",
+      "duration_ms": 30933,
+      "width": 3840,
+      "height": 2160,
+      "reached_eof": true,
+      "decoded_frames": 928,
+      "vehicle_inference_frames": 928,
+      "model": "yolo26s",
+      "model_sha256": "646f8bc3fe0a656803d95c294f7852321748cb29d13466a1af8862e2db384a1b",
+      "classes": [
+        2,
+        3,
+        5,
+        7
+      ],
+      "confidence": 0.25,
+      "nms_iou": 0.45,
+      "inference_size": 960,
+      "actual_device": "cuda:0",
+      "ultralytics_version": "8.4.162",
+      "capture_script_sha256": "891cabe3fb6a91d0401418de9bb2c571a237214dbcd6a473e19318b696d90356",
+      "wall_seconds": 58.234,
+      "median_detector_ms": 25.317,
+      "p95_detector_ms": 29.169,
+      "detector_seconds": 23.87651496599483,
+      "ocr_loaded": false,
+      "plate_model_loaded": false,
+      "central_delivery": false,
+      "detections_sha256": "b85247816098319fb5db84f4e2ad26166acfcfec3a25fd67ca50303897b4fcb1",
+      "tracker_config": {
+        "tracker_type": "bytetrack",
+        "track_high_thresh": 0.25,
+        "track_low_thresh": 0.1,
+        "new_track_thresh": 0.25,
+        "track_buffer": 30,
+        "match_thresh": 0.8,
+        "fuse_score": true
+      },
+      "tracker_config_sha256": "395701d947a749179dee3e327b1181b730c4ca98e7cac5a2ab05280aae573b8b",
+      "policy_source_sha256": "d801dffa29812b731b95f7b770453b5def133c655a04037cb2150e77ada52cd5",
+      "replay_script_sha256": "891cabe3fb6a91d0401418de9bb2c571a237214dbcd6a473e19318b696d90356",
+      "anchors": [
+        {
+          "position_ms": 9500,
+          "plate_box": [
+            1805,
+            1711,
+            1916,
+            1795
+          ],
+          "sparse": {
+            "candidate_owners": [
+              "V042"
+            ],
+            "status": "unique"
+          },
+          "dense": {
+            "candidate_owners": [
+              "V102"
+            ],
+            "status": "unique"
+          },
+          "screened": {
+            "candidate_owners": [
+              "V068"
+            ],
+            "status": "unique"
+          }
+        },
+        {
+          "position_ms": 10000,
+          "plate_box": [
+            1886,
+            1769,
+            2028,
+            1814
+          ],
+          "sparse": {
+            "candidate_owners": [
+              "V042"
+            ],
+            "status": "unique"
+          },
+          "dense": {
+            "candidate_owners": [
+              "V108"
+            ],
+            "status": "unique"
+          },
+          "screened": {
+            "candidate_owners": [
+              "V072"
+            ],
+            "status": "unique"
+          }
+        },
+        {
+          "position_ms": 11000,
+          "plate_box": [
+            1693,
+            1767,
+            1834,
+            1817
+          ],
+          "sparse": {
+            "candidate_owners": [
+              "V042"
+            ],
+            "status": "unique"
+          },
+          "dense": {
+            "candidate_owners": [
+              "V158"
+            ],
+            "status": "unique"
+          },
+          "screened": {
+            "candidate_owners": [
+              "V104"
+            ],
+            "status": "unique"
+          }
+        },
+        {
+          "position_ms": 28000,
+          "plate_box": [
+            1946,
+            1690,
+            2150,
+            1775
+          ],
+          "sparse": {
+            "candidate_owners": [],
+            "status": "unassigned"
+          },
+          "dense": {
+            "candidate_owners": [
+              "V288"
+            ],
+            "status": "unique"
+          },
+          "screened": {
+            "candidate_owners": [
+              "V183"
+            ],
+            "status": "unique"
+          }
+        },
+        {
+          "position_ms": 30500,
+          "plate_box": [
+            1336,
+            1567,
+            1469,
+            1632
+          ],
+          "sparse": {
+            "candidate_owners": [],
+            "status": "unassigned"
+          },
+          "dense": {
+            "candidate_owners": [
+              "V382"
+            ],
+            "status": "unique"
+          },
+          "screened": {
+            "candidate_owners": [
+              "V248"
+            ],
+            "status": "unique"
+          }
+        }
+      ],
+      "identity_accuracy": null,
+      "detection_precision": null,
+      "recall": null,
+      "limitations": [
+        "No human vehicle inventory or track identities supplied; no IDF1, precision, recall or identity-switch accuracy claim.",
+        "Qualified means repeated model evidence, not a verified vehicle. Persistent false positives may qualify.",
+        "Sparse boxes are held between 500ms updates, explicitly labelled in the viewer; dense boxes use actual per-frame tracker outputs.",
+        "ByteTrack buffer counts updates: same 30-update setting represents different durations in sparse versus dense modes. The outer passage policy independently uses PTS.",
+        "Only motorized COCO classes 2,3,5,7 are included; bicycles are excluded from this plate-workload demonstration."
+      ],
+      "strategies": {
+        "sparse": {
+          "updates": 62,
+          "tracker_config": {
+            "tracker_type": "bytetrack",
+            "track_high_thresh": 0.25,
+            "track_low_thresh": 0.1,
+            "new_track_thresh": 0.25,
+            "track_buffer": 30,
+            "match_thresh": 0.8,
+            "fuse_score": true
+          },
+          "native_track_ids": 54,
+          "passage_records": 122,
+          "qualified_passages": 57,
+          "tentative_only_passages": 65,
+          "tracked_observation_instances": 469,
+          "qualified_observation_instances": 262,
+          "qualification_excluded_instances": 207,
+          "cpu_replay_seconds": 0.076,
+          "policy_counters": {
+            "source_timestamps": 62,
+            "passages_started": 122,
+            "accepted_observations": 469,
+            "passages_qualified": 57,
+            "ended_gap": 108,
+            "ended_discontinuity": 4,
+            "ended_eof": 10
+          }
+        },
+        "dense": {
+          "updates": 928,
+          "tracker_config": {
+            "tracker_type": "bytetrack",
+            "track_high_thresh": 0.25,
+            "track_low_thresh": 0.1,
+            "new_track_thresh": 0.25,
+            "track_buffer": 30,
+            "match_thresh": 0.8,
+            "fuse_score": true
+          },
+          "native_track_ids": 405,
+          "passage_records": 415,
+          "qualified_passages": 221,
+          "tentative_only_passages": 194,
+          "tracked_observation_instances": 11826,
+          "qualified_observation_instances": 9592,
+          "qualification_excluded_instances": 2234,
+          "cpu_replay_seconds": 1.002,
+          "policy_counters": {
+            "source_timestamps": 928,
+            "passages_started": 415,
+            "accepted_observations": 11826,
+            "passages_qualified": 221,
+            "ended_gap": 378,
+            "ended_discontinuity": 7,
+            "ended_eof": 30
+          }
+        },
+        "screened": {
+          "updates": 928,
+          "tracker_config": {
+            "tracker_type": "bytetrack",
+            "track_high_thresh": 0.25,
+            "track_low_thresh": 0.1,
+            "new_track_thresh": 0.4,
+            "track_buffer": 30,
+            "match_thresh": 0.8,
+            "fuse_score": true
+          },
+          "native_track_ids": 260,
+          "passage_records": 269,
+          "qualified_passages": 186,
+          "tentative_only_passages": 83,
+          "tracked_observation_instances": 10488,
+          "qualified_observation_instances": 9082,
+          "qualification_excluded_instances": 1406,
+          "cpu_replay_seconds": 0.881,
+          "policy_counters": {
+            "source_timestamps": 928,
+            "passages_started": 269,
+            "accepted_observations": 10488,
+            "passages_qualified": 186,
+            "ended_gap": 242,
+            "ended_discontinuity": 8,
+            "ended_eof": 19
+          }
+        }
+      }
+    },
+    "motion_960": {
+      "schema_version": 1,
+      "source_sha256": "6b7064605b3d4d12c6c1da4566cbcec1cd2e3e3bd7b77814865fe9df22045f65",
+      "recording_id": "rec-6b7064605b3d",
+      "source_name": "footage.mp4",
+      "duration_ms": 30933,
+      "width": 3840,
+      "height": 2160,
+      "reached_eof": true,
+      "decoded_frames": 928,
+      "vehicle_inference_frames": 928,
+      "model": "yolo26s",
+      "model_sha256": "646f8bc3fe0a656803d95c294f7852321748cb29d13466a1af8862e2db384a1b",
+      "classes": [
+        2,
+        3,
+        5,
+        7
+      ],
+      "confidence": 0.25,
+      "nms_iou": 0.45,
+      "inference_size": 960,
+      "actual_device": "cuda:0",
+      "ultralytics_version": "8.4.162",
+      "capture_script_sha256": "891cabe3fb6a91d0401418de9bb2c571a237214dbcd6a473e19318b696d90356",
+      "wall_seconds": 58.234,
+      "median_detector_ms": 25.317,
+      "p95_detector_ms": 29.169,
+      "detector_seconds": 23.87651496599483,
+      "ocr_loaded": false,
+      "plate_model_loaded": false,
+      "central_delivery": false,
+      "detections_sha256": "b85247816098319fb5db84f4e2ad26166acfcfec3a25fd67ca50303897b4fcb1",
+      "tracker_config": {
+        "tracker_type": "bytetrack",
+        "track_high_thresh": 0.25,
+        "track_low_thresh": 0.1,
+        "new_track_thresh": 0.25,
+        "track_buffer": 30,
+        "match_thresh": 0.8,
+        "fuse_score": true
+      },
+      "tracker_config_sha256": "395701d947a749179dee3e327b1181b730c4ca98e7cac5a2ab05280aae573b8b",
+      "policy_source_sha256": "d801dffa29812b731b95f7b770453b5def133c655a04037cb2150e77ada52cd5",
+      "replay_script_sha256": "da3104336900937bcfb672888bf246dd4d676569e341d4fb6d10067a01f11a7b",
+      "anchors": [
+        {
+          "position_ms": 9500,
+          "plate_box": [
+            1805,
+            1711,
+            1916,
+            1795
+          ],
+          "sparse": {
+            "candidate_owners": [
+              "V042"
+            ],
+            "status": "unique"
+          },
+          "dense": {
+            "candidate_owners": [
+              "V102"
+            ],
+            "status": "unique"
+          },
+          "screened": {
+            "candidate_owners": [
+              "V087"
+            ],
+            "status": "unique"
+          }
+        },
+        {
+          "position_ms": 10000,
+          "plate_box": [
+            1886,
+            1769,
+            2028,
+            1814
+          ],
+          "sparse": {
+            "candidate_owners": [
+              "V042"
+            ],
+            "status": "unique"
+          },
+          "dense": {
+            "candidate_owners": [
+              "V108"
+            ],
+            "status": "unique"
+          },
+          "screened": {
+            "candidate_owners": [],
+            "status": "unassigned"
+          }
+        },
+        {
+          "position_ms": 11000,
+          "plate_box": [
+            1693,
+            1767,
+            1834,
+            1817
+          ],
+          "sparse": {
+            "candidate_owners": [
+              "V042"
+            ],
+            "status": "unique"
+          },
+          "dense": {
+            "candidate_owners": [
+              "V158"
+            ],
+            "status": "unique"
+          },
+          "screened": {
+            "candidate_owners": [
+              "V109"
+            ],
+            "status": "unique"
+          }
+        },
+        {
+          "position_ms": 28000,
+          "plate_box": [
+            1946,
+            1690,
+            2150,
+            1775
+          ],
+          "sparse": {
+            "candidate_owners": [],
+            "status": "unassigned"
+          },
+          "dense": {
+            "candidate_owners": [
+              "V288"
+            ],
+            "status": "unique"
+          },
+          "screened": {
+            "candidate_owners": [
+              "V218"
+            ],
+            "status": "unique"
+          }
+        },
+        {
+          "position_ms": 30500,
+          "plate_box": [
+            1336,
+            1567,
+            1469,
+            1632
+          ],
+          "sparse": {
+            "candidate_owners": [],
+            "status": "unassigned"
+          },
+          "dense": {
+            "candidate_owners": [
+              "V382"
+            ],
+            "status": "unique"
+          },
+          "screened": {
+            "candidate_owners": [
+              "V283"
+            ],
+            "status": "unique"
+          }
+        }
+      ],
+      "identity_accuracy": null,
+      "detection_precision": null,
+      "recall": null,
+      "limitations": [
+        "No human vehicle inventory or track identities supplied; no IDF1, precision, recall or identity-switch accuracy claim.",
+        "Qualified means repeated model evidence, not a verified vehicle. Persistent false positives may qualify.",
+        "Sparse boxes are held between 500ms updates, explicitly labelled in the viewer; dense boxes use actual per-frame tracker outputs.",
+        "ByteTrack buffer counts updates: same 30-update setting represents different durations in sparse versus dense modes. The outer passage policy independently uses PTS.",
+        "Only motorized COCO classes 2,3,5,7 are included; bicycles are excluded from this plate-workload demonstration."
+      ],
+      "strategies": {
+        "sparse": {
+          "updates": 62,
+          "tracker_config": {
+            "tracker_type": "bytetrack",
+            "track_high_thresh": 0.25,
+            "track_low_thresh": 0.1,
+            "new_track_thresh": 0.25,
+            "track_buffer": 30,
+            "match_thresh": 0.8,
+            "fuse_score": true
+          },
+          "native_track_ids": 54,
+          "passage_records": 122,
+          "qualified_passages": 57,
+          "tentative_only_passages": 65,
+          "tracked_observation_instances": 469,
+          "qualified_observation_instances": 262,
+          "qualification_excluded_instances": 207,
+          "cpu_replay_seconds": 0.081,
+          "policy_counters": {
+            "source_timestamps": 62,
+            "passages_started": 122,
+            "accepted_observations": 469,
+            "passages_qualified": 57,
+            "ended_gap": 108,
+            "ended_discontinuity": 4,
+            "ended_eof": 10
+          }
+        },
+        "dense": {
+          "updates": 928,
+          "tracker_config": {
+            "tracker_type": "bytetrack",
+            "track_high_thresh": 0.25,
+            "track_low_thresh": 0.1,
+            "new_track_thresh": 0.25,
+            "track_buffer": 30,
+            "match_thresh": 0.8,
+            "fuse_score": true
+          },
+          "native_track_ids": 405,
+          "passage_records": 415,
+          "qualified_passages": 221,
+          "tentative_only_passages": 194,
+          "tracked_observation_instances": 11826,
+          "qualified_observation_instances": 9592,
+          "qualification_excluded_instances": 2234,
+          "cpu_replay_seconds": 1.253,
+          "policy_counters": {
+            "source_timestamps": 928,
+            "passages_started": 415,
+            "accepted_observations": 11826,
+            "passages_qualified": 221,
+            "ended_gap": 378,
+            "ended_discontinuity": 7,
+            "ended_eof": 30
+          }
+        },
+        "screened": {
+          "updates": 928,
+          "tracker_config": {
+            "tracker_type": "bytetrack",
+            "track_high_thresh": 0.25,
+            "track_low_thresh": 0.1,
+            "new_track_thresh": 0.4,
+            "track_buffer": 30,
+            "match_thresh": 0.8,
+            "fuse_score": false
+          },
+          "native_track_ids": 252,
+          "passage_records": 308,
+          "qualified_passages": 198,
+          "tentative_only_passages": 110,
+          "tracked_observation_instances": 11825,
+          "qualified_observation_instances": 10267,
+          "qualification_excluded_instances": 1558,
+          "cpu_replay_seconds": 0.957,
+          "policy_counters": {
+            "source_timestamps": 928,
+            "passages_started": 308,
+            "accepted_observations": 11825,
+            "passages_qualified": 198,
+            "ended_discontinuity": 54,
+            "ended_gap": 228,
+            "ended_eof": 26
+          }
+        }
+      }
+    }
+  },
+  "selected_viewer": "960; screened with original score-fusion association",
+  "rejected_candidate": "motion_960; more gross discontinuities and missing 10-second owner",
+  "verification": {
+    "policy_tests": 18,
+    "review_and_browser_timing_tests": 5,
+    "all_928_fractional_frame_indices_correct": true,
+    "browser_video_loaded": true,
+    "browser_application_errors": 0,
+    "dummy_labels_written_to_real_run": false,
+    "screenshot": "cancelled after stalling"
+  },
+  "review_status": {
+    "pending_passages": 269,
+    "human_detection_precision": null,
+    "human_identity_accuracy": null
+  },
+  "deployment": {
+    "tracking_only_viewer": true,
+    "integrated_into_OCR_pipeline": false,
+    "existing_recorded_worker_restored": true,
+    "model_weights_changed": false
+  },
+  "raw_video_images_detection_timelines_and_labels_published": false
+}

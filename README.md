@@ -197,6 +197,7 @@ docs/          Current guides, model experiments and historical reports
 - **[Full-video human review](docs/FULL_VIDEO_REVIEW_20261110.md):** label the complete Mumbai clip, merge track fragments, add misses, and calculate an auditable accuracy report.
 - **[Temporal OCR comparison](docs/TEMPORAL_APPROACH_COMPARISON_20261110.md):** measured single-frame, multi-frame and reconstruction results, including a verified mixed-vehicle evidence failure.
 - **[Evidence continuity and frame selection](docs/FRAME_SELECTION_20261110.md):** deployed guard, full-recording validation and fixed-input image-selection experiments.
+- **[Tracking-only prototype](docs/CONTINUOUS_TRACKING_20261110.md):** full-frame GPU runs, tentative-track filtering and local review of non-vehicles and mixed identities.
 - **[Historical engineering validation](VALIDATION.md):** earlier live/diagnostic measurements; these do not define the current dashboard's scope.
 
 Older task reports, `CURRENT_STATUS.md`, handoff notes, and demonstration videos are dated records of earlier iterations. They do not override the current dashboard guide or this recorded-mode setup. Model weights and source datasets retain their respective licences and attribution requirements.
