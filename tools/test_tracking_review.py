@@ -76,5 +76,27 @@ class TrackingReviewTests(unittest.TestCase):
         result=subprocess.run([shutil.which('node'),'-e',javascript],check=True,capture_output=True,text=True)
         self.assertEqual(json.loads(result.stdout),[])
 
+    @unittest.skipUnless(shutil.which('node'),'Node is needed for the review-filter regression')
+    def test_review_filter_hides_mixed_objects_and_keeps_stationary_vehicles(self):
+        page=Path(__file__).with_name('tracking_review.html').read_text(encoding='utf-8')
+        function=page[page.index('function visible(f)'):page.index('function draw(ms)')]
+        script="""
+        let mode='screened',hide=true;
+        const $=id=>id==='mode'?{value:mode}:{checked:hide};
+        const review={labels:{sign:{status:'mixed'},object:{status:'non_vehicle'},parked:{status:'vehicle'}}};
+        const row=id=>[id,10,10,20,20,7,.75,1];
+        const f={q:['sign','object','parked','pending'].map(row),r:[]};f.d=f.q;f.s=f.q;
+        """+function+"""
+        const screened=visible(f).map(t=>t[0]);
+        hide=false;const audit=visible(f).map(t=>t[0]);
+        hide=true;mode='dense';const baseline=visible(f).map(t=>t[0]);
+        console.log(JSON.stringify({screened,audit,baseline}));
+        """
+        result=subprocess.run([shutil.which('node'),'-e',script],check=True,capture_output=True,text=True)
+        actual=json.loads(result.stdout)
+        self.assertEqual(actual['screened'],['parked','pending'])
+        self.assertEqual(actual['audit'],['sign','object','parked','pending'])
+        self.assertEqual(actual['baseline'],actual['audit'])
+
 
 if __name__=='__main__':unittest.main()

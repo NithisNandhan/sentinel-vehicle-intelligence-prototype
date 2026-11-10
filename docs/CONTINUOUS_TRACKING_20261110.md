@@ -1,5 +1,25 @@
 # Tracking-only prototype and false-detection review
 
+## Follow-up: user-confirmed road-sign false detection
+
+User review identified a fixed road sign labelled as truck in passage V027.
+Its native review thumbnails confirm the sign; later the box also includes
+foreground vehicles, so the local review marks this history `mixed`/unsafe
+rather than declaring every pixel/frame a non-vehicle. The user's other saved
+labels were preserved. This is scoped to the frozen report and passage ID.
+
+The screened playback now hides reviewed `non_vehicle` and `mixed` histories
+by default. The checkbox can restore them for inspection; raw detections and
+baseline modes remain unchanged. Stationary vehicles are not rejected for
+being stationary. No broad image-region exclusion or new confidence threshold
+was introduced, and model weights were not changed.
+
+This is review-driven suppression, not automatic semantic recognition of road
+signs or a correction to YOLO's learned detector. Persistent high-confidence
+false positives still require review or later training on labelled negatives.
+Six focused server/browser tests pass after the filter update, including the
+stationary-vehicle and mixed-object regression.
+
 ## What is implemented
 
 The new local viewer at http://127.0.0.1:7798/ replays the full permitted Mumbai
