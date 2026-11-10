@@ -1,0 +1,184 @@
+{
+  "scope": "Selected previously reviewed Mumbai reference targets; not whole-video or unseen-camera accuracy.",
+  "source_sha256": "6b7064605b3d4d12c6c1da4566cbcec1cd2e3e3bd7b77814865fe9df22045f65",
+  "trace_sha256": "926067d17adad4721a2f8c6ea4fc0fd506e4c81d2a21438d4fc657ae29ae9c64",
+  "labels_sha256": "e83899f7ef28a95c0140501b2fdbf270d99f045494029fd97bd204eb37a0b846",
+  "review_manifest_sha256": "80e43807e4c25d1fb8ae37e411a5ae2c0078a0d1900af6d176d701743a5f6814",
+  "geometry_sha256": "f3cf315fc21b66107646c18bd4d1d269feb0f511796aa3db1f467c1b72881cf4",
+  "models": {
+    "ocr_model": "awiros-ctc-adapted",
+    "ocr_checkpoint_sha256": "c2ba896d994b174071c95ace0f5ffc8a61cec3fc6eecce8f0bc5feb7dec4456d",
+    "ocr_device": "gpu",
+    "detector_profile": "general",
+    "vehicle_model": "yolo26s",
+    "vehicle_model_sha256": "646f8bc3fe0a656803d95c294f7852321748cb29d13466a1af8862e2db384a1b",
+    "plate_model": "parent",
+    "plate_model_sha256": "746fdd358ec110418775d7c9d8d07910d48b1a21471f92bf4421f6510d6daade",
+    "plate_device": "gpu",
+    "vehicle_device": "gpu",
+    "detector_device": "gpu"
+  },
+  "capture": {
+    "decoded_frames": 928,
+    "analysed_frames": 62,
+    "wall_seconds": 260.36,
+    "options": {
+      "reject_non_plates": false,
+      "two_line": false,
+      "format_validator": false,
+      "position_vote": false,
+      "result_states": false,
+      "plate_level_tracking": false,
+      "near_duplicate_guard": false,
+      "adaptive_sampling": false,
+      "multi_source_plates": true,
+      "text_rectify": true,
+      "secondary_veto": false,
+      "partial_watchlist": false,
+      "profile": "baseline"
+    },
+    "pipeline_summary": {
+      "analysed_frames": 62,
+      "vehicle_box_instances": 356,
+      "vehicle_frames": 62,
+      "peak_vehicle_boxes": 13,
+      "vehicle_track_segments": 111,
+      "eligible_vehicle_tracks": 356,
+      "plate_roi_searches": 356,
+      "plate_roi_unsearched_tracks": 0,
+      "vehicle_crop_calls": 356,
+      "plate_detector_calls": 1036,
+      "targeted_searches": 157,
+      "plate_crops": 172,
+      "ocr_calls": 172,
+      "distinct_ocr_observations": 172,
+      "eligible_fusion_windows": 42,
+      "candidate_windows": 41,
+      "plate_region_resets": 27,
+      "text_supported_crops": 21,
+      "reconstruction_attempts": 30,
+      "reconstructed_windows": 18,
+      "reconstruction_failures": 0,
+      "ocr_gap_resets": 18,
+      "consistency_resets": 33,
+      "text_rectified_ocr_calls": 16,
+      "unique_model_accepted_unverified": 3,
+      "maximum_distinct_observations": 8,
+      "maximum_plate_span_ms": 4500,
+      "median_plate_width": 108.0,
+      "median_crop_quality": 0.954
+    }
+  },
+  "protocol": {
+    "association": "Same PTS within 20ms; bounding box of prior manual polygon where available; IoU >= 0.30; ambiguous overlaps rejected",
+    "disputed_ids_excluded": [
+      "21"
+    ],
+    "single_frame_selection": "Maximum image quality within the same OCR-reader segment; no transcription/confidence selection",
+    "multi_frame_window": 8,
+    "reconstruction": "Captured operational ECC proposals and veto; no extra independent observation",
+    "comparison_unit": "Labelled reference target linked to one uninterrupted OCR-reader instance; not assumed unique vehicles",
+    "single_frame_acceptance": "Not applicable: one image cannot satisfy the unchanged multi-frame confirmation gate"
+  },
+  "summary": {
+    "single_quality": {
+      "exact": 3,
+      "targets": 18,
+      "matched_exact": 3,
+      "matched_targets": 6,
+      "multi_frame_exact": 0,
+      "multi_frame_targets": 2,
+      "outputs": 6,
+      "accepted_correct": null,
+      "accepted_wrong": null
+    },
+    "multi_originals": {
+      "exact": 2,
+      "targets": 18,
+      "matched_exact": 2,
+      "matched_targets": 6,
+      "multi_frame_exact": 0,
+      "multi_frame_targets": 2,
+      "outputs": 6,
+      "accepted_correct": 0,
+      "accepted_wrong": 0
+    },
+    "multi_reconstruction": {
+      "exact": 2,
+      "targets": 18,
+      "matched_exact": 2,
+      "matched_targets": 6,
+      "multi_frame_exact": 0,
+      "multi_frame_targets": 2,
+      "outputs": 6,
+      "accepted_correct": 0,
+      "accepted_wrong": 0
+    }
+  },
+  "paired": {
+    "single_quality__multi_originals": {
+      "recovered": [],
+      "regressed": [
+        "19"
+      ]
+    },
+    "multi_originals__multi_reconstruction": {
+      "recovered": [],
+      "regressed": []
+    }
+  },
+  "winners": [
+    "single_quality"
+  ],
+  "matched_targets": 6,
+  "unmatched_targets": 12,
+  "genuine_multi_frame_targets": 2,
+  "distinct_matched_segments": 6,
+  "conflicting_segments": [],
+  "observations_reconciled_with_pipeline": 172,
+  "capture_runner_sha256": "6d366c70545bbd02f80dca767b3efc106191962a0120ad3965d2f5214751d3a8",
+  "scorer_sha256": "f5d285ba55a1986f58c4a39920fa40458d88f0fb4e9f539ec9ee89f0d84dcf99",
+  "date": "2026-11-10",
+  "integrity_audit": {
+    "scope": "Post-review integrity sensitivity analysis, not a replacement for the frozen raw result",
+    "report_sha256": "6e6d964df6f7ecff34583f794a9090d58dd6de4784964bd9e3039d41f3c24402",
+    "reviewer": "Assistant visual inspection, independently checked by QA agent",
+    "reason": "A yellow state-series plate at 28.0 seconds and a different white Bharat-series plate at 30.5 seconds entered OCR reader ocr-0090 under tracker 117. Visual inspection confirms different plates. The 2500 ms gap did not exceed the existing reset threshold. The second observation altered the first target reading; this is cross-vehicle evidence contamination.",
+    "excluded_segments": [
+      "ocr-0090"
+    ],
+    "excluded_reference_ids": [
+      "19"
+    ],
+    "raw_matched_targets": 6,
+    "retained_matched_targets": 5,
+    "summary": {
+      "single_quality": {
+        "exact": 2,
+        "targets": 5,
+        "multi_frame_exact": 0,
+        "multi_frame_targets": 2
+      },
+      "multi_originals": {
+        "exact": 2,
+        "targets": 5,
+        "multi_frame_exact": 0,
+        "multi_frame_targets": 2
+      },
+      "multi_reconstruction": {
+        "exact": 2,
+        "targets": 5,
+        "multi_frame_exact": 0,
+        "multi_frame_targets": 2
+      }
+    }
+  },
+  "verification": {
+    "controlled_tests": 6,
+    "trace_observations_equal_pipeline": true,
+    "source_crop_dimensions_and_coordinates_checked": true,
+    "mixed_vehicle_images_independently_reviewed": true
+  },
+  "models_or_deployment_changed": false,
+  "raw_video_crops_predictions_and_labels_published": false
+}
