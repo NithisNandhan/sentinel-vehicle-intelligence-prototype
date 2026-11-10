@@ -81,6 +81,40 @@ the VT0117 card contains PT0288 only, and the two window histories appear in the
 closed inspection queue. The local viewer is **http://127.0.0.1:7805/#VT0117**;
 the unfiltered control remains on port 7804.
 
+## Simple numbered results page
+
+The landing page on port 7805 now uses a dropdown numbered 1 through 18 for the
+eighteen evaluated human labels, in their original review order. Each selection
+shows the labelled reference crop, an example automatic crop when available,
+the reconstructed OCR reading and the actual human reading. Original reference
+IDs remain in the local data; the displayed numbering has no gaps.
+
+At the user's request, this view counts a label when its complete text appears
+as an active reconstructed **top output anywhere in the clip**, irrespective of
+timestamp, crop geometry or the confirmation threshold. Count each labelled
+example once; extra incorrect guesses do not reduce this found-at-least-once
+score. The measured result is **12/18 (66.7%)**. This is recognition coverage on
+these selected labels, not prediction precision. Single-frame outputs and lower
+ranked alternatives cannot count towards it.
+
+When no exact result exists, the page shows the previously associated incorrect
+reconstructed reading if one is available. Otherwise it says no exact reading
+was found and displays the human reference crop; it does not invent a vehicle
+association to fill the empty automatic-crop panel. The original detailed page
+is preserved as `engineering.html`. The original `accuracy.json` is unchanged.
+
+Regenerate the local landing page with:
+
+```text
+python tools/render_plate_results.py --capture data/benchmarks/plate-validated-final-20261110 --review data/benchmarks/recorded-footage-20261104/manual-review
+```
+
+The renderer verifies prediction/label bindings and reference-image hashes.
+Generated HTML, crops and `simple-results.json` contain local review data and
+remain outside Git. Four focused tests cover the new counting rule and safe
+HTML rendering. Browser verification exercised all eighteen choices, loaded
+their available images and checked desktop and narrow layouts for overflow.
+
 ## Reproduce
 
 In the existing CPU-capable research image, with edge/tools on `PYTHONPATH` and
