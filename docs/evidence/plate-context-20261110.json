@@ -1,0 +1,307 @@
+{
+  "date": "2026-11-10",
+  "scope": "Same eighteen selected development references; not full-video or unseen-camera accuracy",
+  "source_sha256": "6b7064605b3d4d12c6c1da4566cbcec1cd2e3e3bd7b77814865fe9df22045f65",
+  "models": {
+    "ocr_model": "awiros-ctc-adapted",
+    "ocr_checkpoint_sha256": "c2ba896d994b174071c95ace0f5ffc8a61cec3fc6eecce8f0bc5feb7dec4456d",
+    "ocr_device": "gpu",
+    "detector_profile": "general",
+    "vehicle_model": "yolo26s",
+    "vehicle_model_sha256": "646f8bc3fe0a656803d95c294f7852321748cb29d13466a1af8862e2db384a1b",
+    "plate_model": "parent",
+    "plate_model_sha256": "746fdd358ec110418775d7c9d8d07910d48b1a21471f92bf4421f6510d6daade",
+    "plate_device": "gpu",
+    "vehicle_device": "gpu",
+    "detector_device": "gpu"
+  },
+  "human_labels_used_only_for_scoring": true,
+  "central_events_sent": 0,
+  "runs": {
+    "baseline": {
+      "summary": {
+        "single": {
+          "exact": 5,
+          "targets": 18,
+          "matched_exact": 5,
+          "matched_targets": 12,
+          "multi_frame_exact": 4,
+          "multi_frame_targets": 7,
+          "recovered_vs_single": [],
+          "regressed_vs_single": []
+        },
+        "multi": {
+          "exact": 7,
+          "targets": 18,
+          "matched_exact": 7,
+          "matched_targets": 12,
+          "multi_frame_exact": 6,
+          "multi_frame_targets": 7,
+          "recovered_vs_single": [
+            "03",
+            "15"
+          ],
+          "regressed_vs_single": []
+        },
+        "reconstruction": {
+          "exact": 7,
+          "targets": 18,
+          "matched_exact": 7,
+          "matched_targets": 12,
+          "multi_frame_exact": 6,
+          "multi_frame_targets": 7,
+          "recovered_vs_single": [
+            "03",
+            "15"
+          ],
+          "regressed_vs_single": []
+        }
+      },
+      "changes_vs_baseline": {
+        "single": {
+          "gained": [],
+          "lost": []
+        },
+        "multi": {
+          "gained": [],
+          "lost": []
+        },
+        "reconstruction": {
+          "gained": [],
+          "lost": []
+        }
+      },
+      "decoded_frames": 928,
+      "sampled_frames": 124,
+      "evidence_histories_not_unique_vehicles": 179,
+      "wall_seconds": 280.66,
+      "ocr_calls": 315,
+      "router": {
+        "owned_observations": 399,
+        "ambiguous_owner": 88,
+        "continuity_relative_jump": 73,
+        "continuity_scale_change": 22,
+        "duplicate_proposals": 16,
+        "continuity_gap": 9
+      },
+      "context": null,
+      "motion": null,
+      "matched_reference_model_accepted": 3,
+      "matched_reference_model_accepted_correct": 3,
+      "matched_reference_model_accepted_wrong": 0,
+      "all_group_model_accepted": 7,
+      "all_group_vehicle_owned_accepted": 7,
+      "conflicting_groups_quarantined": 0,
+      "predictions_sha256": "006533655a7868ec5fc324e7d57aab5fd0fcc55986c5f7d06d9fea6bd1e432d9",
+      "inference_source_sha256": null
+    },
+    "context": {
+      "summary": {
+        "single": {
+          "exact": 7,
+          "targets": 18,
+          "matched_exact": 7,
+          "matched_targets": 10,
+          "multi_frame_exact": 5,
+          "multi_frame_targets": 5,
+          "recovered_vs_single": [],
+          "regressed_vs_single": []
+        },
+        "multi": {
+          "exact": 7,
+          "targets": 18,
+          "matched_exact": 7,
+          "matched_targets": 10,
+          "multi_frame_exact": 5,
+          "multi_frame_targets": 5,
+          "recovered_vs_single": [],
+          "regressed_vs_single": []
+        },
+        "reconstruction": {
+          "exact": 7,
+          "targets": 18,
+          "matched_exact": 7,
+          "matched_targets": 10,
+          "multi_frame_exact": 5,
+          "multi_frame_targets": 5,
+          "recovered_vs_single": [],
+          "regressed_vs_single": []
+        }
+      },
+      "changes_vs_baseline": {
+        "single": {
+          "gained": [
+            "10",
+            "15"
+          ],
+          "lost": []
+        },
+        "multi": {
+          "gained": [
+            "10"
+          ],
+          "lost": [
+            "03"
+          ]
+        },
+        "reconstruction": {
+          "gained": [
+            "10"
+          ],
+          "lost": [
+            "03"
+          ]
+        }
+      },
+      "decoded_frames": 928,
+      "sampled_frames": 124,
+      "evidence_histories_not_unique_vehicles": 319,
+      "wall_seconds": 292.92,
+      "ocr_calls": 484,
+      "router": {
+        "plate_observations": 484,
+        "new_groups": 319,
+        "unique_owner": 300,
+        "association_scale_change": 2584,
+        "association_displacement": 2310,
+        "ambiguous_owner": 107,
+        "association_appearance": 406,
+        "unassigned_owner": 72,
+        "association_text_conflict": 385,
+        "expired_groups": 311,
+        "matched_observations": 165,
+        "unqualified_owner": 5,
+        "ambiguous_association": 15,
+        "owner_conflict": 1
+      },
+      "context": {
+        "padded_search": 1173,
+        "same_frame_duplicates": 91
+      },
+      "motion": null,
+      "matched_reference_model_accepted": 4,
+      "matched_reference_model_accepted_correct": 4,
+      "matched_reference_model_accepted_wrong": 0,
+      "all_group_model_accepted": 12,
+      "all_group_vehicle_owned_accepted": 8,
+      "conflicting_groups_quarantined": 0,
+      "predictions_sha256": "4f4c257dc230c36f5f51c3ff6a7902acbd6e8f129fafab523e8fd73b5a1145e3",
+      "inference_source_sha256": null
+    },
+    "motion": {
+      "summary": {
+        "single": {
+          "exact": 6,
+          "targets": 18,
+          "matched_exact": 6,
+          "matched_targets": 10,
+          "multi_frame_exact": 5,
+          "multi_frame_targets": 8,
+          "recovered_vs_single": [],
+          "regressed_vs_single": []
+        },
+        "multi": {
+          "exact": 8,
+          "targets": 18,
+          "matched_exact": 8,
+          "matched_targets": 10,
+          "multi_frame_exact": 7,
+          "multi_frame_targets": 8,
+          "recovered_vs_single": [
+            "06",
+            "18"
+          ],
+          "regressed_vs_single": []
+        },
+        "reconstruction": {
+          "exact": 8,
+          "targets": 18,
+          "matched_exact": 8,
+          "matched_targets": 10,
+          "multi_frame_exact": 7,
+          "multi_frame_targets": 8,
+          "recovered_vs_single": [
+            "06",
+            "18"
+          ],
+          "regressed_vs_single": []
+        }
+      },
+      "changes_vs_baseline": {
+        "single": {
+          "gained": [
+            "10",
+            "15"
+          ],
+          "lost": [
+            "18"
+          ]
+        },
+        "multi": {
+          "gained": [
+            "06",
+            "10"
+          ],
+          "lost": [
+            "03"
+          ]
+        },
+        "reconstruction": {
+          "gained": [
+            "06",
+            "10"
+          ],
+          "lost": [
+            "03"
+          ]
+        }
+      },
+      "decoded_frames": 928,
+      "sampled_frames": 124,
+      "evidence_histories_not_unique_vehicles": 245,
+      "wall_seconds": 317.17,
+      "ocr_calls": 481,
+      "router": {
+        "plate_observations": 481,
+        "new_groups": 245,
+        "unique_owner": 298,
+        "association_scale_change": 2250,
+        "association_displacement": 1891,
+        "ambiguous_owner": 106,
+        "association_appearance": 259,
+        "unassigned_owner": 72,
+        "motion_supported_edges": 181,
+        "association_text_conflict": 309,
+        "matched_observations": 236,
+        "expired_groups": 239,
+        "unqualified_owner": 5,
+        "ambiguous_association": 5,
+        "owner_conflict": 1
+      },
+      "context": {
+        "padded_search": 1173,
+        "same_frame_duplicates": 92
+      },
+      "motion": {
+        "lost_support": 107,
+        "supported_updates": 2907,
+        "reseed_without_features": 160,
+        "lost_geometry": 14,
+        "scale_rejected": 1
+      },
+      "matched_reference_model_accepted": 5,
+      "matched_reference_model_accepted_correct": 5,
+      "matched_reference_model_accepted_wrong": 0,
+      "all_group_model_accepted": 9,
+      "all_group_vehicle_owned_accepted": 6,
+      "conflicting_groups_quarantined": 0,
+      "predictions_sha256": "16e5f78f635a3cb879b6d6e9e2c7f946be2e00e83810ac4e2729434ae15de727",
+      "inference_source_sha256": {
+        "owned_plate": "dde09a4f82f26f2b536d68ac5189d969c8f9094cdf6becb432a6f1f550843495",
+        "plate_context": "86a4a22aa4a40221b6a4070419d80809ef5919f42d57fa939475ede9e65efeab",
+        "plate_identity": "07b00369b257494a66ab1eed8ad3da8cf21a3cecb760522bc8ae4827025ae9e6",
+        "plate_motion": "dc0c117b62008c2caf049a7052cc6c69a022c9be9a61367f72185844da3ae6ba"
+      }
+    }
+  }
+}
