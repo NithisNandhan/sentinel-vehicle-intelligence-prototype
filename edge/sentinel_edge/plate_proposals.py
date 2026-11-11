@@ -175,6 +175,7 @@ class ProposalPool:
                 self.last_calls += 1
                 for raw in self.tile_detector.boxes(region[y1:y2, x1:x2]):
                     proposals.append(((raw[0] + x1, raw[1] + y1, raw[2] + x1, raw[3] + y1), 'tile', None))
+        self.last_raw_proposals=tuple(proposals[:128])
         ranked = rank(proposals, region.shape, top_k=self.top_k)
         self.last_alternatives = tuple(ranked)
         if not ranked:

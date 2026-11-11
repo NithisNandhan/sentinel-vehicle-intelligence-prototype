@@ -72,7 +72,7 @@ def run(args):
     args.output.mkdir(parents=True);(args.output/'assets').mkdir()
     (args.output/'runner.py').write_bytes(Path(__file__).read_bytes())
     source_hashes={}
-    for name in ('owned_plate','plate_context','plate_identity','plate_motion','vehicle_lifecycle','vehicle_plate','plate_sampling','plate_evidence','plate_filter'):
+    for name in ('owned_plate','plate_context','plate_identity','plate_motion','vehicle_lifecycle','vehicle_plate','plate_sampling','plate_evidence','plate_filter','crop_completion','plate_proposals','plate_quality','text_boundaries','plate_extent'):
         payload=(Path(__file__).resolve().parents[1]/'edge/sentinel_edge'/(name+'.py')).read_bytes()
         (args.output/('source-'+name+'.py')).write_bytes(payload)
         source_hashes[name]=hashlib.sha256(payload).hexdigest()
@@ -103,6 +103,9 @@ def run(args):
     ocr,detector,unused_vehicle=load_models(config,args.cache,checkpoint,detector_profile='general',device='gpu')
     models=model_identity(ocr,'general',detector=detector,vehicle_model=unused_vehicle)
     search=ProposalPool(TargetedPlateSearch(detector),tile_detector=detector,text_detector=load_text_detector())
+    if args.complete_crops:
+        from sentinel_edge.crop_completion import CompletePlateSearch
+        search=CompletePlateSearch(search)
     del unused_vehicle
     router=VehiclePlateRouter(visual_identity=args.visual_identity) if args.vehicle_lifecycle else PlateIdentityTracker(excluded) if args.plate_first else OwnedPlateRouter(excluded)
     bank=CropBank(max_bytes=128*1024*1024,max_frames=6,max_tracks=512,retain_best=True)
@@ -170,6 +173,7 @@ def run(args):
                 proposals,metrics=deduplicate_views(proposals);context_metrics.update(metrics)
             # Deduplicate overlapping vehicle ROIs before running identity OCR.
             unique=[]
+            original_boxes=[tuple(p['box']) for p in proposals]
             for proposal in sorted(proposals,key=lambda p:-p['confidence']):
                 if any(box_iou(proposal['box'],p['box'])>=.5 for p in unique):
                     context_metrics['same_frame_duplicates']+=1;continue
@@ -182,6 +186,20 @@ def run(args):
                 key=hashlib.sha256(working.tobytes()+str(working.shape).encode()).hexdigest()
                 if key not in posterior_cache:
                     posterior_cache[key]=ocr.probabilities(working);identity_ocr_calls+=1
+                if args.refine_characters:
+                    from sentinel_edge.plate_extent import recover_readable_extent
+                    seed=tuple(proposal['box'])
+                    recovery=recover_readable_extent(frame.image,seed,posterior_cache[key],ocr.tokens,
+                                                     [box for box in original_boxes if box!=seed])
+                    if recovery:
+                        proposal.update(box=recovery['box'],quad=None,
+                            completion=dict(**recovery,seed_box=list(seed),selection_score=.85))
+                        native=crop_box(frame.image,recovery['box']);working=native
+                        digest=hashlib.sha256(native.tobytes()).hexdigest()
+                        key=hashlib.sha256(working.tobytes()+str(working.shape).encode()).hexdigest()
+                        if key not in posterior_cache:
+                            posterior_cache[key]=ocr.probabilities(working);identity_ocr_calls+=1
+                        context_metrics['character_extent_recovered']+=1
                 gray=cv2.resize(cv2.cvtColor(working,cv2.COLOR_BGR2GRAY),(32,12)).astype(np.float32).ravel()
                 gray-=gray.mean();norm=float(np.linalg.norm(gray))
                 if norm<1e-6:
@@ -206,6 +224,8 @@ def run(args):
             gid=proposal['group'];b=proposal['box'];native=crop_box(frame.image,b)
             if native is None:continue
             quality=crop_quality(native);digest=hashlib.sha256(native.tobytes()).hexdigest()
+            completion=proposal.get('completion')
+            priority=.7*completion['selection_score']+.3*quality if args.complete_crops and completion else quality
             group=groups.setdefault(gid,dict(id=gid,owner=proposal['owner'],observed=[],metadata={}))
             group['owner']=proposal['owner']
             group['owner_locked']=proposal.get('owner_locked',True)
@@ -214,7 +234,8 @@ def run(args):
                 owner=proposal['owner'],owner_candidate=proposal.get('owner_candidate',proposal['owner']),
                 owner_locked=proposal.get('owner_locked',True),crop_origin=proposal.get('crop_origin','tight_vehicle')))
             group['metadata'][digest]=dict(box=b,quad=proposal['quad'],posterior_key=proposal.get('posterior_key'))
-            bank.add(gid,native,pts,quality=quality)
+            group['metadata'][digest].update(native_quality=quality,selection_priority=priority,completion=completion)
+            bank.add(gid,native,pts,quality=priority)
             if motion:motion.observe(gid,b)
         if args.plate_first:
             # Only retained bank originals need posterior payloads after routing.
@@ -229,6 +250,9 @@ def run(args):
     for group in groups.values():
         samples=select_frames(bank.get(group['id']),limit=6)
         if not samples:continue
+        # Completeness changes which originals survive selection, not the
+        # image-quality weights used by the frozen CTC/reconstruction methods.
+        for sample in samples:sample.quality=group['metadata'][sample.source_id]['native_quality']
         observations=[];multi=CTCPlateReader(ocr.tokens)
         for i,sample in enumerate(samples):
             metadata=group['metadata'][sample.source_id]
@@ -241,7 +265,8 @@ def run(args):
             if not cv2.imwrite(str(args.output/relative),sample.image):raise ValueError('Native PNG save failed')
             ownership=next((o['owner'] for o in group['observed'] if o['source_id']==sample.source_id and o.get('owner_locked')),None)
             observations.append(dict(position_ms=sample.pts_ms,source_id=sample.source_id,quality=sample.quality,vehicle_id=ownership,
-                box=metadata['box'],path=relative,rows=rows,working_quad=metadata['quad']))
+                box=metadata['box'],path=relative,rows=rows,working_quad=metadata['quad'],
+                selection_priority=metadata['selection_priority'],crop_completion=metadata['completion']))
         best=max(observations,key=lambda o:(o['quality'],-o['position_ms']))
         single=CTCPlateReader(ocr.tokens);single.add(best['rows'],timestamp_ms=best['position_ms'],source_id=best['source_id'])
         values=dict(single=reading_result(single),multi=reading_result(multi))
@@ -282,7 +307,8 @@ def run(args):
         plate_first=args.plate_first,plate_flow=args.plate_flow,motion_diagnostics=dict(motion.metrics) if motion else None,
         identity_ocr_calls=identity_ocr_calls,context_diagnostics=dict(context_metrics),
         vehicle_lifecycle=bool(lifecycle),vehicle_lifecycle_counters=dict(lifecycle.counters) if lifecycle else None,
-        visual_identity=args.visual_identity,plate_validation=validation,
+        visual_identity=args.visual_identity,plate_validation=validation,complete_crops=args.complete_crops,
+        refine_characters=args.refine_characters,
         vehicle_motion_diagnostics=dict(vehicle_motion.metrics) if lifecycle else None,
         vehicles=list(lifecycle.records.values()) if lifecycle else [],vehicle_results=vehicle_results,
         router=dict(router.counters),search_diagnostics=search.diagnostics(),groups_with_owned_crops=len(groups),
@@ -424,6 +450,8 @@ if __name__=='__main__':
     p.add_argument('--visual-identity',action='store_true',help='Retain visually established identity through OCR conflicts; block uncertain text acceptance')
     p.add_argument('--adaptive-plates',action='store_true',help='Bounded extra plate searches for new or reappearing vehicles')
     p.add_argument('--validate-plates',action='store_true',help='Conservative crop-level non-plate triage before parent OCR fusion')
+    p.add_argument('--complete-crops',action='store_true',help='Complete partial plate boxes and select intact crops before sharp fragments')
+    p.add_argument('--refine-characters',action='store_true',help='Expand incomplete single-row crops along supported character strokes')
     p.add_argument('--recordings-dir',type=Path,default=Path('/recordings'));p.add_argument('--cache',type=Path,default=Path('/models/experiments/awiros'))
     p.add_argument('--review',type=Path,default=Path('data/benchmarks/recorded-footage-20261104/manual-review'))
     p.add_argument('--review-summary',type=Path,help='After-inference vehicle mapping for --phase render only')
@@ -433,6 +461,8 @@ if __name__=='__main__':
     if args.visual_identity and not args.vehicle_lifecycle:p.error('--visual-identity requires --vehicle-lifecycle')
     if args.adaptive_plates and not args.vehicle_lifecycle:p.error('--adaptive-plates requires --vehicle-lifecycle')
     if args.validate_plates and not args.vehicle_lifecycle:p.error('--validate-plates requires --vehicle-lifecycle')
+    if args.complete_crops and not args.plate_first:p.error('--complete-crops requires --plate-first')
+    if args.refine_characters and not args.complete_crops:p.error('--refine-characters requires --complete-crops')
     if args.review_summary and args.phase!='render':p.error('--review-summary is only for after-inference rendering')
     if args.phase=='run':run(args)
     elif args.phase=='score':score(args)

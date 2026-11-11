@@ -1,0 +1,595 @@
+{
+  "date": "2026-11-11",
+  "scope": "Selected development labels; found-anywhere coverage, not full-video precision",
+  "experiment_kind": "full_detector_rerun",
+  "crop_replay": null,
+  "unchanged_crop_groups": null,
+  "changed_crop_groups": null,
+  "unchanged_crop_output_differences": null,
+  "baseline_predictions_sha256": "6f01bd5121d965c87150a6f4429b0f93326ac98e7743c00f83579d4516101611",
+  "predictions_sha256": "e154828104d5c6a6ee37699dcaa9ee24ad03893f6f8eed29fda901be855d150b",
+  "source_sha256": "6b7064605b3d4d12c6c1da4566cbcec1cd2e3e3bd7b77814865fe9df22045f65",
+  "scores": {
+    "previous": {
+      "correct": 12,
+      "total": 18,
+      "percent": 66.7
+    },
+    "current": {
+      "correct": 12,
+      "total": 18,
+      "percent": 66.7
+    }
+  },
+  "gained_references": [],
+  "lost_references": [],
+  "cases": [
+    {
+      "number": 1,
+      "reference": "01",
+      "previous": {
+        "found": false,
+        "crop_size": null,
+        "group": null,
+        "timestamp_ms": null,
+        "correspondence": "No corresponding automatic crop identified"
+      },
+      "current": {
+        "found": false,
+        "crop_size": null,
+        "group": null,
+        "timestamp_ms": null,
+        "correspondence": "No corresponding automatic crop identified"
+      }
+    },
+    {
+      "number": 2,
+      "reference": "02",
+      "previous": {
+        "found": true,
+        "crop_size": [
+          209,
+          213
+        ],
+        "group": "PT0005",
+        "timestamp_ms": 2267,
+        "correspondence": "Exact reconstructed reading found anywhere"
+      },
+      "current": {
+        "found": true,
+        "crop_size": [
+          209,
+          213
+        ],
+        "group": "PT0005",
+        "timestamp_ms": 2267,
+        "correspondence": "Exact reconstructed reading found anywhere"
+      }
+    },
+    {
+      "number": 3,
+      "reference": "03",
+      "previous": {
+        "found": true,
+        "crop_size": [
+          167,
+          47
+        ],
+        "group": "PT0036",
+        "timestamp_ms": 5000,
+        "correspondence": "Exact reconstructed reading found anywhere"
+      },
+      "current": {
+        "found": true,
+        "crop_size": [
+          167,
+          47
+        ],
+        "group": "PT0035",
+        "timestamp_ms": 5000,
+        "correspondence": "Exact reconstructed reading found anywhere"
+      }
+    },
+    {
+      "number": 4,
+      "reference": "04",
+      "previous": {
+        "found": false,
+        "crop_size": null,
+        "group": null,
+        "timestamp_ms": null,
+        "correspondence": "No corresponding automatic crop identified"
+      },
+      "current": {
+        "found": false,
+        "crop_size": null,
+        "group": null,
+        "timestamp_ms": null,
+        "correspondence": "No corresponding automatic crop identified"
+      }
+    },
+    {
+      "number": 5,
+      "reference": "05",
+      "previous": {
+        "found": false,
+        "crop_size": [
+          180,
+          116
+        ],
+        "group": "PT0111",
+        "timestamp_ms": 10000,
+        "correspondence": "Saved case association; illustrative only"
+      },
+      "current": {
+        "found": false,
+        "crop_size": [
+          180,
+          116
+        ],
+        "group": "PT0110",
+        "timestamp_ms": 10000,
+        "correspondence": "Saved case association; illustrative only"
+      }
+    },
+    {
+      "number": 6,
+      "reference": "06",
+      "previous": {
+        "found": true,
+        "crop_size": [
+          124,
+          128
+        ],
+        "group": "PT0079",
+        "timestamp_ms": 10267,
+        "correspondence": "Exact reconstructed reading found anywhere"
+      },
+      "current": {
+        "found": true,
+        "crop_size": [
+          124,
+          128
+        ],
+        "group": "PT0077",
+        "timestamp_ms": 10267,
+        "correspondence": "Exact reconstructed reading found anywhere"
+      }
+    },
+    {
+      "number": 7,
+      "reference": "07",
+      "previous": {
+        "found": true,
+        "crop_size": [
+          141,
+          43
+        ],
+        "group": "PT0107",
+        "timestamp_ms": 9767,
+        "correspondence": "Exact reconstructed reading found anywhere"
+      },
+      "current": {
+        "found": true,
+        "crop_size": [
+          141,
+          43
+        ],
+        "group": "PT0106",
+        "timestamp_ms": 9767,
+        "correspondence": "Exact reconstructed reading found anywhere"
+      }
+    },
+    {
+      "number": 8,
+      "reference": "09",
+      "previous": {
+        "found": false,
+        "crop_size": null,
+        "group": null,
+        "timestamp_ms": null,
+        "correspondence": "No corresponding automatic crop identified"
+      },
+      "current": {
+        "found": false,
+        "crop_size": null,
+        "group": null,
+        "timestamp_ms": null,
+        "correspondence": "No corresponding automatic crop identified"
+      }
+    },
+    {
+      "number": 9,
+      "reference": "10",
+      "previous": {
+        "found": true,
+        "crop_size": [
+          141,
+          49
+        ],
+        "group": "PT0121",
+        "timestamp_ms": 10767,
+        "correspondence": "Exact reconstructed reading found anywhere"
+      },
+      "current": {
+        "found": true,
+        "crop_size": [
+          140,
+          48
+        ],
+        "group": "PT0120",
+        "timestamp_ms": 11000,
+        "correspondence": "Exact reconstructed reading found anywhere"
+      }
+    },
+    {
+      "number": 10,
+      "reference": "11",
+      "previous": {
+        "found": true,
+        "crop_size": [
+          189,
+          59
+        ],
+        "group": "PT0170",
+        "timestamp_ms": 15500,
+        "correspondence": "Exact reconstructed reading found anywhere"
+      },
+      "current": {
+        "found": true,
+        "crop_size": [
+          189,
+          59
+        ],
+        "group": "PT0170",
+        "timestamp_ms": 15500,
+        "correspondence": "Exact reconstructed reading found anywhere"
+      }
+    },
+    {
+      "number": 11,
+      "reference": "12",
+      "previous": {
+        "found": false,
+        "crop_size": null,
+        "group": null,
+        "timestamp_ms": null,
+        "correspondence": "No corresponding automatic crop identified"
+      },
+      "current": {
+        "found": false,
+        "crop_size": null,
+        "group": null,
+        "timestamp_ms": null,
+        "correspondence": "No corresponding automatic crop identified"
+      }
+    },
+    {
+      "number": 12,
+      "reference": "13",
+      "previous": {
+        "found": true,
+        "crop_size": [
+          167,
+          86
+        ],
+        "group": "PT0198",
+        "timestamp_ms": 19500,
+        "correspondence": "Exact reconstructed reading found anywhere"
+      },
+      "current": {
+        "found": true,
+        "crop_size": [
+          167,
+          86
+        ],
+        "group": "PT0195",
+        "timestamp_ms": 19500,
+        "correspondence": "Exact reconstructed reading found anywhere"
+      }
+    },
+    {
+      "number": 13,
+      "reference": "15",
+      "previous": {
+        "found": true,
+        "crop_size": [
+          121,
+          31
+        ],
+        "group": "PT0160",
+        "timestamp_ms": 19267,
+        "correspondence": "Exact reconstructed reading found anywhere"
+      },
+      "current": {
+        "found": true,
+        "crop_size": [
+          121,
+          31
+        ],
+        "group": "PT0160",
+        "timestamp_ms": 19267,
+        "correspondence": "Exact reconstructed reading found anywhere"
+      }
+    },
+    {
+      "number": 14,
+      "reference": "16",
+      "previous": {
+        "found": false,
+        "crop_size": null,
+        "group": null,
+        "timestamp_ms": null,
+        "correspondence": "No corresponding automatic crop identified"
+      },
+      "current": {
+        "found": false,
+        "crop_size": null,
+        "group": null,
+        "timestamp_ms": null,
+        "correspondence": "No corresponding automatic crop identified"
+      }
+    },
+    {
+      "number": 15,
+      "reference": "17",
+      "previous": {
+        "found": true,
+        "crop_size": [
+          135,
+          47
+        ],
+        "group": "PT0251",
+        "timestamp_ms": 23267,
+        "correspondence": "Exact reconstructed reading found anywhere"
+      },
+      "current": {
+        "found": true,
+        "crop_size": [
+          141,
+          47
+        ],
+        "group": "PT0249",
+        "timestamp_ms": 23500,
+        "correspondence": "Exact reconstructed reading found anywhere"
+      }
+    },
+    {
+      "number": 16,
+      "reference": "18",
+      "previous": {
+        "found": true,
+        "crop_size": [
+          242,
+          136
+        ],
+        "group": "PT0218",
+        "timestamp_ms": 26500,
+        "correspondence": "Exact reconstructed reading found anywhere"
+      },
+      "current": {
+        "found": true,
+        "crop_size": [
+          103,
+          29
+        ],
+        "group": "PT0215",
+        "timestamp_ms": 22767,
+        "correspondence": "Exact reconstructed reading found anywhere"
+      }
+    },
+    {
+      "number": 17,
+      "reference": "19",
+      "previous": {
+        "found": true,
+        "crop_size": [
+          107,
+          29
+        ],
+        "group": "PT0228",
+        "timestamp_ms": 24267,
+        "correspondence": "Exact reconstructed reading found anywhere"
+      },
+      "current": {
+        "found": true,
+        "crop_size": [
+          107,
+          29
+        ],
+        "group": "PT0225",
+        "timestamp_ms": 24267,
+        "correspondence": "Exact reconstructed reading found anywhere"
+      }
+    },
+    {
+      "number": 18,
+      "reference": "20",
+      "previous": {
+        "found": true,
+        "crop_size": [
+          145,
+          50
+        ],
+        "group": "PT0293",
+        "timestamp_ms": 29767,
+        "correspondence": "Exact reconstructed reading found anywhere"
+      },
+      "current": {
+        "found": true,
+        "crop_size": [
+          145,
+          50
+        ],
+        "group": "PT0291",
+        "timestamp_ms": 29767,
+        "correspondence": "Exact reconstructed reading found anywhere"
+      }
+    }
+  ],
+  "models": {
+    "ocr_model": "awiros-ctc-adapted",
+    "ocr_checkpoint_sha256": "c2ba896d994b174071c95ace0f5ffc8a61cec3fc6eecce8f0bc5feb7dec4456d",
+    "ocr_device": "gpu",
+    "detector_profile": "general",
+    "vehicle_model": "yolo26s",
+    "vehicle_model_sha256": "646f8bc3fe0a656803d95c294f7852321748cb29d13466a1af8862e2db384a1b",
+    "plate_model": "parent",
+    "plate_model_sha256": "746fdd358ec110418775d7c9d8d07910d48b1a21471f92bf4421f6510d6daade",
+    "plate_device": "gpu",
+    "vehicle_device": "gpu",
+    "detector_device": "gpu"
+  },
+  "model_weights_changed": false,
+  "source_frames": 928,
+  "sampled_frames": 124,
+  "plate_histories": 302,
+  "baseline_plate_histories": 304,
+  "ocr_calls": 578,
+  "baseline_ocr_calls": 582,
+  "wall_seconds": 489.25,
+  "baseline_wall_seconds": 455.68,
+  "search": {
+    "frames_started": 124,
+    "tile_calls": 8,
+    "text_detector_calls": 121,
+    "text_proposals": 340,
+    "selected_with_text": 56,
+    "text_detector_enabled": true,
+    "extra_budget_skips": 2329,
+    "crop_completion": {
+      "focused_retries": 206,
+      "focused_text": 2,
+      "closed_boundary": 1
+    },
+    "text_detector_device": "cpu"
+  },
+  "validation": {
+    "rule_version": 1,
+    "history_counts": {
+      "text_evidence_present": 157,
+      "uncertain": 143,
+      "suspected_non_plate": 2
+    },
+    "histories": 302,
+    "thresholds": {
+      "ctc_character_peak": 0.6,
+      "minimum_components": 3,
+      "upper_body_limit": 0.5,
+      "minimum_gap_ms": 150
+    },
+    "scope": "Saved-native-evidence triage; no ground-truth labels used"
+  },
+  "exact_timestamp_reference_summary": {
+    "single": {
+      "exact": 7,
+      "targets": 18,
+      "matched_exact": 7,
+      "matched_targets": 11,
+      "multi_frame_exact": 6,
+      "multi_frame_targets": 9,
+      "recovered_vs_single": [],
+      "regressed_vs_single": []
+    },
+    "multi": {
+      "exact": 10,
+      "targets": 18,
+      "matched_exact": 10,
+      "matched_targets": 11,
+      "multi_frame_exact": 9,
+      "multi_frame_targets": 9,
+      "recovered_vs_single": [
+        "02",
+        "06",
+        "15"
+      ],
+      "regressed_vs_single": []
+    },
+    "reconstruction": {
+      "exact": 10,
+      "targets": 18,
+      "matched_exact": 10,
+      "matched_targets": 11,
+      "multi_frame_exact": 9,
+      "multi_frame_targets": 9,
+      "recovered_vs_single": [
+        "02",
+        "06",
+        "15"
+      ],
+      "regressed_vs_single": []
+    }
+  },
+  "baseline_exact_timestamp_reference_summary": {
+    "single": {
+      "exact": 7,
+      "targets": 18,
+      "matched_exact": 7,
+      "matched_targets": 11,
+      "multi_frame_exact": 6,
+      "multi_frame_targets": 9,
+      "recovered_vs_single": [],
+      "regressed_vs_single": []
+    },
+    "multi": {
+      "exact": 10,
+      "targets": 18,
+      "matched_exact": 10,
+      "matched_targets": 11,
+      "multi_frame_exact": 9,
+      "multi_frame_targets": 9,
+      "recovered_vs_single": [
+        "02",
+        "06",
+        "15"
+      ],
+      "regressed_vs_single": []
+    },
+    "reconstruction": {
+      "exact": 10,
+      "targets": 18,
+      "matched_exact": 10,
+      "matched_targets": 11,
+      "multi_frame_exact": 9,
+      "multi_frame_targets": 9,
+      "recovered_vs_single": [
+        "02",
+        "06",
+        "15"
+      ],
+      "regressed_vs_single": []
+    }
+  },
+  "inference_source_sha256": {
+    "owned_plate": "dde09a4f82f26f2b536d68ac5189d969c8f9094cdf6becb432a6f1f550843495",
+    "plate_context": "5c0380377913e329c0d0c26781e5b533f60f7b632a2f577dff37487eaee81c7c",
+    "plate_identity": "115149760fcf54a4bb7e3296f0b09203b531eee5957c67c855e7e34222078ea3",
+    "plate_motion": "dc0c117b62008c2caf049a7052cc6c69a022c9be9a61367f72185844da3ae6ba",
+    "vehicle_lifecycle": "86960943fdb45c99bdd44b0249a845f9fa86d2b3f40590c71bbe9045ed387bfe",
+    "vehicle_plate": "29add02ebb32ee02aa4a5b9499cbaab7d9dfcdfd7e99bb9b79599fcd50bae824",
+    "plate_sampling": "d516254b8712dd527f93f126aa864851b98f91b4276621fd1ac22a76ae83976e",
+    "plate_evidence": "8e8e09f8452b7983f66584774b81be078f69393e67d6ec943bca22e501fbc51a",
+    "plate_filter": "ebb3e8f323d39cd918f8845b9715b6d7d5bfa5ab4c9a87e059e9cae405768872",
+    "crop_completion": "a8b8d7f2ce539382573ab46fa95abdbd62c9c1a2fb22aee6177a90a156144249",
+    "plate_proposals": "74ef6a20230d003bb33b32208e0c7f7d17adc18656c6f2065ca5de226cb9ea1f",
+    "plate_quality": "c94272bf04476d27e11d024fde3cb24f5d6d816d8ff8cab4b06f7b5e52c99cb4",
+    "text_boundaries": "899e3baa591410d62242325ab9b1f6221474be9651c572f10ae038e818c34ac6"
+  },
+  "central_events_sent": 0,
+  "limitations": [
+    "Same development clip; not held-out accuracy",
+    "Extra wrong guesses are not penalised by the user-requested coverage metric",
+    "Text helper runs on CPU after a failed GPU attempt; OCR and plate detector remain on GPU",
+    "Wall-clock proposal budgets can change which optional detector calls run"
+  ],
+  "failed_attempts": [
+    {
+      "capture": "crop-recovery-20261111",
+      "reason": "CUDA unknown error during GPU text-helper run; no completed score"
+    },
+    {
+      "capture": "crop-recovery-cpu-text-20261111",
+      "reason": "CPU predictor memory_optimize_pass failed; fixed before final run"
+    }
+  ]
+}

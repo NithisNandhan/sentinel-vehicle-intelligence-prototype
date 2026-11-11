@@ -1,5 +1,8 @@
 # Crop-level plate validation
 
+For the subsequent crop-boundary experiments and side-by-side images, see
+[Native crop recovery](CROP_RECOVERY_20261111.md).
+
 The engineering review now separates suspected non-plate evidence from normal
 vehicle plate cards. It preserves all original crops, IDs and raw hypotheses.
 The correction is opt-in and does not change the operator worker or send events.

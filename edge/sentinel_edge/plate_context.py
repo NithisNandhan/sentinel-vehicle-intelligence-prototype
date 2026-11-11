@@ -47,7 +47,7 @@ def context_proposals(image,vehicles,search,*,max_recoveries=2):
         quad=getattr(search,'last_text_quad',None)
         return dict(box=[a+x,b+y,c+x,d+y],confidence=float(search.last_confidence or 0.),
                     quad=[(qx-a,qy-b) for qx,qy in quad] if quad is not None else None,
-                    crop_origin=kind,search_box=list(context))
+                    crop_origin=kind,search_box=list(context),completion=getattr(search,'last_completion',None))
     for vehicle in vehicles:
         box=expanded_box(vehicle['box'],image.shape)
         proposal=detect(box,'padded_search')

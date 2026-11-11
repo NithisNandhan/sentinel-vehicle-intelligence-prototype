@@ -28,10 +28,12 @@ class TextBoundaryDetector:
         from ppocr.postprocess.db_postprocess import DBPostProcess
         config=paddle.inference.Config(str(assets/'inference.json'),str(assets/'inference.pdiparams'))
         config.disable_glog_info()
-        config.enable_memory_optim()
         if device=='gpu':
+            config.enable_memory_optim()
             config.enable_use_gpu(256,0)
         else:
+            # Paddle's CPU PIR predictor has no memory_optimize_pass result;
+            # enabling that legacy pass raises at create_predictor().
             config.disable_gpu()
             config.set_cpu_math_library_num_threads(2)
         self.predictor=paddle.inference.create_predictor(config)
