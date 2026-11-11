@@ -48,5 +48,19 @@ class ContextTests(unittest.TestCase):
         self.assertEqual(len(retained),2)
         self.assertEqual(metrics['fragment_recovery_rejected'],1)
 
+    def test_oriented_alternative_has_crop_local_quad_and_preserved_boundary_metadata(self):
+        import numpy as np
+        class Search:
+            last_text_quad=None;last_confidence=None
+            def box(self,region):
+                self.last_candidates=[dict(box=[50,50,150,90],quad=[[50,55],[145,50],[150,85],[55,90]],
+                    confidence=None,completion=None,proposal_sources=['text_corners'],
+                    geometry={'boundary':'estimated_text_enclosure'})]
+                return self.last_candidates[0]['box']
+        proposals,_=context_proposals(np.zeros((300,500,3),np.uint8),[dict(box=[100,100,200,200])],Search())
+        self.assertEqual(proposals[0]['quad'],[(0,5),(95,0),(100,35),(5,40)])
+        self.assertEqual(proposals[0]['box'],[102,102,202,142])
+        self.assertEqual(proposals[0]['geometry']['boundary'],'estimated_text_enclosure')
+
 
 if __name__=='__main__':unittest.main()

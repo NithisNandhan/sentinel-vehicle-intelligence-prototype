@@ -46,7 +46,9 @@ def context_proposals(image,vehicles,search,*,max_recoveries=2):
         return dict(box=[a+x,b+y,c+x,d+y],confidence=float(candidate.get('confidence',search.last_confidence) or 0.),
                     quad=[(qx-a,qy-b) for qx,qy in quad] if quad is not None else None,
                     crop_origin=kind,search_box=list(context),completion=candidate.get('completion',getattr(search,'last_completion',None)),
-                    proposal_sources=candidate.get('proposal_sources',['existing_search']))
+                    proposal_sources=candidate.get('proposal_sources',['existing_search']),
+                    geometry=candidate.get('geometry'),seed_quad=candidate.get('seed_quad'),
+                    text_members=candidate.get('text_members'))
     def detect(context,kind):
         x,y,x2,y2=context;region=image[y:y2,x:x2]
         if not region.size:return None

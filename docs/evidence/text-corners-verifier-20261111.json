@@ -1,0 +1,376 @@
+{
+  "date": "2026-11-11",
+  "scope": "Timestamp-selected automatic vehicle-ROI diagnostic, not whole-video accuracy",
+  "source_sha256": "6b7064605b3d4d12c6c1da4566cbcec1cd2e3e3bd7b77814865fe9df22045f65",
+  "schedule_sha256": "8fa799002b5cfa58e51efa2f216e3257818d6e1d1fd3c5839af5b15176611a9e",
+  "verifier_model_sha256": "e12b5716f74a73fa36e98a877bf28c4716dbf6905af3c25d9da76862aefada40",
+  "elapsed_seconds": 574.19,
+  "selected_frames": 14,
+  "decoded_frames": 901,
+  "summary": {
+    "text_calls": 149,
+    "vehicle_regions": 149,
+    "raw_text_regions": 373,
+    "uncertain": 175,
+    "likely_non_plate": 28,
+    "ocr_calls": 128,
+    "likely_plate": 128,
+    "contrast_text_calls": 28
+  },
+  "labels_used_during_inference": false,
+  "manual_plate_boxes_used_during_inference": false,
+  "ocr_weights_changed": false,
+  "new_reconstruction_benchmark": false,
+  "central_events_sent": 0,
+  "tests_passed": 114,
+  "reference_correspondence": [
+    {
+      "number": 1,
+      "correspondence": false,
+      "status": null,
+      "ocr_ran": false,
+      "diagnostic_exact": false
+    },
+    {
+      "number": 2,
+      "correspondence": false,
+      "status": null,
+      "ocr_ran": false,
+      "diagnostic_exact": false
+    },
+    {
+      "number": 3,
+      "correspondence": true,
+      "status": "likely_plate",
+      "ocr_ran": true,
+      "diagnostic_exact": false
+    },
+    {
+      "number": 4,
+      "correspondence": true,
+      "status": "likely_plate",
+      "ocr_ran": true,
+      "diagnostic_exact": false
+    },
+    {
+      "number": 5,
+      "correspondence": false,
+      "status": null,
+      "ocr_ran": false,
+      "diagnostic_exact": false
+    },
+    {
+      "number": 6,
+      "correspondence": false,
+      "status": null,
+      "ocr_ran": false,
+      "diagnostic_exact": false
+    },
+    {
+      "number": 7,
+      "correspondence": true,
+      "status": "likely_plate",
+      "ocr_ran": true,
+      "diagnostic_exact": true
+    },
+    {
+      "number": 8,
+      "correspondence": false,
+      "status": null,
+      "ocr_ran": false,
+      "diagnostic_exact": false
+    },
+    {
+      "number": 9,
+      "correspondence": true,
+      "status": "likely_plate",
+      "ocr_ran": true,
+      "diagnostic_exact": true
+    },
+    {
+      "number": 10,
+      "correspondence": true,
+      "status": "likely_plate",
+      "ocr_ran": true,
+      "diagnostic_exact": true
+    },
+    {
+      "number": 11,
+      "correspondence": true,
+      "status": "uncertain",
+      "ocr_ran": false,
+      "diagnostic_exact": false
+    },
+    {
+      "number": 12,
+      "correspondence": false,
+      "status": null,
+      "ocr_ran": false,
+      "diagnostic_exact": false
+    },
+    {
+      "number": 13,
+      "correspondence": true,
+      "status": "likely_plate",
+      "ocr_ran": true,
+      "diagnostic_exact": true
+    },
+    {
+      "number": 14,
+      "correspondence": false,
+      "status": null,
+      "ocr_ran": false,
+      "diagnostic_exact": false
+    },
+    {
+      "number": 15,
+      "correspondence": true,
+      "status": "likely_plate",
+      "ocr_ran": true,
+      "diagnostic_exact": true
+    },
+    {
+      "number": 16,
+      "correspondence": true,
+      "status": "likely_plate",
+      "ocr_ran": true,
+      "diagnostic_exact": true
+    },
+    {
+      "number": 17,
+      "correspondence": true,
+      "status": "likely_plate",
+      "ocr_ran": true,
+      "diagnostic_exact": true
+    },
+    {
+      "number": 18,
+      "correspondence": true,
+      "status": "likely_plate",
+      "ocr_ran": true,
+      "diagnostic_exact": true
+    }
+  ],
+  "verifier_training": {
+    "model_sha256": "e12b5716f74a73fa36e98a877bf28c4716dbf6905af3c25d9da76862aefada40",
+    "manifest_sha256": "7e9355e07ae0fb9cb19e75eca288e287e3c175b3cc7cd4302fb1a564bfba884e",
+    "thresholds": {
+      "reject_below": 0.05951813378478329,
+      "accept_above": 0.9651207182623738,
+      "selection_split": "val",
+      "target_positive_retention": 0.99,
+      "target_accept_precision": 0.95
+    },
+    "metrics": {
+      "train": {
+        "examples": 3312,
+        "positives": 1152,
+        "assumed_background_negatives": 2160,
+        "tp": 811,
+        "fp": 0,
+        "tn": 1824,
+        "fn": 0,
+        "uncertain_positive": 341,
+        "uncertain_negative": 336,
+        "positive_retention": 1.0,
+        "accepted_precision": 1.0,
+        "decision_coverage": 0.7955917874396136
+      },
+      "val": {
+        "examples": 916,
+        "positives": 136,
+        "assumed_background_negatives": 780,
+        "tp": 91,
+        "fp": 4,
+        "tn": 663,
+        "fn": 1,
+        "uncertain_positive": 44,
+        "uncertain_negative": 113,
+        "positive_retention": 0.9926470588235294,
+        "accepted_precision": 0.9578947368421052,
+        "decision_coverage": 0.8286026200873362
+      },
+      "test": {
+        "examples": 545,
+        "positives": 83,
+        "assumed_background_negatives": 462,
+        "tp": 56,
+        "fp": 0,
+        "tn": 360,
+        "fn": 1,
+        "uncertain_positive": 26,
+        "uncertain_negative": 102,
+        "positive_retention": 0.9879518072289156,
+        "accepted_precision": 1.0,
+        "decision_coverage": 0.7651376146788991
+      }
+    },
+    "training": {
+      "seed": 31,
+      "C": 0.3,
+      "solver": "lbfgs",
+      "max_iter": 2000,
+      "iterations": [
+        57
+      ],
+      "images_per_split": {
+        "val": 130,
+        "test": 77,
+        "train": 360
+      },
+      "no_cross_split_group_or_pixel_overlap": true,
+      "threshold_selection_split": "val",
+      "test_used_for_fitting": false
+    },
+    "wall_seconds": 17.39,
+    "label_scope": "Publisher positive boxes; assumed background negatives outside all annotated plates; not independently human verified",
+    "mumbai_used": false,
+    "excluded_evaluation_source_sha256": "6b7064605b3d4d12c6c1da4566cbcec1cd2e3e3bd7b77814865fe9df22045f65",
+    "limitations": [
+      "Source images share original detector-dataset grouping, not independently verified camera identity",
+      "Background negatives may include missed publisher annotations or text branding; precision is proxy-labelled",
+      "Painted registration and Mumbai CCTV performance are not established by these dataset scores",
+      "Validation thresholds apply to these domains; uncertain candidates should remain reviewable"
+    ]
+  },
+  "limitations": [
+    "Training negatives are annotation-derived assumed backgrounds, not independently human verified",
+    "Verifier test metrics are crop/proxy results, not Mumbai plate accuracy",
+    "Human review timestamps select the diagnostic subset; tentative automatic vehicle boxes included",
+    "Only likely_plate regions receive OCR; uncertain and rejected crops remain reviewable",
+    "New readings are single-frame diagnostics, not reconstructed final readings",
+    "Four corners estimate a text enclosure; physical plate corners are not verified",
+    "Geometry correspondence uses human boxes only after inference and is illustrative"
+  ],
+  "runtime_device": "cpu",
+  "stage_trace": [
+    {
+      "number": 1,
+      "stage": "display_association_ambiguous",
+      "overlapping_text_regions": 3,
+      "matching_corner_candidates": 3,
+      "covering_vehicle_regions": 3
+    },
+    {
+      "number": 2,
+      "stage": "display_association_ambiguous",
+      "overlapping_text_regions": 2,
+      "matching_corner_candidates": 2,
+      "covering_vehicle_regions": 2
+    },
+    {
+      "number": 3,
+      "stage": "likely_plate",
+      "overlapping_text_regions": 1,
+      "matching_corner_candidates": 2,
+      "covering_vehicle_regions": 1
+    },
+    {
+      "number": 4,
+      "stage": "likely_plate",
+      "overlapping_text_regions": 1,
+      "matching_corner_candidates": 1,
+      "covering_vehicle_regions": 1
+    },
+    {
+      "number": 5,
+      "stage": "vehicle_region_missing",
+      "overlapping_text_regions": 0,
+      "matching_corner_candidates": 0,
+      "covering_vehicle_regions": 0
+    },
+    {
+      "number": 6,
+      "stage": "text_expansion_or_filtering",
+      "overlapping_text_regions": 1,
+      "matching_corner_candidates": 0,
+      "covering_vehicle_regions": 3
+    },
+    {
+      "number": 7,
+      "stage": "likely_plate",
+      "overlapping_text_regions": 2,
+      "matching_corner_candidates": 1,
+      "covering_vehicle_regions": 2
+    },
+    {
+      "number": 8,
+      "stage": "display_association_ambiguous",
+      "overlapping_text_regions": 3,
+      "matching_corner_candidates": 3,
+      "covering_vehicle_regions": 3
+    },
+    {
+      "number": 9,
+      "stage": "likely_plate",
+      "overlapping_text_regions": 1,
+      "matching_corner_candidates": 1,
+      "covering_vehicle_regions": 1
+    },
+    {
+      "number": 10,
+      "stage": "likely_plate",
+      "overlapping_text_regions": 2,
+      "matching_corner_candidates": 2,
+      "covering_vehicle_regions": 2
+    },
+    {
+      "number": 11,
+      "stage": "uncertain",
+      "overlapping_text_regions": 2,
+      "matching_corner_candidates": 1,
+      "covering_vehicle_regions": 1
+    },
+    {
+      "number": 12,
+      "stage": "text_expansion_or_filtering",
+      "overlapping_text_regions": 1,
+      "matching_corner_candidates": 0,
+      "covering_vehicle_regions": 1
+    },
+    {
+      "number": 13,
+      "stage": "likely_plate",
+      "overlapping_text_regions": 1,
+      "matching_corner_candidates": 1,
+      "covering_vehicle_regions": 1
+    },
+    {
+      "number": 14,
+      "stage": "text_detector_no_overlapping_outline",
+      "overlapping_text_regions": 0,
+      "matching_corner_candidates": 0,
+      "covering_vehicle_regions": 1
+    },
+    {
+      "number": 15,
+      "stage": "likely_plate",
+      "overlapping_text_regions": 1,
+      "matching_corner_candidates": 1,
+      "covering_vehicle_regions": 1
+    },
+    {
+      "number": 16,
+      "stage": "likely_plate",
+      "overlapping_text_regions": 2,
+      "matching_corner_candidates": 1,
+      "covering_vehicle_regions": 2
+    },
+    {
+      "number": 17,
+      "stage": "likely_plate",
+      "overlapping_text_regions": 1,
+      "matching_corner_candidates": 1,
+      "covering_vehicle_regions": 1
+    },
+    {
+      "number": 18,
+      "stage": "likely_plate",
+      "overlapping_text_regions": 1,
+      "matching_corner_candidates": 1,
+      "covering_vehicle_regions": 1
+    }
+  ],
+  "vehicle_review_exclusions_used": true,
+  "renderer_corner_roundoff_tolerance": 1e-06
+}

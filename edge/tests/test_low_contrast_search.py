@@ -145,6 +145,23 @@ class DiscoveryTests(unittest.TestCase):
         with self.assertRaises(ValueError):
             LowContrastPlateSearch(Primary())
 
+    def test_corner_mode_preserves_quad_as_independent_verification_input(self):
+        polygon=[[98,130],[244,130],[244,158],[98,158]]
+        primary=Primary(box=[96,125,250,165],polygons=[polygon])
+        pool=LowContrastPlateSearch(primary,character_guided=True,text_corners=True)
+        image=scene();before=image.copy();pool.box(image)
+        oriented=[c for c in pool.last_candidates if 'text_corners' in c['proposal_sources']]
+        self.assertTrue(oriented)
+        self.assertIsNotNone(oriented[0]['quad'])
+        self.assertEqual(oriented[0]['geometry']['boundary'],'estimated_text_enclosure')
+        self.assertFalse(oriented[0]['geometry']['physical_plate_corners_verified'])
+        self.assertTrue(any('existing_search' in c['proposal_sources'] for c in pool.last_candidates))
+        self.assertTrue(np.array_equal(before,image))
+
+    def test_corner_mode_requires_character_discovery(self):
+        with self.assertRaises(ValueError):
+            LowContrastPlateSearch(Primary(),contrast_pass=True,text_corners=True)
+
 
 if __name__ == '__main__':
     unittest.main()

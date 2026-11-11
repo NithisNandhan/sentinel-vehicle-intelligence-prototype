@@ -1,0 +1,47 @@
+{
+  "schema_version": 1,
+  "model_type": "linear-logistic-hog",
+  "feature_version": "native-gray-numpyhog-128x64-v1",
+  "feature_dimension": 3786,
+  "model_sha256": "e12b5716f74a73fa36e98a877bf28c4716dbf6905af3c25d9da76862aefada40",
+  "thresholds": {
+    "reject_below": 0.05951813378478329,
+    "accept_above": 0.9651207182623738,
+    "selection_split": "val",
+    "target_positive_retention": 0.99,
+    "target_accept_precision": 0.95
+  },
+  "manifest_sha256": "7e9355e07ae0fb9cb19e75eca288e287e3c175b3cc7cd4302fb1a564bfba884e",
+  "excluded_evaluation_source_sha256": "6b7064605b3d4d12c6c1da4566cbcec1cd2e3e3bd7b77814865fe9df22045f65",
+  "label_scope": "Publisher positive boxes; assumed background negatives outside all annotated plates; not independently human verified",
+  "training_sources": [
+    {
+      "source": "Gujarat vehicle plates",
+      "licence": "Apache-2.0",
+      "url": "https://www.kaggle.com/datasets/paneraghanshyam/gujarat-vehicle-number-plates-yolo-ready"
+    },
+    {
+      "source": "Make ML / Larxel plate detection",
+      "licence": "CC0",
+      "url": "https://www.kaggle.com/datasets/andrewmvd/car-plate-detection"
+    }
+  ],
+  "score_scope": "Uncalibrated visual classifier score; not real-world plate probability or OCR confidence",
+  "training": {
+    "seed": 31,
+    "C": 0.3,
+    "solver": "lbfgs",
+    "max_iter": 2000,
+    "iterations": [
+      57
+    ],
+    "images_per_split": {
+      "val": 130,
+      "test": 77,
+      "train": 360
+    },
+    "no_cross_split_group_or_pixel_overlap": true,
+    "threshold_selection_split": "val",
+    "test_used_for_fitting": false
+  }
+}

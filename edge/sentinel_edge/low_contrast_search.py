@@ -98,7 +98,7 @@ def character_groups(image, polygons, *, limit=6):
 class LowContrastPlateSearch:
     """Wrap the current search; keep legacy results and add bounded alternatives."""
     def __init__(self, primary, *, character_guided=False, contrast_pass=False,
-                 max_extra_calls=24, max_candidates=4):
+                 max_extra_calls=24, max_candidates=4, text_corners=False):
         if not character_guided and not contrast_pass:
             raise ValueError('At least one discovery method is required')
         if (not 1 <= max_extra_calls <= 128
@@ -106,6 +106,9 @@ class LowContrastPlateSearch:
             raise ValueError('Bounded discovery work required')
         self.primary = primary
         self.character_guided, self.contrast_pass = character_guided, contrast_pass
+        if text_corners and not character_guided:
+            raise ValueError('Text-corner discovery requires character-guided search')
+        self.text_corners = text_corners
         self.max_extra_calls, self.max_candidates = max_extra_calls, max_candidates
         self.remaining = max_extra_calls
         self.metrics = Counter()
@@ -132,6 +135,7 @@ class LowContrastPlateSearch:
         return dict(self.primary.diagnostics(), low_contrast=dict(self.metrics),
                     low_contrast_config=dict(character_guided=self.character_guided,
                                              contrast_pass=self.contrast_pass,
+                                             text_corners=self.text_corners,
                                              max_extra_calls=self.max_extra_calls))
 
     def _spend(self, name):
@@ -176,7 +180,13 @@ class LowContrastPlateSearch:
             text_detector = getattr(self.pool, 'text_detector', None)
             if not polygons and not text_already_ran and text_detector is not None and self._spend('independent_text_calls'):
                 polygons = text_detector.polygons(image)
-            for group in character_groups(image, polygons):
+            if self.text_corners:
+                from .text_plate_geometry import text_plate_candidates
+                groups = text_plate_candidates(image,polygons,
+                    other_boxes=[entry[0] for entry in raw if entry[1] in ('plate','tile')])
+            else:
+                groups = character_groups(image, polygons)
+            for group in groups:
                 box = group['box']
                 # A proposed text union must not encompass two separate plates.
                 members = [entry[0] for entry in raw if entry[1] in ('plate', 'tile')
@@ -185,13 +195,18 @@ class LowContrastPlateSearch:
                 if len(members) > 1 and any(intersects_another_plate(seed, box, raw) for seed in members):
                     self.metrics['separate_plate_vetoes'] += 1
                     continue
-                candidates.append(dict(box=box, proposal_sources=['character_group'],
-                    confidence=None, quad=None, completion=None,
-                    character_components=group['characters']))
+                candidates.append(dict(box=box, proposal_sources=['text_corners' if self.text_corners else 'character_group'],
+                    confidence=None, quad=group.get('quad'), completion=None,
+                    geometry=group.get('geometry'), seed_quad=group.get('seed_quad'),text_members=group.get('text_members'),
+                    character_components=group.get('character_components',group.get('characters',0))))
                 self.metrics['character_group_proposals'] += 1
         merged = []
         for candidate in candidates:
             for previous in merged:
+                # A new oriented enclosure is a different working geometry.
+                # Verify it independently before selecting one view for OCR.
+                if self.text_corners and ('text_corners' in candidate['proposal_sources']) != ('text_corners' in previous['proposal_sources']):
+                    continue
                 if overlap(candidate['box'], previous['box']) >= .5:
                     previous['proposal_sources'] = sorted(set(previous['proposal_sources']+candidate['proposal_sources']))
                     self.metrics['same_frame_duplicates'] += 1
@@ -201,7 +216,7 @@ class LowContrastPlateSearch:
         # Preserve the old result and reserve a novel candidate per new method.
         # Several contrast detections must not silently crowd out text discovery.
         selected = [c for c in merged if 'existing_search' in c['proposal_sources']][:1]
-        for source in ('contrast_plate','character_group'):
+        for source in ('contrast_plate','text_corners' if self.text_corners else 'character_group'):
             novel = next((c for c in merged if source in c['proposal_sources']
                           and 'existing_search' not in c['proposal_sources']
                           and all(c is not value for value in selected)), None)

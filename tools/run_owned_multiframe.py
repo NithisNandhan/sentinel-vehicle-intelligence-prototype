@@ -72,7 +72,10 @@ def run(args):
     args.output.mkdir(parents=True);(args.output/'assets').mkdir()
     (args.output/'runner.py').write_bytes(Path(__file__).read_bytes())
     source_hashes={}
-    for name in ('owned_plate','plate_context','plate_identity','plate_motion','vehicle_lifecycle','vehicle_plate','plate_sampling','plate_evidence','plate_filter','crop_completion','plate_proposals','plate_quality','text_boundaries','plate_extent','low_contrast_search','ocr_crop_experiment'):
+    source_names=['owned_plate','plate_context','plate_identity','plate_motion','vehicle_lifecycle','vehicle_plate','plate_sampling','plate_evidence','plate_filter','crop_completion','plate_proposals','plate_quality','text_boundaries','plate_extent','low_contrast_search','ocr_crop_experiment']
+    if args.text_corners:source_names.append('text_plate_geometry')
+    if args.plate_verifier:source_names.extend(['plate_region_gate','plate_region_verifier'])
+    for name in source_names:
         payload=(Path(__file__).resolve().parents[1]/'edge/sentinel_edge'/(name+'.py')).read_bytes()
         (args.output/('source-'+name+'.py')).write_bytes(payload)
         source_hashes[name]=hashlib.sha256(payload).hexdigest()
@@ -111,7 +114,14 @@ def run(args):
         if args.character_guided and search.diagnostics().get('text_detector_enabled') is False:
             raise ValueError('Character-guided experiment requires the configured, cached text detector')
         search=LowContrastPlateSearch(search,character_guided=args.character_guided,contrast_pass=args.contrast_detection,
-                                     max_extra_calls=args.discovery_call_budget)
+                                     max_extra_calls=args.discovery_call_budget,text_corners=args.text_corners)
+    verifier=None;verification_audit=[];verification_counts=Counter()
+    if args.plate_verifier:
+        from sentinel_edge.plate_region_verifier import PlateRegionVerifier
+        verifier=PlateRegionVerifier(args.plate_verifier)
+        (args.output/'verification-assets').mkdir()
+        (args.output/'region-verifier-model.npz').write_bytes(args.plate_verifier.read_bytes())
+        (args.output/'region-verifier-model.json').write_bytes(args.plate_verifier.with_suffix('.json').read_bytes())
     del unused_vehicle
     write_json(args.output/'progress.json',dict(stage='models_loaded',models=models))
     router=VehiclePlateRouter(visual_identity=args.visual_identity) if args.vehicle_lifecycle else PlateIdentityTracker(excluded) if args.plate_first else OwnedPlateRouter(excluded)
@@ -169,6 +179,11 @@ def run(args):
         proposals=[];search.begin_frame()
         eligible=[v for v in vehicles if v['qualified'] and v['id'] not in excluded]
         if lifecycle:eligible=[v for v in vehicles if v.get('status') in ('visible','predicted')]
+        if args.text_corners:
+            # A tentative vehicle can seed text discovery without acquiring
+            # confirmed ownership. The visual verifier still precedes all OCR;
+            # reviewed non-vehicles and the router's ownership gates remain.
+            eligible=[v for v in vehicles if v['id'] not in excluded and not v.get('ownership_veto')]
         if not base_due:eligible=[v for v in eligible if v['id'] in burst_due and v.get('observed')]
         if bursts:bursts.searched({v['id'] for v in eligible})
         if eligible:
@@ -176,12 +191,25 @@ def run(args):
         if args.plate_first:
             proposals,metrics=context_proposals(frame.image,eligible,search)
             context_metrics.update(metrics);roi_calls+=metrics['padded_search']+metrics['fragment_redetection']
-            if lifecycle:
+            if verifier:
+                from sentinel_edge.plate_region_gate import verify_proposals
+                def preserve_verification(index,item,native,working):
+                    key=f'{int(pts):08}-{index:03}'
+                    native_path=f'verification-assets/{key}-native.png'
+                    working_path=f'verification-assets/{key}-rectified.png'
+                    if not cv2.imwrite(str(args.output/native_path),native) or not cv2.imwrite(str(args.output/working_path),working):
+                        raise ValueError('Verification crop save failed')
+                    verification_audit.append(dict(position_ms=pts,**item,native_path=native_path,
+                        rectified_path=working_path,native_sha256=sha(args.output/native_path),
+                        rectified_sha256=sha(args.output/working_path),native_source_id=hashlib.sha256(native.tobytes()).hexdigest()))
+                proposals,_,counts=verify_proposals(frame.image,proposals,verifier,observe=preserve_verification)
+                verification_counts.update(counts)
+            if lifecycle and not verifier:
                 proposals,metrics=deduplicate_views(proposals);context_metrics.update(metrics)
             # Deduplicate overlapping vehicle ROIs before running identity OCR.
             unique=[]
             original_boxes=[tuple(p['box']) for p in proposals]
-            for proposal in sorted(proposals,key=lambda p:-p['confidence']):
+            for proposal in (proposals if verifier else sorted(proposals,key=lambda p:-p['confidence'])):
                 if any(box_iou(proposal['box'],p['box'])>=.5 for p in unique):
                     context_metrics['same_frame_duplicates']+=1;continue
                 native=crop_box(frame.image,proposal['box'])
@@ -244,6 +272,8 @@ def run(args):
             group['metadata'][digest]=dict(box=b,quad=proposal['quad'],posterior_key=proposal.get('posterior_key'))
             group['metadata'][digest].update(native_quality=quality,selection_priority=priority,completion=completion)
             group['metadata'][digest]['proposal_sources']=proposal.get('proposal_sources',['existing_search'])
+            group['metadata'][digest]['plate_verification']=proposal.get('plate_verification')
+            group['metadata'][digest]['geometry']=proposal.get('geometry')
             bank.add(gid,native,pts,quality=priority)
             if motion:motion.observe(gid,b)
         if args.plate_first:
@@ -277,7 +307,8 @@ def run(args):
             observations.append(dict(position_ms=sample.pts_ms,source_id=sample.source_id,quality=sample.quality,vehicle_id=ownership,
                 box=metadata['box'],path=relative,rows=rows,working_quad=metadata['quad'],
                 selection_priority=metadata['selection_priority'],crop_completion=metadata['completion'],
-                proposal_sources=metadata.get('proposal_sources',['existing_search'])))
+                proposal_sources=metadata.get('proposal_sources',['existing_search']),
+                plate_verification=metadata.get('plate_verification'),geometry=metadata.get('geometry')))
         best=max(observations,key=lambda o:(o['quality'],-o['position_ms']))
         single=CTCPlateReader(ocr.tokens);single.add(best['rows'],timestamp_ms=best['position_ms'],source_id=best['source_id'])
         values=dict(single=reading_result(single),multi=reading_result(multi))
@@ -320,7 +351,10 @@ def run(args):
         vehicle_lifecycle=bool(lifecycle),vehicle_lifecycle_counters=dict(lifecycle.counters) if lifecycle else None,
         visual_identity=args.visual_identity,plate_validation=validation,complete_crops=args.complete_crops,
         refine_characters=args.refine_characters,
-        low_contrast_search=dict(character_guided=args.character_guided,contrast_pass=args.contrast_detection),
+        low_contrast_search=dict(character_guided=args.character_guided,contrast_pass=args.contrast_detection,text_corners=args.text_corners),
+        pre_ocr_verification=dict(enabled=bool(verifier),counts=dict(verification_counts),
+            model_sha256=sha(args.output/'region-verifier-model.npz') if verifier else None,
+            receipt_sha256=sha(args.output/'region-verifier-model.json') if verifier else None),
         vehicle_motion_diagnostics=dict(vehicle_motion.metrics) if lifecycle else None,
         vehicles=list(lifecycle.records.values()) if lifecycle else [],vehicle_results=vehicle_results,
         router=dict(router.counters),search_diagnostics=search.diagnostics(),groups_with_owned_crops=len(groups),
@@ -330,6 +364,8 @@ def run(args):
         ownership_source_sha256=source_hashes['plate_identity' if args.plate_first else 'owned_plate'],
         groups=predictions,scope='Full permitted source; frozen dense tracker; no events or training; selected human reference evaluation follows separately')
     write_json(args.output/'predictions.json',document)
+    if verifier:write_json(args.output/'plate-verification.json',dict(source_sha256=source.sha256,
+        decisions=verification_audit,counts=dict(verification_counts),labels_used_during_inference=False))
     write_json(args.output/'progress.json',dict(stage='inference_complete',groups=len(predictions),ocr_calls=ocr_calls+identity_ocr_calls))
     print(json.dumps(dict(stage='inference_complete',groups=len(predictions),ocr_calls=ocr_calls+identity_ocr_calls,wall_seconds=document['wall_seconds'])),flush=True)
 
@@ -468,6 +504,8 @@ if __name__=='__main__':
     p.add_argument('--contrast-detection',action='store_true',help='Run the existing detector on a CLAHE working copy; crop and OCR native pixels')
     p.add_argument('--device',choices=('gpu','cpu'),default='gpu',help='Explicit detector and OCR device; no silent downgrade')
     p.add_argument('--discovery-call-budget',type=int,default=24,help='Maximum extra text/contrast calls per sampled frame (CPU research: 6)')
+    p.add_argument('--text-corners',action='store_true',help='Preserve oriented text outlines and expand to an estimated four-corner crop')
+    p.add_argument('--plate-verifier',type=Path,help='Learned region-verifier model; only likely_plate regions reach OCR')
     p.add_argument('--recordings-dir',type=Path,default=Path('/recordings'));p.add_argument('--cache',type=Path,default=Path('/models/experiments/awiros'))
     p.add_argument('--review',type=Path,default=Path('data/benchmarks/recorded-footage-20261104/manual-review'))
     p.add_argument('--review-summary',type=Path,help='After-inference vehicle mapping for --phase render only')
@@ -481,6 +519,10 @@ if __name__=='__main__':
     if args.refine_characters and not args.complete_crops:p.error('--refine-characters requires --complete-crops')
     if (args.character_guided or args.contrast_detection) and not args.plate_first:p.error('Discovery alternatives require --plate-first')
     if not 1<=args.discovery_call_budget<=128:p.error('Discovery call budget must be between 1 and 128')
+    if args.text_corners and not args.character_guided:p.error('--text-corners requires --character-guided')
+    if args.text_corners and not args.plate_verifier:p.error('--text-corners requires --plate-verifier before OCR')
+    if args.plate_verifier and not args.text_corners:p.error('--plate-verifier requires --text-corners')
+    if args.plate_verifier and args.refine_characters:p.error('Pre-OCR verification uses text-corner expansion; disable post-OCR --refine-characters')
     if args.review_summary and args.phase!='render':p.error('--review-summary is only for after-inference rendering')
     if args.phase=='run':run(args)
     elif args.phase=='score':score(args)
