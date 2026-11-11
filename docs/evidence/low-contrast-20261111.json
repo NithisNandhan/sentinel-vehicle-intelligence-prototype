@@ -1,0 +1,471 @@
+{
+  "date": "2026-11-11",
+  "scope": "Same development clip; selected-reference found-anywhere coverage, not precision or held-out accuracy",
+  "source_sha256": "6b7064605b3d4d12c6c1da4566cbcec1cd2e3e3bd7b77814865fe9df22045f65",
+  "predictions_sha256": "6870f7ec6fc532b43be1f1fd2db4fcda4f2e89c7c04963bad97a96b3f82d7cf9",
+  "scores": {
+    "previous": {
+      "correct": 12,
+      "total": 18,
+      "percent": 66.7
+    },
+    "current": {
+      "correct": 12,
+      "total": 18,
+      "percent": 66.7
+    }
+  },
+  "gained_references": [],
+  "lost_references": [],
+  "decoded_frames": 928,
+  "sampled_frames": 124,
+  "reached_eof": true,
+  "labels_used_during_inference": false,
+  "ocr_calls": 716,
+  "wall_seconds": 3276.54,
+  "plate_histories": 404,
+  "previous_plate_histories": 304,
+  "new_source_supported_histories": 185,
+  "new_source_history_counts": {
+    "contrast_plate": 57,
+    "character_group": 153
+  },
+  "model_runtime": {
+    "previous": {
+      "detector_device": "gpu",
+      "ocr_device": "gpu",
+      "plate_device": "gpu",
+      "vehicle_device": "gpu"
+    },
+    "current": {
+      "detector_device": "cpu",
+      "ocr_device": "cpu",
+      "plate_device": "cpu",
+      "vehicle_device": "cpu"
+    },
+    "devices_changed": true,
+    "model_identity_equal": true,
+    "note": "Runtime devices differ. CPU/GPU numerical differences and wall-clock search budgets can affect outputs; processing times are not a controlled device-performance comparison."
+  },
+  "model_weights_changed": false,
+  "search_diagnostics": {
+    "frames_started": 124,
+    "tile_calls": 0,
+    "text_detector_calls": 44,
+    "text_proposals": 159,
+    "selected_with_text": 25,
+    "text_detector_enabled": true,
+    "extra_budget_skips": 2406,
+    "crop_completion": {
+      "focused_retries": 197,
+      "focused_text": 2,
+      "closed_boundary": 1
+    },
+    "text_detector_device": "cpu",
+    "low_contrast": {
+      "contrast_calls": 413,
+      "contrast_proposals": 113,
+      "character_group_proposals": 253,
+      "same_frame_duplicates": 151,
+      "extra_candidates_retained": 198,
+      "independent_text_calls": 325,
+      "extra_budget_skips": 3116
+    },
+    "low_contrast_config": {
+      "character_guided": true,
+      "contrast_pass": true,
+      "max_extra_calls": 6
+    }
+  },
+  "validation": {
+    "rule_version": 1,
+    "history_counts": {
+      "text_evidence_present": 247,
+      "uncertain": 155,
+      "suspected_non_plate": 2
+    },
+    "histories": 404,
+    "thresholds": {
+      "ctc_character_peak": 0.6,
+      "minimum_components": 3,
+      "upper_body_limit": 0.5,
+      "minimum_gap_ms": 150
+    },
+    "scope": "Saved-native-evidence triage; no ground-truth labels used"
+  },
+  "central_events_sent": 0,
+  "cases": [
+    {
+      "number": 1,
+      "previous": {
+        "found": false,
+        "crop_size": null,
+        "correspondence": "No corresponding automatic crop identified"
+      },
+      "current": {
+        "found": false,
+        "crop_size": null,
+        "correspondence": "No corresponding automatic crop identified",
+        "proposal_sources": []
+      }
+    },
+    {
+      "number": 2,
+      "previous": {
+        "found": true,
+        "crop_size": [
+          209,
+          213
+        ],
+        "correspondence": "Exact reconstructed reading found anywhere"
+      },
+      "current": {
+        "found": true,
+        "crop_size": [
+          209,
+          213
+        ],
+        "correspondence": "Exact reconstructed reading found anywhere",
+        "proposal_sources": [
+          "existing_search"
+        ]
+      }
+    },
+    {
+      "number": 3,
+      "previous": {
+        "found": true,
+        "crop_size": [
+          167,
+          47
+        ],
+        "correspondence": "Exact reconstructed reading found anywhere"
+      },
+      "current": {
+        "found": true,
+        "crop_size": [
+          167,
+          47
+        ],
+        "correspondence": "Exact reconstructed reading found anywhere",
+        "proposal_sources": [
+          "existing_search"
+        ]
+      }
+    },
+    {
+      "number": 4,
+      "previous": {
+        "found": false,
+        "crop_size": null,
+        "correspondence": "No corresponding automatic crop identified"
+      },
+      "current": {
+        "found": false,
+        "crop_size": null,
+        "correspondence": "No corresponding automatic crop identified",
+        "proposal_sources": []
+      }
+    },
+    {
+      "number": 5,
+      "previous": {
+        "found": false,
+        "crop_size": [
+          369,
+          137
+        ],
+        "correspondence": "Saved case association; illustrative only"
+      },
+      "current": {
+        "found": false,
+        "crop_size": [
+          369,
+          137
+        ],
+        "correspondence": "Saved case association; illustrative only",
+        "proposal_sources": [
+          "existing_search"
+        ]
+      }
+    },
+    {
+      "number": 6,
+      "previous": {
+        "found": true,
+        "crop_size": [
+          124,
+          128
+        ],
+        "correspondence": "Exact reconstructed reading found anywhere"
+      },
+      "current": {
+        "found": true,
+        "crop_size": [
+          103,
+          80
+        ],
+        "correspondence": "Exact reconstructed reading found anywhere",
+        "proposal_sources": [
+          "character_group",
+          "contrast_plate"
+        ]
+      }
+    },
+    {
+      "number": 7,
+      "previous": {
+        "found": true,
+        "crop_size": [
+          141,
+          43
+        ],
+        "correspondence": "Exact reconstructed reading found anywhere"
+      },
+      "current": {
+        "found": true,
+        "crop_size": [
+          131,
+          39
+        ],
+        "correspondence": "Exact reconstructed reading found anywhere",
+        "proposal_sources": [
+          "character_group"
+        ]
+      }
+    },
+    {
+      "number": 8,
+      "previous": {
+        "found": false,
+        "crop_size": null,
+        "correspondence": "No corresponding automatic crop identified"
+      },
+      "current": {
+        "found": false,
+        "crop_size": [
+          133,
+          53
+        ],
+        "correspondence": "Saved case association; illustrative only",
+        "proposal_sources": [
+          "character_group"
+        ]
+      }
+    },
+    {
+      "number": 9,
+      "previous": {
+        "found": true,
+        "crop_size": [
+          141,
+          49
+        ],
+        "correspondence": "Exact reconstructed reading found anywhere"
+      },
+      "current": {
+        "found": true,
+        "crop_size": [
+          140,
+          48
+        ],
+        "correspondence": "Exact reconstructed reading found anywhere",
+        "proposal_sources": [
+          "existing_search"
+        ]
+      }
+    },
+    {
+      "number": 10,
+      "previous": {
+        "found": true,
+        "crop_size": [
+          189,
+          59
+        ],
+        "correspondence": "Exact reconstructed reading found anywhere"
+      },
+      "current": {
+        "found": true,
+        "crop_size": [
+          189,
+          59
+        ],
+        "correspondence": "Exact reconstructed reading found anywhere",
+        "proposal_sources": [
+          "existing_search"
+        ]
+      }
+    },
+    {
+      "number": 11,
+      "previous": {
+        "found": false,
+        "crop_size": null,
+        "correspondence": "No corresponding automatic crop identified"
+      },
+      "current": {
+        "found": false,
+        "crop_size": null,
+        "correspondence": "No corresponding automatic crop identified",
+        "proposal_sources": []
+      }
+    },
+    {
+      "number": 12,
+      "previous": {
+        "found": true,
+        "crop_size": [
+          167,
+          86
+        ],
+        "correspondence": "Exact reconstructed reading found anywhere"
+      },
+      "current": {
+        "found": true,
+        "crop_size": [
+          125,
+          38
+        ],
+        "correspondence": "Exact reconstructed reading found anywhere",
+        "proposal_sources": [
+          "character_group"
+        ]
+      }
+    },
+    {
+      "number": 13,
+      "previous": {
+        "found": true,
+        "crop_size": [
+          121,
+          31
+        ],
+        "correspondence": "Exact reconstructed reading found anywhere"
+      },
+      "current": {
+        "found": true,
+        "crop_size": [
+          121,
+          31
+        ],
+        "correspondence": "Exact reconstructed reading found anywhere",
+        "proposal_sources": [
+          "existing_search"
+        ]
+      }
+    },
+    {
+      "number": 14,
+      "previous": {
+        "found": false,
+        "crop_size": null,
+        "correspondence": "No corresponding automatic crop identified"
+      },
+      "current": {
+        "found": false,
+        "crop_size": null,
+        "correspondence": "No corresponding automatic crop identified",
+        "proposal_sources": []
+      }
+    },
+    {
+      "number": 15,
+      "previous": {
+        "found": true,
+        "crop_size": [
+          135,
+          47
+        ],
+        "correspondence": "Exact reconstructed reading found anywhere"
+      },
+      "current": {
+        "found": true,
+        "crop_size": [
+          141,
+          47
+        ],
+        "correspondence": "Exact reconstructed reading found anywhere",
+        "proposal_sources": [
+          "existing_search"
+        ]
+      }
+    },
+    {
+      "number": 16,
+      "previous": {
+        "found": true,
+        "crop_size": [
+          242,
+          136
+        ],
+        "correspondence": "Exact reconstructed reading found anywhere"
+      },
+      "current": {
+        "found": true,
+        "crop_size": [
+          103,
+          29
+        ],
+        "correspondence": "Exact reconstructed reading found anywhere",
+        "proposal_sources": [
+          "existing_search"
+        ]
+      }
+    },
+    {
+      "number": 17,
+      "previous": {
+        "found": true,
+        "crop_size": [
+          107,
+          29
+        ],
+        "correspondence": "Exact reconstructed reading found anywhere"
+      },
+      "current": {
+        "found": true,
+        "crop_size": [
+          107,
+          29
+        ],
+        "correspondence": "Exact reconstructed reading found anywhere",
+        "proposal_sources": [
+          "existing_search"
+        ]
+      }
+    },
+    {
+      "number": 18,
+      "previous": {
+        "found": true,
+        "crop_size": [
+          145,
+          50
+        ],
+        "correspondence": "Exact reconstructed reading found anywhere"
+      },
+      "current": {
+        "found": true,
+        "crop_size": [
+          145,
+          50
+        ],
+        "correspondence": "Exact reconstructed reading found anywhere",
+        "proposal_sources": [
+          "existing_search"
+        ]
+      }
+    }
+  ],
+  "limitations": [
+    "Combined method trial; individual method ablations were not run",
+    "Previous capture used GPU, current CPU; numerical behaviour and clock-based budgets differ",
+    "Extra incorrect guesses are not penalised by this coverage metric",
+    "Additional proposal/history counts are not verified plates or unique vehicles",
+    "Native crop boundary changes and prior completion/refinement are also present",
+    "No held-out clip or complete detection ground truth was evaluated"
+  ],
+  "runtime_problem": "Standard NVIDIA hook crashed; direct WSL CUDA preflight returned no device. Explicit CPU fallback used.",
+  "recommendation": "Keep opt-in pending visual review and a controlled same-device detection-recall evaluation"
+}

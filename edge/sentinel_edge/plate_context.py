@@ -36,22 +36,32 @@ def spans_fragments(candidate,a,b):
 
 def context_proposals(image,vehicles,search,*,max_recoveries=2):
     metrics=Counter();proposals=[]
+    def project(local,context,kind,*,candidate=None):
+        x,y,x2,y2=context
+        a,b,c,d=[round(v) for v in local]
+        a,b,c,d=max(0,a),max(0,b),min(x2-x,c),min(y2-y,d)
+        if c-a<24 or d-b<8:return None
+        candidate=candidate or {}
+        quad=candidate.get('quad',getattr(search,'last_text_quad',None))
+        return dict(box=[a+x,b+y,c+x,d+y],confidence=float(candidate.get('confidence',search.last_confidence) or 0.),
+                    quad=[(qx-a,qy-b) for qx,qy in quad] if quad is not None else None,
+                    crop_origin=kind,search_box=list(context),completion=candidate.get('completion',getattr(search,'last_completion',None)),
+                    proposal_sources=candidate.get('proposal_sources',['existing_search']))
     def detect(context,kind):
         x,y,x2,y2=context;region=image[y:y2,x:x2]
         if not region.size:return None
         local=search.box(region);metrics[kind]+=1
         if local is None:return None
-        a,b,c,d=[round(v) for v in local]
-        a,b,c,d=max(0,a),max(0,b),min(x2-x,c),min(y2-y,d)
-        if c-a<24 or d-b<8:return None
-        quad=getattr(search,'last_text_quad',None)
-        return dict(box=[a+x,b+y,c+x,d+y],confidence=float(search.last_confidence or 0.),
-                    quad=[(qx-a,qy-b) for qx,qy in quad] if quad is not None else None,
-                    crop_origin=kind,search_box=list(context),completion=getattr(search,'last_completion',None))
+        candidates=getattr(search,'last_candidates',())
+        return project(local,context,kind,candidate=candidates[0] if candidates else None)
     for vehicle in vehicles:
         box=expanded_box(vehicle['box'],image.shape)
         proposal=detect(box,'padded_search')
         if proposal:proposals.append(proposal)
+        for candidate in getattr(search,'last_candidates',())[1:]:
+            extra=project(candidate['box'],box,'discovery_alternative',candidate=candidate)
+            if extra:
+                proposals.append(extra);metrics['discovery_alternatives']+=1
     # At most two extra calls per sampled frame, regardless of crowded scenes.
     originals=list(proposals)
     pairs=[(a,b) for i,a in enumerate(originals) for b in originals[i+1:]
