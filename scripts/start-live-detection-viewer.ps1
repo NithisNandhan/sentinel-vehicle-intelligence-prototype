@@ -1,5 +1,5 @@
 param(
-    [ValidateSet('legacy', 'general', 'plate_adapted', 'indian_adapted')]
+    [ValidateSet('legacy', 'general', 'general_quality', 'plate_adapted', 'indian_adapted')]
     [string]$DetectorProfile = 'general',
     [switch]$DeliverAccepted,
     [switch]$PlateRecovery,

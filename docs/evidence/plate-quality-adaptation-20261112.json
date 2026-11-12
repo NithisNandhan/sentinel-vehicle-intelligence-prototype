@@ -1,0 +1,157 @@
+{
+  "schema_version": 1,
+  "scope": "Publisher-labelled reserved77 originals with3 repeated conditions; Mumbai18 development references at14timestamps. Not independent camera generalization or fullvideo OCR accuracy.",
+  "training": {
+    "original_train_images": 360,
+    "train_with_context_views": 712,
+    "validation_with_context_views": 259,
+    "test_originals": 77,
+    "epochs": 12,
+    "learning_rate": 5e-05,
+    "box_loss_gain": 9,
+    "mosaic": 0.05,
+    "candidate_sha256": "2497adf041acbbca0a9f966b3cc6de2aacd595a1aac2dcf3d486ff8c088e3fad",
+    "real_image_export_parity_checks": 48,
+    "promoted": false
+  },
+  "weight_test": [
+    {
+      "name": "parent",
+      "conditions": {
+        "native": {
+          "matched_iou50": 76,
+          "matched_iou75": 36,
+          "annotations": 83,
+          "annotation_precision": 0.8539
+        },
+        "resolution_quarter": {
+          "matched_iou50": 53,
+          "matched_iou75": 17,
+          "annotations": 83,
+          "annotation_precision": 0.7361
+        },
+        "motion9": {
+          "matched_iou50": 54,
+          "matched_iou75": 30,
+          "annotations": 83,
+          "annotation_precision": 0.871
+        }
+      }
+    },
+    {
+      "name": "fine_tuned",
+      "conditions": {
+        "native": {
+          "matched_iou50": 75,
+          "matched_iou75": 40,
+          "annotations": 83,
+          "annotation_precision": 0.8427
+        },
+        "resolution_quarter": {
+          "matched_iou50": 59,
+          "matched_iou75": 28,
+          "annotations": 83,
+          "annotation_precision": 0.7564
+        },
+        "motion9": {
+          "matched_iou50": 52,
+          "matched_iou75": 26,
+          "annotations": 83,
+          "annotation_precision": 0.8254
+        }
+      }
+    }
+  ],
+  "protected_scale_test": [
+    {
+      "name": "parent",
+      "conditions": {
+        "native": {
+          "matched_iou50": 76,
+          "matched_iou75": 36,
+          "annotations": 83,
+          "annotation_precision": 0.8539
+        },
+        "resolution_quarter": {
+          "matched_iou50": 53,
+          "matched_iou75": 17,
+          "annotations": 83,
+          "annotation_precision": 0.7361
+        },
+        "motion9": {
+          "matched_iou50": 54,
+          "matched_iou75": 30,
+          "annotations": 83,
+          "annotation_precision": 0.871
+        }
+      }
+    },
+    {
+      "name": "native_scale",
+      "conditions": {
+        "native": {
+          "matched_iou50": 79,
+          "matched_iou75": 37,
+          "annotations": 83,
+          "annotation_precision": 0.8229
+        },
+        "resolution_quarter": {
+          "matched_iou50": 53,
+          "matched_iou75": 17,
+          "annotations": 83,
+          "annotation_precision": 0.7067
+        },
+        "motion9": {
+          "matched_iou50": 60,
+          "matched_iou75": 33,
+          "annotations": 83,
+          "annotation_precision": 0.8
+        }
+      }
+    }
+  ],
+  "mumbai_before_after": [
+    {
+      "model": "baseline_scale",
+      "model_sha256": "746fdd358ec110418775d7c9d8d07910d48b1a21471f92bf4421f6510d6daade",
+      "device": "cuda",
+      "regions": 149,
+      "proposals": 92,
+      "median_ms": 96.55187400039722,
+      "found_iou30": 11,
+      "native_exact": 8,
+      "complete_reference_box_95": 5
+    },
+    {
+      "model": "yolov9t512",
+      "model_sha256": "746fdd358ec110418775d7c9d8d07910d48b1a21471f92bf4421f6510d6daade",
+      "device": "cuda",
+      "regions": 149,
+      "proposals": 60,
+      "median_ms": 25.154325000016797,
+      "found_iou30": 10,
+      "native_exact": 7,
+      "complete_reference_box_95": 5
+    }
+  ],
+  "rejected_weights_mumbai": [
+    {
+      "model": "roi_adapted",
+      "model_sha256": "2497adf041acbbca0a9f966b3cc6de2aacd595a1aac2dcf3d486ff8c088e3fad",
+      "device": "cuda",
+      "regions": 149,
+      "proposals": 53,
+      "median_ms": 14.518235999958051,
+      "found_iou30": 8,
+      "native_exact": 5,
+      "complete_reference_box_95": 7
+    }
+  ],
+  "original_crops_and_readings_preserved": 60,
+  "default_profile_changed": false,
+  "new_opt_in_profile": "general_quality",
+  "automatic_acceptance_thresholds_changed": false,
+  "diagnostic_tests_passed": 123,
+  "integrated_gpu_preflight": "passed",
+  "full_video_quality_profile_tested": false
+}

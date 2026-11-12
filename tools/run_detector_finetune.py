@@ -18,9 +18,17 @@ parser.add_argument('--epochs',type=int,default=20)
 parser.add_argument('--name',default=None)
 parser.add_argument('--dataset',default=None)
 parser.add_argument('--resume',action='store_true',help='Resume an interrupted vehicle run, not a completed experiment')
+parser.add_argument('--plate-lr',type=float,default=.0002,
+                    help='Plate-only transfer learning rate; legacy default preserved')
+parser.add_argument('--plate-box-gain',type=float,default=7.5,
+                    help='Plate-only box regression loss gain; legacy default preserved')
+parser.add_argument('--plate-mosaic',type=float,default=.2,
+                    help='Plate-only mosaic probability; legacy default preserved')
 args = parser.parse_args()
 if not 1 <= args.epochs <= 60:
     raise ValueError('Bounded experiment required')
+if not (0 < args.plate_lr <= .001 and 1 <= args.plate_box_gain <= 15 and 0 <= args.plate_mosaic <= .5):
+    raise ValueError('Bounded plate adaptation parameters required')
 dataset = args.dataset or args.kind
 if not dataset.replace('-','').isalnum():
     raise ValueError('Simple dataset name required')
@@ -92,6 +100,8 @@ else:
     if hashlib.sha256(parent.read_bytes()).hexdigest() != receipt['sha256']:
         raise ValueError('Publisher training checkpoint changed')
     record['parent_sha256'] = receipt['sha256']
+    record['plate_adaptation'] = dict(lr0=args.plate_lr,box=args.plate_box_gain,
+                                    mosaic=args.plate_mosaic)
     opt = train.parse_opt(known=True)
     opt.weights = str(parent); opt.data = str(root/'data.yaml'); opt.cfg = ''
     opt.epochs = args.epochs; opt.batch_size = 4; opt.imgsz = 512
@@ -107,8 +117,9 @@ else:
     import utils.general
     utils.general.check_font = lambda *a,**kw: None
     hyp = yaml.safe_load((source/'data/hyps/hyp.scratch-high.yaml').read_text())
-    hyp.update(lr0=.0002,lrf=.1,warmup_epochs=1,warmup_bias_lr=.001,
-               mosaic=.2,mixup=0,copy_paste=0,translate=.05,scale=.15,degrees=3)
+    hyp.update(lr0=args.plate_lr,lrf=.1,warmup_epochs=1,warmup_bias_lr=.001,
+               box=args.plate_box_gain,mosaic=args.plate_mosaic,
+               mixup=0,copy_paste=0,translate=.05,scale=.15,degrees=3)
     hyp_path = root/'hyp-transfer.yaml'; hyp_path.write_text(yaml.safe_dump(hyp))
     opt.hyp = str(hyp_path)
     callbacks = Callbacks()

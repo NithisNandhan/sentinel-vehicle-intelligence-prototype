@@ -10,6 +10,7 @@ from .vision import _box_iou, associate_vehicle_tracks
 PROFILES = {
     'legacy': ('yolov8n', 'parent'),
     'general': ('yolo26s', 'parent'),
+    'general_quality': ('yolo26s', 'parent_scale'),
     'plate_adapted': ('yolo26s', 'adapted'),
     'indian_adapted': ('bmd', 'adapted'),
 }
@@ -18,6 +19,7 @@ HASHES = {
     'yolo26s': '646f8bc3fe0a656803d95c294f7852321748cb29d13466a1af8862e2db384a1b',
     'bmd': 'a6d7cb9b39d77ac5f2b494ac4e264454d3d5bc13e6b78d92700671c658a36a5a',
     'parent': '746fdd358ec110418775d7c9d8d07910d48b1a21471f92bf4421f6510d6daade',
+    'parent_scale': '746fdd358ec110418775d7c9d8d07910d48b1a21471f92bf4421f6510d6daade',
     'adapted': 'd0416773dccb3ec8c852390e03a8b6f177850e0f693c2a529fc49c7961525611',
 }
 # Coarse tracking taxonomy. It does not claim fine subclass accuracy.
@@ -160,8 +162,10 @@ class PlateDetector:
             raise RuntimeError('GPU requested but plate CUDA provider is unavailable')
         root = Path(cache)/'experiments/detectors'
         self.name = name
-        if name == 'parent':
-            verified(root/'yolo-v9-t-512-license-plates-end2end.onnx', HASHES[name])
+        self.native_scale = name == 'parent_scale'
+        self.last_scale_calls = 1
+        if name in ('parent', 'parent_scale'):
+            verified(root/'yolo-v9-t-512-license-plates-end2end.onnx', HASHES['parent'])
             self.model = PlateModel('yolov9t512', root, 'cuda' if self.device == 'gpu' else 'cpu')
             self.providers = self.model.providers
             if self.device == 'gpu':
@@ -202,6 +206,15 @@ class PlateDetector:
 
     def scored_boxes(self, image):
         """Proposals with the detector's own score, in the adapter's ranking order."""
+        if self.native_scale:
+            from .plate_scale_search import detect_views
+            values,self.last_scale_calls=detect_views(image,self._scored_boxes_single,max_calls=6)
+            return [(p['box'],p['confidence']) for p in values]
+        self.last_scale_calls=1
+        return self._scored_boxes_single(image)
+
+    def _scored_boxes_single(self, image):
+        """One unchanged model invocation; native-view search never recurses."""
         if self.session is None:
             detections = sorted(self.model.model.predict(image),key=lambda d:-float(d.confidence))
             return [([d.bounding_box.x1,d.bounding_box.y1,d.bounding_box.x2,d.bounding_box.y2],float(d.confidence))

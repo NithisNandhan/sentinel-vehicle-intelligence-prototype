@@ -25,9 +25,15 @@ class TargetedPlateSearch:
     def box(self, image):
         self.last_calls, self.last_fallback, self.last_confidence = 1, False, None
         primary = self.detector.box(image)
+        self.last_calls = getattr(self.detector, 'last_scale_calls', 1)
+        self.last_fallback = self.last_calls > 1
         if self.usable(primary, image):
             self.last_confidence = getattr(self.detector, 'last_confidence', None)
             return primary
+        if self.last_calls > 1:
+            # The quality profile has already searched bounded native views.
+            # Do not recursively tile every one of its tiles a second time.
+            return None
         h, w = image.shape[:2]
         if w < 192 or h < 96:
             return None

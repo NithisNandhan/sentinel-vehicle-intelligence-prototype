@@ -104,6 +104,28 @@ def infer(args):
         detector = IWPODDetector(args.iwpod_source)
         model_path = args.iwpod_source / 'weights/iwpod_net.h5'
         providers = ['TensorFlowCPU']
+    elif args.model == 'roi_adapted':
+        import torch
+        import onnxruntime as ort
+        from types import SimpleNamespace
+        model_path=args.candidate
+        receipt=json.loads(model_path.with_suffix('.receipt.json').read_bytes())
+        if (sha(model_path)!=receipt['onnx_sha256'] or receipt['input_shape']!=[1,3,512,512]
+                or receipt['output_shape']!=[1,5,5376] or not receipt.get('zero_input_cpu_parity')
+                or not receipt.get('real_image_parity_passed') or receipt.get('real_image_parity_checks')!=48):
+            raise ValueError('Verified adapted raw YOLOv9 export required')
+        options=ort.SessionOptions();options.intra_op_num_threads=2;options.inter_op_num_threads=1
+        providers=([('CUDAExecutionProvider',{'use_tf32':'0'}),'CPUExecutionProvider']
+                   if args.device=='cuda' else ['CPUExecutionProvider'])
+        session=ort.InferenceSession(str(model_path),options,providers=providers)
+        providers=session.get_providers()
+        if args.device=='cuda' and 'CUDAExecutionProvider' not in providers:
+            raise RuntimeError('Candidate detector GPU fallback')
+        detector=SimpleNamespace(session=session,height=512,width=512,input_name=session.get_inputs()[0].name,
+                                 predict=lambda image: None)
+        # Warm the actual ONNX session, not the wrapper placeholder.
+        from sentinel_edge.detector_comparison import letterbox
+        detector.predict=lambda image:session.run(None,{detector.input_name:letterbox(image,512,512)[0]})
     else:
         # Import Torch first to expose its CUDA/cuDNN dependencies to ORT.
         if args.device == 'cuda':
@@ -111,18 +133,27 @@ def infer(args):
             if not torch.cuda.is_available():
                 raise RuntimeError('Requested CUDA unavailable')
         from sentinel_edge.detector_comparison import PlateModel
-        detector = PlateModel(args.model, args.cache, args.device)
+        underlying='yolov9t512' if args.model=='baseline_scale' else args.model
+        detector = PlateModel(underlying, args.cache, args.device)
         providers = detector.providers
         names = {'yolov9t512': 'yolo-v9-t-512-license-plates-end2end.onnx',
                  'yolov9s608': 'yolo-v9-s-608-license-plates-end2end.onnx'}
-        model_path = args.cache / names.get(args.model, f'license-plate-finetune-v1{args.model[6]}.onnx')
+        model_path = args.cache / names.get(underlying, f'license-plate-finetune-v1{underlying[6]}.onnx')
     cold_seconds = time.monotonic() - began
     # Warmup excluded from steady-state timings, same first automatic ROI.
     detector.predict(cases[0][3])
     rows, timings = [], []
+    detector_calls=0
     for case_id, pts, region, image in cases:
         start = time.monotonic()
-        if args.model == 'iwpod':
+        if args.model == 'baseline_scale':
+            from sentinel_edge.plate_scale_search import detect_views
+            def scored_predict(view):
+                return [([d.bounding_box.x1,d.bounding_box.y1,d.bounding_box.x2,d.bounding_box.y2],
+                         float(d.confidence)) for d in detector.model.predict(view)]
+            proposals,calls=detect_views(image,scored_predict,max_calls=6)
+            detector_calls+=calls
+        elif args.model == 'iwpod':
             proposals = detector.predict(image)
         elif detector.session is None:
             proposals = [dict(box=[d.bounding_box.x1, d.bounding_box.y1, d.bounding_box.x2, d.bounding_box.y2],
@@ -134,6 +165,7 @@ def infer(args):
             proposals = [dict(box=b, confidence=c) for b, c in decode_yolo11(
                 values, scale, left, top, image.shape, with_confidence=True)]
         elapsed_ms = (time.monotonic() - start) * 1000
+        if args.model!='baseline_scale':detector_calls+=1
         timings.append(elapsed_ms)
         predictions = []
         for index, proposal in enumerate(proposals):
@@ -145,7 +177,8 @@ def infer(args):
             if not cv2.imwrite(str(output / relative), crop):
                 raise ValueError('Native crop save failed')
             item = dict(box=box, confidence=float(proposal['confidence']), native_path=relative,
-                        native_sha256=sha(output / relative), quad=proposal.get('quad'))
+                        native_sha256=sha(output / relative), quad=proposal.get('quad'),
+                        detection_view=proposal.get('view','full'))
             if proposal.get('rectified') is not None:
                 relative = f'assets/{case_id}-{index:02}-rectified.png'
                 if not cv2.imwrite(str(output / relative), proposal['rectified']):
@@ -164,8 +197,12 @@ def infer(args):
                   providers=providers, device=args.device if args.model != 'iwpod' else 'cpu',
                   cold_load_seconds=cold_seconds, median_ms=statistics.median(timings),
                   p95_ms=float(np.percentile(timings, 95)), elapsed_seconds=time.monotonic() - began,
-                  regions=len(cases), proposals=sum(len(r['predictions']) for r in rows), frames=rows,
+                  regions=len(cases), detector_calls=detector_calls,
+                  proposals=sum(len(r['predictions']) for r in rows), frames=rows,
                   script_sha256=sha(__file__), scene_precision_recall=None, held_out=False)
+    if args.model=='baseline_scale':
+        result.update(scale_policy='full_view_protected_v2',
+                      scale_policy_sha256=sha(ROOT/'edge/sentinel_edge/plate_scale_search.py'))
     write(output / 'predictions.json', result)
     print(json.dumps({k:v for k,v in result.items() if k != 'frames'}), flush=True)
 
@@ -287,7 +324,8 @@ def score(args):
 def main():
     p=argparse.ArgumentParser(description=__doc__)
     p.add_argument('action',choices=('prepare','infer','ocr','score'))
-    p.add_argument('--model',default='yolov9t512',choices=('yolov9t512','yolov9s608','yolo11m_plate','yolo11l_plate','yolo11x_plate','iwpod'))
+    p.add_argument('--model',default='yolov9t512',choices=('yolov9t512','yolov9s608','yolo11m_plate','yolo11l_plate','yolo11x_plate','iwpod','roi_adapted','baseline_scale'))
+    p.add_argument('--candidate',type=Path,default=Path('/models/experiments/detectors/yolov9t512-context-20261112.onnx'))
     p.add_argument('--device',default='cuda',choices=('cpu','cuda'))
     p.add_argument('--cache',type=Path,default=Path('/models/experiments/detectors'))
     p.add_argument('--ocr-cache',type=Path,default=Path('/models/experiments/awiros'))

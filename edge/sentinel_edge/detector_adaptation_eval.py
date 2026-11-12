@@ -98,32 +98,52 @@ def normalised_targets(boxes, shape):
             for _,x,y,w,h in boxes]
 
 
-def evaluate(kind,root,checkpoint,report):
+def evaluate(kind,root,checkpoint,report,*,scale_search=False):
     import torch
     torch.set_num_threads(2); cv2.setNumThreads(2)
     manifest=json.loads((root/'manifest.json').read_text())
-    receipt=json.loads((checkpoint.parent.parent/'training-receipt.json').read_text())
-    if (manifest['kind']!=kind or receipt['kind']!=kind
-            or receipt['training_manifest_sha256']!=hashlib.sha256((root/'manifest.json').read_bytes()).hexdigest()
-            or receipt['best_sha256']!=hashlib.sha256(checkpoint.read_bytes()).hexdigest()):
-        raise ValueError('Candidate receipt and frozen training manifest required')
+    if manifest['kind']!=kind:
+        raise ValueError('Dataset kind mismatch')
+    if scale_search:
+        if kind!='plate' or checkpoint is not None:
+            raise ValueError('Scale-search evaluates the unchanged plate model only')
+        receipt=None
+    else:
+        receipt=json.loads((checkpoint.parent.parent/'training-receipt.json').read_text())
+        if (manifest['kind']!=kind or receipt['kind']!=kind
+                or receipt['training_manifest_sha256']!=hashlib.sha256((root/'manifest.json').read_bytes()).hexdigest()
+                or receipt['best_sha256']!=hashlib.sha256(checkpoint.read_bytes()).hexdigest()):
+            raise ValueError('Candidate receipt and frozen training manifest required')
     samples=[s for s in manifest['samples'] if s['split']=='test']
     if not samples or len(samples)>300:
         raise ValueError('Bounded prepared test partition required')
     cache=Path('/models/experiments/detectors')
     baseline_classes=[1,2,3,5,7] if manifest.get('source')=='iisc-aim/BMD-45' else [2,3,5,7]
     baseline=PlateModel('yolov9t512',cache,'cuda') if kind=='plate' else VehicleModel('yolo26s',cache,'cuda',640,baseline_classes)
-    candidate=FinePlate(checkpoint) if kind=='plate' else FineVehicle(checkpoint)
+    if scale_search:
+        from .plate_scale_search import detect_views
+        class ScaleSearch:
+            def predict(self,image):
+                def scored(view):
+                    return [([d.bounding_box.x1,d.bounding_box.y1,d.bounding_box.x2,d.bounding_box.y2],float(d.confidence))
+                            for d in baseline.model.predict(view)]
+                values,_=detect_views(image,scored,max_calls=6)
+                return [p['box'] for p in values]
+        candidate=ScaleSearch()
+    else:
+        candidate=FinePlate(checkpoint) if kind=='plate' else FineVehicle(checkpoint)
     result={'kind':kind,'sample_images':len(samples),'confidence_threshold':.25,'nms_iou':.45,
         'manifest_sha256':hashlib.sha256((root/'manifest.json').read_bytes()).hexdigest(),
-        'candidate_sha256':hashlib.sha256(checkpoint.read_bytes()).hexdigest(),
+        'candidate_sha256':(hashlib.sha256((cache/'yolo-v9-t-512-license-plates-end2end.onnx').read_bytes()).hexdigest()
+                            if scale_search else hashlib.sha256(checkpoint.read_bytes()).hexdigest()),
+        'candidate_mode':'native_scale_search_max6' if scale_search else 'fine_tuned_weights',
         'baseline_coco_classes':baseline_classes if kind=='vehicle' else None,
         'candidate_categories':manifest.get('category_names'),
         'taxonomy_caveat':'BMD evaluation includes bicycles in baseline; candidate has 13 publisher subclasses; metrics pool vehicle boxes and do not prove subclass accuracy. COCO lacks a dedicated three-wheeler class.' if manifest.get('source')=='iisc-aim/BMD-45' else None,
         'independent_camera_holdout':False,'ocr_accuracy':None,'live_validation':False,
         'caveat':manifest['caveat']+'; fixed-threshold box metrics against publisher annotations; unmatched boxes may include annotation omissions; stress variants are not new vehicles',
         'models':[]}
-    for name,model in (('parent',baseline),('fine_tuned',candidate)):
+    for name,model in (('parent',baseline),('native_scale' if scale_search else 'fine_tuned',candidate)):
         first=cv2.imread(str(root/samples[0]['image_path']))
         for _ in range(3):model.predict(first)
         rows=[]
@@ -161,7 +181,10 @@ if __name__=='__main__':
     parser=argparse.ArgumentParser()
     parser.add_argument('--kind',choices=['plate','vehicle'],required=True)
     parser.add_argument('--root',type=Path,required=True)
-    parser.add_argument('--checkpoint',type=Path,required=True)
+    parser.add_argument('--checkpoint',type=Path)
+    parser.add_argument('--scale-search',action='store_true')
     parser.add_argument('--report',type=Path,required=True)
     args=parser.parse_args()
-    evaluate(args.kind,args.root,args.checkpoint,args.report)
+    if not args.scale_search and args.checkpoint is None:
+        parser.error('--checkpoint is required for fine-tuned evaluation')
+    evaluate(args.kind,args.root,args.checkpoint,args.report,scale_search=args.scale_search)

@@ -820,7 +820,7 @@ if __name__ == '__main__':
     parser.add_argument('--cache', type=Path, required=True)
     parser.add_argument('--checkpoint', type=Path, required=True)
     parser.add_argument('--container-bind', action='store_true', help='Use only with a Docker loopback-only port publication')
-    parser.add_argument('--detector-profile', choices=('legacy','general','plate_adapted','indian_adapted'))
+    parser.add_argument('--detector-profile', choices=('legacy','general','general_quality','plate_adapted','indian_adapted'))
     parser.add_argument('--training-root', type=Path, default=Path('/training'))
     parser.add_argument('--deliver', action='store_true', help='Durably deliver strictly model-accepted sightings, never candidates or imagery')
     parser.add_argument('--plate-recovery', action='store_true', help='Opt-in native full-image fallback and 250 ms sampling near tracked vehicles')

@@ -2,7 +2,7 @@ param(
     [ValidateSet('cpu', 'gpu')]
     [string]$Device = 'cpu',
     # indian_adapted needs the detector-training volume and is not offered here.
-    [ValidateSet('legacy', 'general', 'plate_adapted')]
+    [ValidateSet('legacy', 'general', 'general_quality', 'plate_adapted')]
     [string]$DetectorProfile = 'general',
     # Process as fast as this machine allows instead of at most real time.
     # Frames are never dropped in either mode.
