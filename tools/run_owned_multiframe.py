@@ -46,6 +46,7 @@ def build_vehicle_results(predictions,posteriors,tokens):
     """Rebuild parent evidence; quarantined crops never supply OCR votes."""
     evidence={};children={}
     excluded={g['id'] for g in predictions if g.get('plate_validation',{}).get('excluded_from_fusion')}
+    provisional={g['id'] for g in predictions if g.get('provisional_region') or g.get('provisional_output')}
     for group in predictions:
         parent=group['parent_vehicle_id']
         if parent and group['id'] not in excluded:children.setdefault(parent,[]).append(group['id'])
@@ -58,10 +59,11 @@ def build_vehicle_results(predictions,posteriors,tokens):
     for parent,items in evidence.items():
         selected,diagnostics=one_view_per_timestamp(items,tokens)
         selected=sorted(selected,key=lambda o:(-o['quality'],o['position_ms']))[:6]
-        selected.sort(key=lambda o:o['position_ms']);reader=CTCPlateReader(tokens)
+        selected.sort(key=lambda o:o['position_ms']);reader=CTCPlateReader(tokens,
+            allow_any_text=bool(provisional.intersection(children.get(parent,[]))))
         for observation in selected:reader.add(observation['rows'],timestamp_ms=observation['position_ms'],source_id=observation['source_id'],quality=observation['quality'])
         values=reading_result(reader)
-        if diagnostics['conflicting_plate_views']:values['accepted']=None
+        if diagnostics['conflicting_plate_views'] or provisional.intersection(children.get(parent,[])):values['accepted']=None
         results.append(dict(id=parent,children=children.get(parent,[]),methods=values,
             samples=[{k:v for k,v in o.items() if k!='rows'} for o in selected],observations=len(selected),**diagnostics))
     return results
@@ -75,6 +77,7 @@ def run(args):
     source_names=['owned_plate','plate_context','plate_identity','plate_motion','vehicle_lifecycle','vehicle_plate','plate_sampling','plate_evidence','plate_filter','crop_completion','plate_proposals','plate_quality','text_boundaries','plate_extent','low_contrast_search','ocr_crop_experiment']
     if args.text_corners:source_names.append('text_plate_geometry')
     if args.plate_verifier:source_names.extend(['plate_region_gate','plate_region_verifier'])
+    if args.provisional_ocr:source_names.append('provisional_plate_reading')
     for name in source_names:
         payload=(Path(__file__).resolve().parents[1]/'edge/sentinel_edge'/(name+'.py')).read_bytes()
         (args.output/('source-'+name+'.py')).write_bytes(payload)
@@ -202,7 +205,8 @@ def run(args):
                     verification_audit.append(dict(position_ms=pts,**item,native_path=native_path,
                         rectified_path=working_path,native_sha256=sha(args.output/native_path),
                         rectified_sha256=sha(args.output/working_path),native_source_id=hashlib.sha256(native.tobytes()).hexdigest()))
-                proposals,_,counts=verify_proposals(frame.image,proposals,verifier,observe=preserve_verification)
+                proposals,_,counts=verify_proposals(frame.image,proposals,verifier,observe=preserve_verification,
+                                                  allow_uncertain=args.provisional_ocr)
                 verification_counts.update(counts)
             if lifecycle and not verifier:
                 proposals,metrics=deduplicate_views(proposals);context_metrics.update(metrics)
@@ -265,6 +269,7 @@ def run(args):
             group['owner']=proposal['owner']
             group['owner_locked']=proposal.get('owner_locked',True)
             group['recognition_conflict']=proposal.get('recognition_conflict',False)
+            group['provisional_region']=group.get('provisional_region',False) or proposal.get('provisional_region',False)
             group['observed'].append(dict(position_ms=pts,box=b,source_id=digest,
                 owner=proposal['owner'],owner_candidate=proposal.get('owner_candidate',proposal['owner']),
                 owner_locked=proposal.get('owner_locked',True),crop_origin=proposal.get('crop_origin','tight_vehicle'),
@@ -293,7 +298,7 @@ def run(args):
         # Completeness changes which originals survive selection, not the
         # image-quality weights used by the frozen CTC/reconstruction methods.
         for sample in samples:sample.quality=group['metadata'][sample.source_id]['native_quality']
-        observations=[];multi=CTCPlateReader(ocr.tokens)
+        observations=[];multi=CTCPlateReader(ocr.tokens,allow_any_text=args.provisional_ocr)
         for i,sample in enumerate(samples):
             metadata=group['metadata'][sample.source_id]
             working=warp_polygon(sample.image,metadata['quad']) if metadata['quad'] else None
@@ -310,13 +315,13 @@ def run(args):
                 proposal_sources=metadata.get('proposal_sources',['existing_search']),
                 plate_verification=metadata.get('plate_verification'),geometry=metadata.get('geometry')))
         best=max(observations,key=lambda o:(o['quality'],-o['position_ms']))
-        single=CTCPlateReader(ocr.tokens);single.add(best['rows'],timestamp_ms=best['position_ms'],source_id=best['source_id'])
+        single=CTCPlateReader(ocr.tokens,allow_any_text=args.provisional_ocr);single.add(best['rows'],timestamp_ms=best['position_ms'],source_id=best['source_id'])
         values=dict(single=reading_result(single),multi=reading_result(multi))
         state=ReconstructionState();update(state,multi,samples,ocr,samples[-1].pts_ms)
         values['reconstruction']=reading_result(multi)
         accepted=multi.accepted(.85)
         if disagreement(state,accepted,.85):values['reconstruction']['accepted']=None
-        if args.visual_identity and group.get('recognition_conflict'):
+        if (args.visual_identity and group.get('recognition_conflict')) or group.get('provisional_region'):
             for value in values.values():value['accepted']=None
         public_samples=[{k:v for k,v in o.items() if k!='rows'} for o in observations]
         for value in values.values():
@@ -326,7 +331,13 @@ def run(args):
             parent_vehicle_id=next(iter(historical_parents)) if len(historical_parents)==1 else None,
             parent_conflict=len(historical_parents)>1,
             recognition_conflict=group.get('recognition_conflict',False),
+            provisional_region=group.get('provisional_region',False),
+            provisional_output=args.provisional_ocr,
             samples=public_samples,observations=len(samples),methods=values,reconstruction_status=state.status))
+        if args.provisional_ocr:
+            from sentinel_edge.provisional_plate_reading import check_reading
+            predictions[-1]['reading_check']=check_reading({'status':'uncertain' if group.get('provisional_region') else 'likely_plate'},
+                                                         values['reconstruction']['top'])
         posteriors.append(dict(id=group['id'],observations=observations))
         if len(predictions)%10==0:
             write_json(args.output/'progress.json',dict(stage='recognizing',groups_done=len(predictions),groups=len(groups),ocr_calls=ocr_calls+identity_ocr_calls))
@@ -353,6 +364,7 @@ def run(args):
         refine_characters=args.refine_characters,
         low_contrast_search=dict(character_guided=args.character_guided,contrast_pass=args.contrast_detection,text_corners=args.text_corners),
         pre_ocr_verification=dict(enabled=bool(verifier),counts=dict(verification_counts),
+            allow_uncertain=args.provisional_ocr,
             model_sha256=sha(args.output/'region-verifier-model.npz') if verifier else None,
             receipt_sha256=sha(args.output/'region-verifier-model.json') if verifier else None),
         vehicle_motion_diagnostics=dict(vehicle_motion.metrics) if lifecycle else None,
@@ -506,6 +518,7 @@ if __name__=='__main__':
     p.add_argument('--discovery-call-budget',type=int,default=24,help='Maximum extra text/contrast calls per sampled frame (CPU research: 6)')
     p.add_argument('--text-corners',action='store_true',help='Preserve oriented text outlines and expand to an estimated four-corner crop')
     p.add_argument('--plate-verifier',type=Path,help='Learned region-verifier model; only likely_plate regions reach OCR')
+    p.add_argument('--provisional-ocr',action='store_true',help='Read uncertain regions; output registration-shaped text provisionally, never auto-confirm it')
     p.add_argument('--recordings-dir',type=Path,default=Path('/recordings'));p.add_argument('--cache',type=Path,default=Path('/models/experiments/awiros'))
     p.add_argument('--review',type=Path,default=Path('data/benchmarks/recorded-footage-20261104/manual-review'))
     p.add_argument('--review-summary',type=Path,help='After-inference vehicle mapping for --phase render only')
@@ -522,6 +535,7 @@ if __name__=='__main__':
     if args.text_corners and not args.character_guided:p.error('--text-corners requires --character-guided')
     if args.text_corners and not args.plate_verifier:p.error('--text-corners requires --plate-verifier before OCR')
     if args.plate_verifier and not args.text_corners:p.error('--plate-verifier requires --text-corners')
+    if args.provisional_ocr and not args.plate_verifier:p.error('--provisional-ocr requires --plate-verifier')
     if args.plate_verifier and args.refine_characters:p.error('Pre-OCR verification uses text-corner expansion; disable post-OCR --refine-characters')
     if args.review_summary and args.phase!='render':p.error('--review-summary is only for after-inference rendering')
     if args.phase=='run':run(args)

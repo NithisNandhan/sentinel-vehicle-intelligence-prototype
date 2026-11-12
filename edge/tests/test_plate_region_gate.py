@@ -34,5 +34,18 @@ class GateTests(unittest.TestCase):
         self.assertEqual(allowed[0]['confidence'],0.)
         self.assertEqual(len(allowed),2,'Actual spatial deduplication remains a caller responsibility')
 
+    def test_optional_provisional_policy_reads_uncertain_but_not_rejected_regions(self):
+        statuses=iter(['uncertain','likely_non_plate'])
+        class Verifier:
+            def verify(self,image,context=None):
+                return dict(status=next(statuses),classifier_score=.5,reasons=[])
+        source=np.zeros((30,100,3),np.uint8)
+        proposals=[dict(box=[0,0,80,25],quad=None,confidence=0.) for _ in range(2)]
+        allowed,audit,_=verify_proposals(source,proposals,Verifier(),allow_uncertain=True)
+        self.assertEqual(len(allowed),1)
+        self.assertEqual(allowed[0]['plate_verification']['status'],'uncertain')
+        self.assertTrue(allowed[0]['provisional_region'])
+        self.assertFalse(audit[1]['ocr_eligible'])
+
 
 if __name__=='__main__':unittest.main()

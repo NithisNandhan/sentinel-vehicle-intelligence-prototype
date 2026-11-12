@@ -27,7 +27,8 @@ probability. Vehicle-context metadata is recorded, but the current learned
 classifier itself is image-only. Spatial ownership remains the existing router's
 responsibility; a new temporal plate/non-plate classifier is not claimed.
 
-The pre-OCR gate passes only `likely_plate` regions. It preserves uncertain and
+The original strict pre-OCR gate passes only `likely_plate` regions. The newer
+`--provisional-ocr` option also reads uncertain regions as described below. It preserves uncertain and
 rejected native/rectified crops and reasons in the engineering audit. Their OCR
 readings are deliberately absent. A low score does not prove a region is not a
 plate; one labelled test plate was rejected, so these decisions must be inspectable.
@@ -117,3 +118,65 @@ Browser checks verified eighteen reference choices, fourteen timestamp choices,
 corner overlays, loaded images and the explicit uncertain/skip explanation.
 The opt-in full multi-frame runner is wired to the new gate and source-reviewed;
 this targeted run does not claim a completed new full-video reconstruction test.
+
+## Provisional OCR and registration resemblance
+
+With `--provisional-ocr`, both likely-plate and uncertain regions may be read;
+likely-non-plate regions remain blocked. The original visual verdict, classifier
+score and model thresholds do not change. OCR eligibility and visual certainty
+are separate decisions.
+
+The selected OCR top is checked by `provisional_plate_reading.check_reading`.
+A recognised project format or common registration-shaped letter/digit layout
+produces a **provisional plate**. Unknown state/district details can still be
+shown under `registration_shape_only`; this is not a registry check. Case and
+formatting separators may be normalised, but characters are not substituted,
+completed, or selected from lower-ranked hypotheses to force a match. Raw text
+is always retained. Other layouts remain review-needed, not proof of a non-plate.
+
+These readings cannot confirm a vehicle or independently create a watchlist
+alert. Histories/parents containing uncertain-region evidence have their
+automatic acceptance cleared. A format-looking string can still be wrong.
+
+The saved-crop replay avoids another detector/video run:
+
+```text
+python tools/run_ocr_research.py tools/replay_provisional_readings.py --capture data/benchmarks/text-corner-audit-20261111 --output data/benchmarks/<fresh-provisional-audit> --device cpu
+python tools/render_text_corner_audit.py --capture data/benchmarks/<fresh-provisional-audit> --baseline data/benchmarks/crop-extent-replay-20261111 --review data/benchmarks/recorded-footage-20261104/manual-review --output data/benchmarks/<fresh-provisional-viewer>
+```
+
+Original images, corners and classifier decisions are frozen. Old OCR outputs
+were already format-filtered, so eligible crops are reread using the unfiltered
+CTC prefix top, with identical-image outputs cached. This keeps resemblance
+checking independent of hypothesis selection. The old ranked text remains in
+the audit for comparison. No plate answers, weight tuning, new detection or central events
+are involved. A versioned audit policy authorises uncertain OCR; the viewer
+recomputes every reading check and rejects tampered displays or operational
+eligibility. Old strict captures retain their original validation rules.
+
+Multi-frame provisional mode likewise admits unfiltered text hypotheses before
+the final resemblance check. This mode cannot return an automatically accepted
+CTC result, and provisional child evidence cannot confirm a parent vehicle.
+The original format-aware reader remains the default outside provisional mode.
+
+### Completed frozen-crop replay, 12 November 2026
+
+The replay read 303 eligible saved crops, including all 175 uncertain regions;
+28 likely-non-plate regions remained unread. Of those OCR outputs, 156 resembled
+a registration, including 68 from uncertain regions; 147 raw readings remain
+review-needed. These are repeated candidate-region counts, not verified plates,
+unique vehicles or a new recognition-accuracy score. Unknown state/district
+layouts account for 60 shape-only results; 96 fit the stricter project patterns.
+
+The first reference's provisional output matches its existing human label. Its
+original uncertain visual decision and classifier score are unchanged. Source
+corners, classifier decisions, OCR weights and every crop's bytes were verified
+unchanged; no plate answers were used by the replay. CPU OCR/decoding took
+371.97 seconds after setup. Full-video reconstructed coverage was not rerun.
+
+The local review is `data/benchmarks/provisional-reading-review-20261112` and
+aggregate evidence is `docs/evidence/provisional-readings-20261112.json`.
+**209 focused tests pass**, including CTC/fusion/reconstruction regression,
+parent-confirmation blocking, policy integrity and viewer tests. A flaky legacy
+timing assertion now permits zero rounded milliseconds while retaining its
+successful-reconstruction, native-pixel and observation-count assertions.

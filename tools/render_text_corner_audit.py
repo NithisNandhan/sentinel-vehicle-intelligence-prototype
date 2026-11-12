@@ -14,6 +14,7 @@ import math
 from pathlib import Path
 import shutil
 import subprocess
+import sys
 
 from PIL import Image
 
@@ -21,9 +22,20 @@ from render_crop_comparison import ROOT, choose, load, overlap, safe_file, sha, 
 
 
 STATES = frozenset(('likely_plate', 'uncertain', 'likely_non_plate'))
+PROVISIONAL_POLICY = 'uncertain_registration_shape_v1'
 NOTICE = ('Four corners are an estimated text enclosure, not verified physical plate corners. '
           'Classifier scores are not verified real-world probabilities. OCR shown here is diagnostic single-frame output, '
-          'not the final reconstructed reading or a new accuracy score.')
+          'not the final reconstructed reading or a new accuracy score. Registration resemblance does not confirm '
+          'vehicle identity and does not trigger an automatic watchlist alert.')
+
+
+def _check_reading(verdict, reading):
+    """Recompute versioned interpretation using the inference policy itself."""
+    edge_path=str(ROOT/'edge')
+    if edge_path not in sys.path:
+        sys.path.insert(0,edge_path)
+    from sentinel_edge.provisional_plate_reading import check_reading
+    return check_reading(verdict,reading)
 
 
 def _image(root, relative, file_hash, native_hash=None):
@@ -58,6 +70,9 @@ def _quad(points, size):
 def validate_audit(capture):
     capture = Path(capture).resolve()
     document = load(safe_file(capture, 'audit.json'))
+    policy = document.get('provisional_ocr_policy')
+    if policy not in (None, PROVISIONAL_POLICY):
+        raise ValueError('Unsupported provisional OCR policy')
     if document.get('labels_used_during_inference') is not False:
         raise ValueError('Explicit label-free inference declaration required')
     if not document.get('source_sha256') or not document.get('schedule_sha256'):
@@ -96,10 +111,20 @@ def validate_audit(capture):
                     raise ValueError('Invalid classifier verdict')
                 if not isinstance(proposal['ocr_ran'], bool):
                     raise ValueError('Explicit OCR execution state required')
-                if verdict['status'] != 'likely_plate' and proposal['ocr_ran']:
+                allowed_ocr = verdict['status'] == 'likely_plate' or (policy == PROVISIONAL_POLICY and verdict['status'] == 'uncertain')
+                if not allowed_ocr and proposal['ocr_ran']:
                     raise ValueError('Uncertain or rejected candidate must not run OCR')
-                if not proposal['ocr_ran'] and proposal.get('top'):
+                if not proposal['ocr_ran'] and proposal.get('top') is not None:
                     raise ValueError('Skipped OCR cannot have a reading')
+                if proposal.get('top') is not None and not isinstance(proposal['top'],str):
+                    raise ValueError('Raw OCR must be text or null')
+                if policy == PROVISIONAL_POLICY:
+                    reading_check=proposal.get('reading_check')
+                    if (not isinstance(reading_check,dict) or reading_check.get('operational_eligible') is not False
+                            or reading_check != _check_reading(verdict,proposal.get('top'))):
+                        raise ValueError('Provisional reading interpretation does not match raw OCR/policy')
+                if policy is None and proposal.get('reading_check') is not None:
+                    raise ValueError('Provisional reading interpretation requires the versioned policy')
                 if any(not isinstance(i, int) or not 0 <= i < len(region['polygons']) for i in proposal['text_members']):
                     raise ValueError('Unknown text-outline member')
                 native, native_size = _image(capture, proposal['native_path'], proposal['native_sha256'], proposal.get('native_source_id'))
@@ -180,7 +205,7 @@ def html(data, output):
 <article><h3>Human reference</h3><div class="image" id="reference-image"></div><p class="reading" id="actual"></p></article>
 <article><h3>Previous automatic crop</h3><div class="image" id="previous-image"></div><p class="reading" id="previous-reading"></p><p class="muted">Saved reconstructed top output</p></article>
 <article><h3>New expanded native crop</h3><div class="image" id="native-image"></div><p id="verdict" class="status"></p></article>
-<article><h3>Rectified working copy</h3><div class="image" id="rectified-image"></div><p class="reading" id="reading"></p><p id="ocr-note" class="muted"></p></article></div><p id="score-note" class="note"></p><ul id="reasons"></ul></section>
+<article><h3>Rectified working copy</h3><div class="image" id="rectified-image"></div><p class="reading" id="reading"></p><p id="raw-reading" class="muted"></p><p id="ocr-note" class="muted"></p></article></div><p id="score-note" class="note"></p><ul id="reasons"></ul></section>
 <section class="panel"><h2>All automatic vehicle regions</h2><div class="toolbar"><label for="frame">Audited frame</label><select id="frame"></select><label for="region">Vehicle region</label><select id="region"></select></div>
 <div class="legend"><span class="raw">Blue dashed: raw text outline</span><span class="likely_plate">Teal: likely plate</span><span class="uncertain">Amber: uncertain</span><span class="likely_non_plate">Red: likely non-plate</span></div><div id="context"></div><p class="muted" id="unretained"></p>
 <div class="toolbar"><label for="status-filter">Status</label><select id="status-filter"><option value="all">All candidates</option><option value="likely_plate">Likely plate</option><option value="uncertain">Uncertain</option><option value="likely_non_plate">Likely non-plate</option></select><label for="candidate">Candidate</label><select id="candidate"></select></div><p class="note">Geometry correspondence is illustrative. Selecting a different candidate does not change any accuracy score.</p></section>
@@ -191,12 +216,12 @@ const colours={likely_plate:'#0f766e',uncertain:'#b7791f',likely_non_plate:'#b42
 const option=(select,value,label)=>{const o=document.createElement('option');o.value=String(value);o.textContent=label;select.append(o);};
 const image=(id,src)=>{const box=e(id);box.replaceChildren();if(!src){box.textContent='No corresponding crop';return;}const im=document.createElement('img');im.src=src;im.alt=id.replaceAll('-',' ');box.append(im);};
 const currentRegion=()=>{if(e('frame').value===''||e('region').value==='')return null;return d.frames[Number(e('frame').value)]?.regions[Number(e('region').value)];};
-function showCandidate(){const region=currentRegion(),p=region?.proposals[Number(e('candidate').value)];image('native-image',p?.native_path);image('rectified-image',p?.rectified_path);e('reasons').replaceChildren();if(!p){e('verdict').textContent='No candidate selected';e('reading').textContent='';e('ocr-note').textContent='OCR was not run for this selection.';e('score-note').textContent='';return;}const v=p.verdict;e('verdict').className='status '+v.status;e('verdict').textContent=v.status.replaceAll('_',' ');e('reading').textContent=p.ocr_ran?(p.top||'No diagnostic OCR reading'):'OCR skipped';e('ocr-note').textContent=p.ocr_ran?'Single-frame diagnostic reading; not reconstructed output.':(p.ocr_skip_reason||(v.status==='likely_plate'?'Classified as likely plate; OCR was not run in this capture.':'Only likely-plate candidates reach OCR. Uncertain/rejected evidence remains visible.'));e('score-note').textContent='Classifier score: '+Number(v.classifier_score).toFixed(4)+' · This is not a verified real-world probability. Corners are an estimated text enclosure.';for(const reason of [...(p.reasons||[]),...(v.reasons||[])]){const li=document.createElement('li');li.textContent=reason;e('reasons').append(li);}}
-function candidates(){const region=currentRegion();e('candidate').replaceChildren();for(const [i,p] of (region?.proposals||[]).entries()){if(e('status-filter').value==='all'||p.verdict.status===e('status-filter').value)option(e('candidate'),i,p.id+' · '+p.verdict.status.replaceAll('_',' '));}if(!e('candidate').options.length)option(e('candidate'),-1,'No candidates in this status');showCandidate();}
+function showCandidate(){const region=currentRegion(),p=region?.proposals[Number(e('candidate').value)];image('native-image',p?.native_path);image('rectified-image',p?.rectified_path);e('reasons').replaceChildren();if(!p){e('verdict').textContent='No candidate selected';e('reading').textContent='';e('raw-reading').textContent='';e('ocr-note').textContent='OCR was not run for this selection.';e('score-note').textContent='';return;}const v=p.verdict;e('verdict').className='status '+v.status;e('verdict').textContent=v.status.replaceAll('_',' ');const checked=p.reading_check;const provisional=checked?.state==='provisional_plate'&&checked.display_plate;e('reading').textContent=p.ocr_ran?(provisional?'Provisional plate: '+checked.display_plate:(p.top||'No diagnostic OCR reading')):'OCR skipped';e('reading').className='reading '+(provisional?'likely_plate':checked?'uncertain':'');e('raw-reading').textContent=checked&&p.ocr_ran?'Raw OCR: '+(p.top||'No text')+' · '+checked.state.replaceAll('_',' '):'';e('ocr-note').textContent=p.ocr_ran?(checked?'Registration resemblance is not identity confirmation. This provisional/review output cannot trigger an automatic watchlist alert.':'Single-frame diagnostic reading; not reconstructed output.'):(p.ocr_skip_reason||(v.status==='likely_plate'?'Classified as likely plate; OCR was not run in this capture.':(d.provisional_ocr_policy?'OCR was not run in this capture; visually rejected regions stay excluded.':'Only likely-plate candidates reach OCR. Uncertain/rejected evidence remains visible.')));e('score-note').textContent='Classifier score: '+Number(v.classifier_score).toFixed(4)+' · This is not a verified real-world probability. Corners are an estimated text enclosure.';for(const reason of [...(p.reasons||[]),...(v.reasons||[]),...(checked?.reasons||[])]){const li=document.createElement('li');li.textContent=reason;e('reasons').append(li);}}
+function candidates(){const region=currentRegion();e('candidate').replaceChildren();for(const [i,p] of (region?.proposals||[]).entries()){if(e('status-filter').value==='all'||p.verdict.status===e('status-filter').value)option(e('candidate'),i,p.id+' · '+p.verdict.status.replaceAll('_',' ')+(p.reading_check?.display_plate?' · provisional':''));}if(!e('candidate').options.length)option(e('candidate'),-1,'No candidates in this status');showCandidate();}
 function draw(){const region=currentRegion(),host=e('context');host.replaceChildren();if(!region){host.textContent='No vehicle region captured at this frame.';e('unretained').textContent='';candidates();return;}const svg=document.createElementNS(ns,'svg');svg.classList.add('context');svg.setAttribute('viewBox','0 0 '+region.size.join(' '));svg.setAttribute('role','img');svg.setAttribute('aria-label','Native vehicle context with raw text and estimated plate outlines');const im=document.createElementNS(ns,'image');im.setAttribute('href',region.path);im.setAttribute('width',region.size[0]);im.setAttribute('height',region.size[1]);svg.append(im);const used=new Set(region.proposals.flatMap(p=>p.text_members));const polygon=(points,colour,dashed)=>{const q=document.createElementNS(ns,'polygon');q.setAttribute('points',points.map(p=>p.join(',')).join(' '));q.setAttribute('fill','none');q.setAttribute('stroke',colour);q.setAttribute('stroke-width',Math.max(1.5,region.size[0]/400));q.setAttribute('vector-effect','non-scaling-stroke');if(dashed)q.setAttribute('stroke-dasharray','5 4');svg.append(q);};region.polygons.forEach(p=>polygon(p,'#2563eb',true));for(const p of region.proposals)polygon(p.quad,colours[p.verdict.status],false);host.append(svg);e('unretained').textContent=region.polygons.length+' raw text outlines · '+region.polygons.filter((_,i)=>!used.has(i)).length+' not retained by bounded geometry search. This does not establish that those outlines are non-plates.';candidates();}
 function regions(){const frame=d.frames[Number(e('frame').value)];e('region').replaceChildren();(frame?.regions||[]).forEach((r,i)=>option(e('region'),i,r.id+' · '+r.proposals.length+' candidates'));draw();}
 function reference(){const r=d.references[Number(e('reference').value)];if(!r)return;e('reference-title').textContent='Reference '+r.number+' of '+d.references.length;e('actual').textContent=r.actual;e('previous-reading').textContent=r.previous.reading||'No saved reconstructed reading';image('reference-image',r.reference_crop);image('previous-image',r.previous.crop);e('time').textContent=(r.position_ms/1000).toFixed(3)+' s';e('correspondence').textContent=r.correspondence;const selection=r.match||r.inspection,fi=selection?selection[0]:r.frame_indexes[0];if(fi!==undefined){e('frame').value=String(fi);regions();if(selection){e('region').value=String(selection[1]);draw();e('status-filter').value='all';candidates();e('candidate').value=String(selection[2]);showCandidate();}}else{e('frame').value='-1';e('region').replaceChildren();e('context').textContent='No audited frame at this reference timestamp.';e('candidate').replaceChildren();showCandidate();}}
-e('notice').textContent=d.notice;e('scope').textContent=d.scope;e('metadata').textContent=JSON.stringify({source_sha256:d.source_sha256,schedule_sha256:d.schedule_sha256,elapsed_seconds:d.elapsed_seconds,summary:d.summary,verifier:d.verifier_metadata,baseline_coverage:d.baseline_coverage,labels_used_during_inference:false},null,2);d.references.forEach((r,i)=>option(e('reference'),i,String(r.number)));d.frames.forEach((f,i)=>option(e('frame'),i,(f.position_ms/1000).toFixed(3)+' s · '+f.regions.length+' regions'));const manual=()=>{e('correspondence').textContent='Manual candidate inspection: this selection does not establish identity correspondence to the human reference.';};e('reference').addEventListener('change',reference);e('frame').addEventListener('change',()=>{manual();regions();});e('region').addEventListener('change',()=>{manual();draw();});e('candidate').addEventListener('change',()=>{manual();showCandidate();});e('status-filter').addEventListener('change',()=>{manual();candidates();});reference();
+e('notice').textContent=d.notice;e('scope').textContent=d.scope;e('metadata').textContent=JSON.stringify({source_sha256:d.source_sha256,schedule_sha256:d.schedule_sha256,elapsed_seconds:d.elapsed_seconds,summary:d.summary,verifier:d.verifier_metadata,provisional_ocr_policy:d.provisional_ocr_policy,baseline_coverage:d.baseline_coverage,labels_used_during_inference:false},null,2);d.references.forEach((r,i)=>option(e('reference'),i,String(r.number)));d.frames.forEach((f,i)=>option(e('frame'),i,(f.position_ms/1000).toFixed(3)+' s · '+f.regions.length+' regions'));const manual=()=>{e('correspondence').textContent='Manual candidate inspection: this selection does not establish identity correspondence to the human reference.';};e('reference').addEventListener('change',reference);e('frame').addEventListener('change',()=>{manual();regions();});e('region').addEventListener('change',()=>{manual();draw();});e('candidate').addEventListener('change',()=>{manual();showCandidate();});e('status-filter').addEventListener('change',()=>{manual();candidates();});reference();
 })();</script></html>'''
 
 
@@ -220,7 +245,7 @@ def render(capture, baseline, review, output):
             if isinstance(node,ast.Assign) and any(isinstance(target,ast.Name) and target.id in ('CORNERS','TEXT_REGIONS') for target in node.targets):
                 corners.update(ast.literal_eval(node.value))
     references = unique(manifest['samples'],'id','human reference')
-    data = {key:copy.deepcopy(audit.get(key)) for key in ('source_sha256','scope','elapsed_seconds','verifier_metadata','schedule_sha256','summary','frames')}
+    data = {key:copy.deepcopy(audit.get(key)) for key in ('source_sha256','scope','elapsed_seconds','verifier_metadata','schedule_sha256','summary','frames','provisional_ocr_policy')}
     data['notice'], data['references'] = NOTICE, []
     copies = dict(audit_assets)
     remap = {relative:f'assets/capture-{i:05}.png' for i, relative in enumerate(copies)}

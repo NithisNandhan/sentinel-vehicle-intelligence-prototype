@@ -45,6 +45,7 @@ def run(args):
     from sentinel_edge.plate_region_verifier import PlateRegionVerifier
     from sentinel_edge.ctc_fusion import CTCPlateReader
     from sentinel_edge.low_contrast_search import contrast_view
+    from sentinel_edge.provisional_plate_reading import POLICY,ocr_allowed,check_reading,unconstrained_top
     if args.output.exists() or not args.output.resolve().is_relative_to((ROOT/'data/benchmarks').resolve()):
         raise ValueError('Fresh local benchmark output required')
     tracking_path=args.tracking/'report.json'
@@ -109,18 +110,24 @@ def run(args):
                 rectified_path=f'assets/{key}-{ci:02}-rectified.png'
                 native_hash,native_id=save(native_path,native)
                 rectified_hash,_=save(rectified_path,rectified)
-                allowed=verdict['status']=='likely_plate'
+                allowed=ocr_allowed(verdict,allow_uncertain=args.provisional_ocr)
                 top=None
                 if allowed:
+                    rows=ocr.probabilities(rectified)
                     reader=CTCPlateReader(ocr.tokens)
-                    reader.add(ocr.probabilities(rectified),timestamp_ms=pts,
+                    if args.provisional_ocr:
+                        top=unconstrained_top(rows,ocr.tokens)
+                    else:
+                        reader.add(rows,timestamp_ms=pts,
                                source_id=hashlib.sha256(rectified.tobytes()).hexdigest())
-                    ranked=reader.candidates();top=ranked[0].plate if ranked else None
+                        ranked=reader.candidates();top=ranked[0].plate if ranked else None
                     totals['ocr_calls']+=1
                 totals[verdict['status']]+=1
-                entry['proposals'].append(dict(**candidate,id=f'{key}-{ci:02}',verdict=verdict,
+                item=dict(**candidate,id=f'{key}-{ci:02}',verdict=verdict,
                     native_path=native_path,rectified_path=rectified_path,native_sha256=native_hash,
-                    rectified_sha256=rectified_hash,native_source_id=native_id,ocr_ran=allowed,top=top))
+                    rectified_sha256=rectified_hash,native_source_id=native_id,ocr_ran=allowed,top=top)
+                if args.provisional_ocr:item['reading_check']=check_reading(verdict,top)
+                entry['proposals'].append(item)
             selected['regions'].append(entry)
             write(args.output/'progress.json',dict(stage='probing',position_ms=pts,regions=totals['vehicle_regions'],
                 counts=dict(totals),elapsed_seconds=round(time.monotonic()-began,2)))
@@ -136,6 +143,7 @@ def run(args):
         decoded_frames=decoded,selected_frames=len(frames),elapsed_seconds=round(time.monotonic()-began,2),
         ocr_model_sha256=sha(checkpoint),verifier_metadata=json.loads(args.verifier.with_suffix('.json').read_bytes()),
         summary=dict(totals),frames=frames,central_events_sent=0,
+        provisional_ocr_policy=POLICY if args.provisional_ocr else None,
         source_code_sha256={name:sha(ROOT/name) for name in ('tools/probe_text_corners.py',
             'edge/sentinel_edge/text_plate_geometry.py','edge/sentinel_edge/plate_region_verifier.py')})
     write(args.output/'audit.json',document)
@@ -154,4 +162,5 @@ if __name__=='__main__':
     parser.add_argument('--device',choices=('cpu','gpu'),default='cpu')
     parser.add_argument('--retry-contrast',action='store_true')
     parser.add_argument('--max-candidates',type=int,default=8)
+    parser.add_argument('--provisional-ocr',action='store_true')
     run(parser.parse_args())

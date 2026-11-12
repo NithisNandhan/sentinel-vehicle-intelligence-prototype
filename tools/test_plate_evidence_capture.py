@@ -31,6 +31,14 @@ class EvidenceIntegrationTests(unittest.TestCase):
         self.assertEqual(result[0]['methods']['top'],'MH01AB1234')
         self.assertEqual({s['source_id'] for s in result[0]['samples']},{'plate','plate2'})
         self.assertEqual(build_vehicle_results(predictions[:1],posts[:1],tokens),[])
+        # The same plausible OCR evidence may remain visible provisionally,
+        # but uncertainty must not become an accepted parent/watchlist result.
+        posts[1]['observations'].append(sample('MH01AB1234',500,'plate3'))
+        self.assertIsNotNone(build_vehicle_results(predictions,posts,tokens)[0]['methods']['accepted'])
+        predictions[1]['provisional_region']=True
+        provisional=build_vehicle_results(predictions,posts,tokens)[0]
+        self.assertEqual(provisional['methods']['top'],'MH01AB1234')
+        self.assertIsNone(provisional['methods']['accepted'])
 
     def test_rejected_true_plate_counts_as_miss_even_if_raw_hypothesis_is_correct(self):
         with tempfile.TemporaryDirectory() as directory:

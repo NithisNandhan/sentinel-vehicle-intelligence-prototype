@@ -10,6 +10,11 @@ working-copy HOG gradients and six texture/shape values. The input image is
 not modified. Inference requires NumPy and OpenCV; scikit-learn is required
 only to rerun `tools/train_plate_region_verifier.py`.
 
+The classifier's `allow_ocr` describes its original strict recommendation. The
+separate opt-in provisional reading policy may read an `uncertain` region and
+display registration-shaped text without changing this visual decision or
+permitting automatic confirmation. See `docs/TEXT_CORNERS_VERIFIER.md`.
+
 ## Data provenance and evaluation
 
 The frozen source manifest has 360 training, 130 validation and 77 test images.

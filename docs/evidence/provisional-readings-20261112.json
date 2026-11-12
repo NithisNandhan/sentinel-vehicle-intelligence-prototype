@@ -1,0 +1,53 @@
+{
+  "date": "2026-11-12",
+  "policy": "uncertain_registration_shape_v1",
+  "source_sha256": "6b7064605b3d4d12c6c1da4566cbcec1cd2e3e3bd7b77814865fe9df22045f65",
+  "source_audit_sha256": "80a99c623d47aa22b59b200561ad0553686676b213db1130ff5cdb3291609f6d",
+  "ocr_model_sha256": "c2ba896d994b174071c95ace0f5ffc8a61cec3fc6eecce8f0bc5feb7dec4456d",
+  "classifier_model_sha256": "e12b5716f74a73fa36e98a877bf28c4716dbf6905af3c25d9da76862aefada40",
+  "model_weights_changed": false,
+  "training_performed": false,
+  "new_detection_performed": false,
+  "all_source_geometry_and_verdicts_unchanged": true,
+  "all_source_crop_bytes_unchanged": true,
+  "labels_used_during_inference": false,
+  "central_events_sent": 0,
+  "summary": {
+    "uncertain": 175,
+    "new_ocr_calls": 303,
+    "uncertain_regions_read": 175,
+    "provisional_results": 156,
+    "uncertain_provisional_results": 68,
+    "ocr_outputs": 303,
+    "likely_non_plate": 28,
+    "likely_plate": 128
+  },
+  "reading_states": {
+    "provisional_plate": 156,
+    "review_needed": 147,
+    "rejected_region": 28
+  },
+  "format_counts": {
+    "registration_shape_only": 60,
+    "not_registration_shaped": 147,
+    "not_read": 28,
+    "recognized_format": 96
+  },
+  "elapsed_seconds": 371.97,
+  "runtime_device": "cpu",
+  "first_reference": {
+    "number": 1,
+    "visual_status": "uncertain",
+    "reading_state": "provisional_plate",
+    "matches_existing_human_label": true,
+    "operational_eligible": false
+  },
+  "tests_passed": 209,
+  "limitations": [
+    "Counts describe repeated candidate regions, not verified unique plates",
+    "Unfiltered OCR top is checked only after decoding; no character swaps or lower-candidate selection",
+    "Registration shape does not confirm character correctness, vehicle identity or registry existence",
+    "Single-frame diagnostic replay is not a new full-video reconstructed reading accuracy result",
+    "Unknown state/district shapes and rare-format limitations remain explicitly reviewable"
+  ]
+}

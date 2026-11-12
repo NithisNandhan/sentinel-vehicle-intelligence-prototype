@@ -3,10 +3,11 @@ from collections import Counter
 import math
 
 from .text_boundaries import warp_polygon
+from .provisional_plate_reading import ocr_allowed
 
 
-def verify_proposals(image, proposals, verifier, *, observe=None):
-    """Return only likely plates; preserve every other decision for review.
+def verify_proposals(image, proposals, verifier, *, observe=None, allow_uncertain=False):
+    """Return policy-eligible regions; preserve every decision for review.
 
     The callback receives native/rectified images, never OCR readings. No
     transformation edits the source. Scores describe the region classifier,
@@ -30,7 +31,8 @@ def verify_proposals(image, proposals, verifier, *, observe=None):
             'proposal_box':list(box),'geometry':proposal.get('geometry')})
         if verdict.get('status') not in ('likely_plate','uncertain','likely_non_plate'):
             raise ValueError('Invalid verifier status')
-        item={**proposal,'plate_verification':verdict,'ocr_eligible':verdict['status']=='likely_plate'}
+        item={**proposal,'plate_verification':verdict,'ocr_eligible':ocr_allowed(verdict,allow_uncertain=allow_uncertain),
+              'provisional_region':verdict['status']=='uncertain'}
         if observe is not None:
             observe(index,item,native,working)
         audit.append(item)

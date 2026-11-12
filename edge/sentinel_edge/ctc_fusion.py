@@ -218,12 +218,17 @@ class CTCPlateReader:
     per-position confidence-weighted vote of the frames' readings as one more
     candidate. Every candidate, voted or not, is rescored against every original
     frame and must pass the same `accepted()` gate.
+    `allow_any_text` is a separate provisional-only mode: no plate grammar or
+    character correction is applied, and `accepted()` always returns None.
     """
-    def __init__(self, tokens, *, window=8, beam_width=100, validate_format=False, position_vote=False):
+    def __init__(self, tokens, *, window=8, beam_width=100, validate_format=False, position_vote=False, allow_any_text=False):
         if not 3 <= window <= 12 or not 1 <= beam_width <= 200:
             raise ValueError('Invalid CTC temporal bounds')
         self.tokens, self.beam_width = tuple(tokens), beam_width
         self.validate_format, self.use_position_vote = bool(validate_format), bool(position_vote)
+        if allow_any_text and validate_format:
+            raise ValueError('Unfiltered provisional text cannot use format correction')
+        self.allow_any_text=bool(allow_any_text)
         self.samples = deque(maxlen=window)
         self._readings = deque(maxlen=window)
         self._cache = None
@@ -253,7 +258,8 @@ class CTCPlateReader:
         report['readings'] = len(self.samples)
         voted = self.admit(report['voted']) if report['voted'] else None
         report['admitted'] = voted
-        without = CTCPlateReader(self.tokens, beam_width=self.beam_width, validate_format=self.validate_format)
+        without = CTCPlateReader(self.tokens, beam_width=self.beam_width, validate_format=self.validate_format,
+                                 allow_any_text=self.allow_any_text)
         without.samples.extend(self.samples)
         without.propose(self._proposals)
         ranked = without.candidates()
@@ -275,6 +281,8 @@ class CTCPlateReader:
         """The plate text a candidate may enter fusion as, or None."""
         if not isinstance(text, str):
             return None
+        if self.allow_any_text:
+            return text if 1<=len(text)<=25 and text.isascii() and text.isalnum() and text==text.upper() else None
         if self.validate_format:
             from .plate_format import check_plate
             return check_plate(text).plate
@@ -383,6 +391,10 @@ class CTCPlateReader:
         return self._cache
 
     def accepted(self, threshold=.85):
+        # Unfiltered text exists only to support provisional engineering output.
+        # It cannot bypass the established automatic plate acceptance path.
+        if self.allow_any_text:
+            return None
         candidates = self.candidates()
         if self.observation_count < 3 or not candidates:
             return None

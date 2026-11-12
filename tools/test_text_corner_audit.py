@@ -9,7 +9,7 @@ import unittest
 from PIL import Image
 
 from render_crop_comparison import ROOT,sha
-from render_text_corner_audit import associate,render,validate_audit,_quad
+from render_text_corner_audit import associate,render,validate_audit,_quad,_check_reading,PROVISIONAL_POLICY
 import test_crop_comparison as fixtures
 
 
@@ -171,6 +171,78 @@ class TextCornerAuditTests(unittest.TestCase):
             page=(root/'output/index.html').read_text(encoding='utf-8')
             self.assertNotIn('</script><script>bad()',page)
             self.assertIn('\\u003c/script\\u003e',page)
+
+    def provisional(self,audit,reading='mh 12-ab 1234',status='uncertain'):
+        audit['provisional_ocr_policy']=PROVISIONAL_POLICY
+        p=audit['frames'][0]['regions'][0]['proposals'][0]
+        p['verdict']['status']=status;p['ocr_ran']=True;p['top']=reading
+        p['reading_check']=_check_reading(p['verdict'],p['top'])
+        return p
+
+    def test_versioned_policy_allows_uncertain_provisional_output_without_relabelling_region(self):
+        with self.temporary() as directory:
+            root=Path(directory);capture,baseline,review,audit=self.fixture(root)
+            p=self.provisional(audit)
+            self.assertEqual(p['reading_check']['display_plate'],'MH12AB1234')
+            write(capture/'audit.json',audit)
+            data=render(capture,baseline,review,root/'output')
+            saved=data['frames'][0]['regions'][0]['proposals'][0]
+            self.assertEqual(data['provisional_ocr_policy'],PROVISIONAL_POLICY)
+            self.assertEqual(saved['verdict']['status'],'uncertain')
+            self.assertEqual(saved['verdict']['classifier_score'],.5)
+            self.assertEqual(saved['top'],'mh 12-ab 1234')
+            self.assertEqual(saved['reading_check']['state'],'provisional_plate')
+            self.assertFalse(saved['reading_check']['operational_eligible'])
+            page=(root/'output/index.html').read_text(encoding='utf-8')
+            for phrase in ('Provisional plate:','Raw OCR:','does not trigger an automatic watchlist alert'):
+                self.assertIn(phrase,page)
+
+    def test_uncertain_provisional_output_still_requires_explicit_policy(self):
+        with self.temporary() as directory:
+            root=Path(directory);capture,_,_,audit=self.fixture(root)
+            self.provisional(audit);audit.pop('provisional_ocr_policy')
+            write(capture/'audit.json',audit)
+            with self.assertRaisesRegex(ValueError,'must not run OCR'):validate_audit(capture)
+
+    def test_invalid_uncertain_raw_reading_is_retained_without_provisional_plate(self):
+        with self.temporary() as directory:
+            root=Path(directory);capture,baseline,review,audit=self.fixture(root)
+            self.provisional(audit,reading='SHOP WINDOW')
+            write(capture/'audit.json',audit)
+            data=render(capture,baseline,review,root/'output')
+            saved=data['frames'][0]['regions'][0]['proposals'][0]
+            self.assertEqual(saved['top'],'SHOP WINDOW')
+            self.assertEqual(saved['reading_check']['raw_reading'],'SHOP WINDOW')
+            self.assertEqual(saved['reading_check']['state'],'review_needed')
+            self.assertIsNone(saved['reading_check']['display_plate'])
+
+    def test_non_plate_regions_still_cannot_run_ocr_under_new_policy(self):
+        with self.temporary() as directory:
+            root=Path(directory);capture,_,_,audit=self.fixture(root)
+            self.provisional(audit,status='likely_non_plate')
+            write(capture/'audit.json',audit)
+            with self.assertRaisesRegex(ValueError,'must not run OCR'):validate_audit(capture)
+
+    def test_provisional_interpretation_is_recomputed_and_tampering_fails_before_render(self):
+        for mutation in ('display','operational','missing','raw'):
+            with self.subTest(mutation=mutation),self.temporary() as directory:
+                root=Path(directory);capture,baseline,review,audit=self.fixture(root)
+                p=self.provisional(audit)
+                if mutation=='display':p['reading_check']['display_plate']='MH12AB9999'
+                elif mutation=='operational':p['reading_check']['operational_eligible']=True
+                elif mutation=='missing':p.pop('reading_check')
+                elif mutation=='raw':p['reading_check']['raw_reading']='MH12AB9999'
+                write(capture/'audit.json',audit)
+                with self.assertRaisesRegex(ValueError,'does not match raw OCR/policy'):
+                    render(capture,baseline,review,root/'output')
+                self.assertFalse((root/'output').exists())
+
+    def test_unknown_policy_is_not_authorisation(self):
+        with self.temporary() as directory:
+            root=Path(directory);capture,_,_,audit=self.fixture(root)
+            self.provisional(audit);audit['provisional_ocr_policy']='unknown_v2'
+            write(capture/'audit.json',audit)
+            with self.assertRaisesRegex(ValueError,'Unsupported'):validate_audit(capture)
 
 
 class BoundaryRoundoffTests(unittest.TestCase):
