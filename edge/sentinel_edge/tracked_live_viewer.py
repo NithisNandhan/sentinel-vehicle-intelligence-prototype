@@ -4,7 +4,7 @@ import statistics
 import time
 
 from .crop_collector import CropCollector as LatestFrames
-from .live_detection_viewer import encoded
+from .live_detection_viewer import encoded, display_frame
 from .tracked_ocr import TrackedOCR
 
 
@@ -150,13 +150,13 @@ def observe_tracked(config,camera,model,detector,vehicle,state,stop, *, debug=Fa
                 diagnostic = getattr(plate_search,'diagnostics',None)
                 if callable(diagnostic):
                     details['crop_pipeline'] = diagnostic()
-                details['original_frame'] = encoded(frame.image,'.jpg')
+                details['original_frame'] = display_frame(frame.image) if recorded else encoded(frame.image,'.jpg')
             # A live frame's age starts when it was captured. A recording has
             # no capture clock; its age is the time since it was analysed.
             published_at = now if recorded else (getattr(frame,'captured_at',now) or now)
             snapshot = dict(pipeline.summary(),camera_id=camera.camera_id,
                 status='processing' if recorded else 'live',published_at=published_at,
-                pts_ms=frame.pts_ms,frame=encoded(view,'.jpg'),crop=crop_display,
+                pts_ms=frame.pts_ms,frame=display_frame(view) if recorded else encoded(view,'.jpg'),crop=crop_display,
                 vehicle_boxes=len(tracks),decoded_frames=tap.decoded,
                 plate_in_frame=bool(displays),resolution=[frame.image.shape[1],frame.image.shape[0]],
                 observed_seconds=round(now-first,2),median_processing_ms=round(statistics.median(timings)),
@@ -166,6 +166,7 @@ def observe_tracked(config,camera,model,detector,vehicle,state,stop, *, debug=Fa
             snapshot['vehicles_seen'] = seen.masked()
             if debug:details['passed'] = seen.engineering()
             if recorded:
+                snapshot['_dashboard_frame_width'] = 1280
                 snapshot['video_position_ms'] = frame.pts_ms-recorded.recording.start_pts_ms
                 snapshot['pacing'] = 'paced' if recorded.paced else 'unpaced'
             if debug:

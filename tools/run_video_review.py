@@ -5,6 +5,7 @@ Every decoded source frame is counted; inference keeps the dashboard's normal
 sampling and gates. Review evidence is retained only for this permitted file.
 """
 import argparse
+import ast
 from datetime import datetime,timezone
 import hashlib
 import json
@@ -17,6 +18,8 @@ import time
 from sentinel_edge.awiros_experiment import file_hash
 from sentinel_edge.recorded_source import RecordingLibrary,read_recording,new_session_id
 
+PREDICTION_POLICY='passed_vehicles_strongest_window_v1'
+
 
 def utc():return datetime.now(timezone.utc).isoformat().replace('+00:00','Z')
 
@@ -25,6 +28,54 @@ def write_json(path,value):
     temporary=path.with_suffix('.tmp')
     temporary.write_text(json.dumps(value,indent=2,allow_nan=False)+'\n',encoding='utf-8')
     temporary.replace(path)
+
+
+def reference_coverage(manifest,review,reference_view):
+    """Suggest old-reference links by native geometry/time only, never OCR text.
+
+    These are not imported labels: duplicate passages, missing vehicles and
+    every current track still require human review before full-clip scoring.
+    """
+    from sentinel_edge.automatic_crops import overlap
+    review,reference_view=Path(review),Path(reference_view)
+    original=json.loads((review/'manifest.json').read_bytes())
+    labels=json.loads((review/'labels.json').read_bytes())
+    previous=json.loads(reference_view.read_bytes())
+    if any(d.get('source_sha256')!=manifest['source']['sha256'] for d in (original,labels,previous)):
+        raise ValueError('Existing human references belong to another source')
+    bindings=previous.get('bindings',{})
+    if (bindings.get('manifest_sha256')!=file_hash(review/'manifest.json')
+            or bindings.get('labels_sha256')!=file_hash(review/'labels.json')):
+        raise ValueError('Existing reference provenance changed')
+    samples={r['id']:r for r in original['samples']}
+    truth={r['id']:r for r in labels['labels']}
+    points={}
+    source=review/'ocr-model-dev/rectify.py'
+    for node in ast.parse(source.read_text(encoding='utf-8')).body:
+        if isinstance(node,ast.Assign) and any(isinstance(t,ast.Name) and t.id in ('CORNERS','TEXT_REGIONS') for t in node.targets):
+            points.update(ast.literal_eval(node.value))
+    rows=[]
+    for reference in previous['references']:
+        sid=reference['reference_id'];sample=samples[sid];label=truth[sid]
+        if label['status']!='readable' or label['plate']!=reference['actual']:
+            raise ValueError('Existing readable human reference is inconsistent')
+        box=sample['box'];quad=points.get(sid)
+        if quad:
+            box=[box[0]+min(p[0] for p in quad),box[1]+min(p[1] for p in quad),
+                 box[0]+max(p[0] for p in quad),box[1]+max(p[1] for p in quad)]
+        candidates=[]
+        for track in manifest['tracks']:
+            best=max((overlap(o['box'],box) for o in track.get('plate_observations',[])
+                      if abs(o['position_ms']-sample['position_ms'])<=1),default=0.)
+            if best>=.3:candidates.append(dict(track_id=track['id'],iou=round(best,4)))
+        rows.append(dict(reference_number=reference['number'],reference_id=sid,position_ms=sample['position_ms'],
+            status='unique_geometry_needs_review' if len(candidates)==1 else 'ambiguous_geometry' if candidates else 'no_matching_observation',
+            candidates=sorted(candidates,key=lambda r:-r['iou'])))
+    return dict(source_sha256=manifest['source']['sha256'],human_reference_count=len(rows),
+        labels_imported=0,predictions_used_for_linking=False,manual_inventory_complete=False,
+        original_manifest_sha256=file_hash(review/'manifest.json'),original_labels_sha256=file_hash(review/'labels.json'),
+        reference_view_sha256=file_hash(reference_view),references=rows,
+        notice='Historical development references, linked only by source hash, video time and native geometry. All suggestions require human confirmation; no labels are imported and this is not full-clip accuracy.')
 
 
 class CountedRun:
@@ -45,6 +96,7 @@ class ReviewObserver:
         self.recording=recording;self.output=output
         self.segment=0;self.tracks={};self.predictions={};self.native={}
         self.last_position=0;self.samples=0;self.started=time.monotonic()
+        self.pipeline=None
 
     def identity(self,track_id):
         value=str(track_id)
@@ -56,15 +108,16 @@ class ReviewObserver:
         if uid not in self.tracks:
             self.tracks[uid]=dict(id=uid,tracker_id=str(track_id),segment=self.segment,
                 first_ms=position,last_ms=position,vehicle_class=None,analysed_samples=0,
-                plate_crop_count=0,vehicle_preview=None,samples=[])
+                plate_crop_count=0,vehicle_preview=None,samples=[],plate_observations=[])
             self.predictions[uid]=dict(first_ms=position,last_ms=position,top_guess=None,
-                candidate_ms=None,candidates=[],accepted=[],observations=0)
-            self.native[uid]=dict(vehicle=None,area=0,plates=[])
+                candidate_ms=None,candidates=[],accepted=[],observations=0,selection_strength=[])
+            self.native[uid]=dict(vehicle=None,area=0,plates=[],selected=None)
         return uid,self.tracks[uid],self.predictions[uid]
 
     def depth(self):return 0
 
     def accept(self,camera_id,track_id,candidate,pts_ms,*,recorded=None):
+        if self.pipeline is not None:self.segment=self.pipeline.metrics['scene_resets']
         position=pts_ms-self.recording.start_pts_ms
         _,_,prediction=self.ensure(track_id,position)
         if candidate.plate not in {r['plate'] for r in prediction['accepted']}:
@@ -82,6 +135,9 @@ class ReviewObserver:
     def on_sample(self,frame,tracks,displays,pipeline):
         from sentinel_edge.live_detection_viewer import crop_box,clipped_box
         from sentinel_edge.plate_quality import crop_quality
+        from sentinel_edge.passed_vehicles import PassedVehicles
+        from sentinel_edge.recognition_contract import recognition_state
+        self.pipeline=pipeline
         self.segment=pipeline.metrics['scene_resets']
         position=frame.pts_ms-self.recording.start_pts_ms
         self.last_position=position;self.samples+=1
@@ -102,23 +158,29 @@ class ReviewObserver:
             row['last_ms']=position;row['plate_crop_count']+=1
             crop=display['crop'];quality=crop_quality(crop)
             digest=hashlib.sha256(crop.tobytes()).hexdigest()
+            sample=dict(position_ms=position,box=list(map(float,display['box'])),
+                width=crop.shape[1],height=crop.shape[0],quality=quality,pixel_sha256=digest)
+            row['plate_observations'].append(dict(position_ms=position,box=sample['box'],pixel_sha256=digest))
             retained=self.native[uid]['plates']
             if not any(item[1]['pixel_sha256']==digest for item in retained):
-                sample=dict(position_ms=position,box=list(map(float,display['box'])),
-                    width=crop.shape[1],height=crop.shape[0],quality=quality,pixel_sha256=digest)
                 retained.append((crop.copy(),sample))
                 retained.sort(key=lambda item:(-item[1]['quality'],item[1]['position_ms']))
                 del retained[6:]
             history=pipeline.histories.get(display['track_id'])
             if history is not None and history.reader.observation_count:
                 ranked=history.reader.candidates()
-                prediction['observations']=history.reader.observation_count
                 if ranked:
-                    prediction['top_guess']=ranked[0].plate
-                    prediction['candidate_ms']=history.reader.samples[-1][0]-self.recording.start_pts_ms
-                    prediction['candidates']=[dict(plate=c.plate,score=c.score,
-                        minimum_character_score=c.minimum_character_score,
-                        format_adjusted=c.format_adjusted) for c in ranked[:20]]
+                    state=recognition_state(display['ocr_status'])
+                    strength=PassedVehicles._strength(state,display['observations'],ranked[0])
+                    if prediction['top_guess'] is None or strength>tuple(prediction['selection_strength']):
+                        prediction.update(top_guess=ranked[0].plate,
+                            candidate_ms=history.reader.samples[-1][0]-self.recording.start_pts_ms,
+                            selection_strength=list(strength),selected_state=state,
+                            observations=history.reader.observation_count,
+                            candidates=[dict(plate=c.plate,score=c.score,
+                                minimum_character_score=c.minimum_character_score,
+                                format_adjusted=c.format_adjusted) for c in ranked[:20]])
+                        self.native[uid]['selected']=(crop.copy(),dict(sample))
         if self.samples%5==0:
             progress=dict(status='processing',position_ms=position,analysed_frames=self.samples,
                 tracked_fragments=len(self.tracks),seconds=round(time.monotonic()-self.started,1))
@@ -138,7 +200,11 @@ class ReviewObserver:
             native=self.native[uid]
             if native['vehicle'] is not None:
                 row['vehicle_preview']['image_sha256']=save(row['vehicle_preview']['path'],native['vehicle'])
-            for number,(crop,sample) in enumerate(native['plates']):
+            chosen=[]
+            if native['selected'] is not None:chosen.append(native['selected'])
+            chosen += [(crop,sample) for crop,sample in native['plates']
+                       if not chosen or sample['pixel_sha256']!=chosen[0][1]['pixel_sha256']]
+            for number,(crop,sample) in enumerate(chosen[:6]):
                 sample['path']=f'assets/{uid}-plate-{number}.png'
                 sample['image_sha256']=save(sample['path'],crop);row['samples'].append(sample)
 
@@ -184,7 +250,7 @@ def main(args):
     settings=dict(options=options.manifest(),keep_unconfirmed_vehicles=keep,
         keep_unconfirmed_min_height=os.getenv('SENTINEL_KEEP_UNCONFIRMED_MIN_HEIGHT','0'),
         ocr_min_confidence=config.ocr_min_confidence,normal_dashboard_sampling=True,
-        review_crops_per_track_max=6,review_track_count_cap=None,
+        review_crops_per_track_max=6,review_track_count_cap=None,prediction_policy=PREDICTION_POLICY,
         text_detector_configured=bool(os.getenv('SENTINEL_TEXT_DETECTOR_ASSETS','')))
     manifest=dict(schema_version=1,run_id=counted.session_id,source=source,models=identity,
         settings=settings,run=dict(started_at=started_at,completed_at=utc(),commit=args.commit,
@@ -199,7 +265,15 @@ def main(args):
     manifest_sha=file_hash(args.output/'manifest.json')
     write_json(args.output/'predictions.json',dict(schema_version=1,manifest_sha256=manifest_sha,
         source_sha256=recording.sha256,tracks=observer.predictions,
+        prediction_policy=PREDICTION_POLICY,
         caveat='Scores are uncalibrated. Top guesses and actual model acceptances are separate.'))
+    if getattr(args,'reference_review',None) and getattr(args,'reference_view',None):
+        write_json(args.output/'legacy-reference-links.json',reference_coverage(manifest,args.reference_review,args.reference_view))
+    write_json(args.output/'review-status.json',dict(schema_version=1,manifest_sha256=manifest_sha,
+        status='human_review_pending',tracked_fragments=len(observer.tracks),human_reviewed_tracks=0,
+        pending_tracks=len(observer.tracks),inventory_complete=False,accuracy_available=False,
+        prediction_policy=PREDICTION_POLICY,central_events_sent=0,
+        notice='Human reviewer must label readable/unreadable/no-plate/non-vehicle/duplicate tracks and add missed vehicles. No current-run ground truth has been inferred from OCR.'))
     write_json(args.output/'progress.json',dict(status='completed',decoded_frames=counted.decoded,
         analysed_frames=observer.samples,tracked_fragments=len(observer.tracks),
         manifest_sha256=manifest_sha,review_ready=True))
@@ -216,4 +290,8 @@ if __name__=='__main__':
     parser.add_argument('--cache',type=Path,default=Path('/models/experiments/awiros'))
     parser.add_argument('--output',type=Path,required=True)
     parser.add_argument('--commit',default='')
-    main(parser.parse_args())
+    parser.add_argument('--reference-review',type=Path,default=None)
+    parser.add_argument('--reference-view',type=Path,default=None)
+    args=parser.parse_args()
+    if bool(args.reference_review)!=bool(args.reference_view):parser.error('Supply both reference provenance inputs or neither')
+    main(args)

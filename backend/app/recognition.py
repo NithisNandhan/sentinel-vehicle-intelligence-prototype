@@ -97,6 +97,11 @@ def request_edge(method: str, path: str, payload: dict | None = None) -> dict:
                 raise unavailable()
             return value
     except urllib.error.HTTPError as error:
+        if path.startswith('/internal/replay?') and error.code in (404, 409, 503):
+            detail = {404: 'Recorded replay is not available',
+                      409: 'Complete the current analysis before replaying; its session may have changed',
+                      503: 'Replay was not retained within its memory or source-timestamp limits'}[error.code]
+            raise HTTPException(status_code=error.code, detail=detail) from None
         if error.code == 404 and path.startswith("/internal/diagnostics?"):
             raise HTTPException(status_code=404, detail="Track evidence is no longer available") from None
         if (error.code == 404 and path.startswith("/internal/evidence")
@@ -315,6 +320,11 @@ def evidence(response: Response, mode: Literal["original", "overlays"] = "overla
     if value.get("source_mode") != "recorded":
         raise HTTPException(status_code=404, detail="No recording is being analysed")
     response.headers["Cache-Control"] = "no-store, max-age=0"
+    return evidence_metadata(value)
+
+
+def evidence_metadata(value: dict) -> dict:
+    """Same bounded allowlist for current and historical recorded evidence."""
     session = value.get("session_id")
     rows = []
     listed = value.get("vehicles")
@@ -340,6 +350,50 @@ def evidence(response: Response, mode: Literal["original", "overlays"] = "overla
             "session_id": session if isinstance(session, str) and _SESSION.fullmatch(session) else None,
             "video_position_ms": _milliseconds(value.get("video_position_ms")),
             "frame": _image(value.get("frame"), 900_000), "vehicles": rows}
+
+
+@router.get('/replay')
+def replay(response: Response, session_id: str = Query(pattern=_SESSION.pattern),
+           offset: int = Query(default=0, ge=0, le=300),
+           limit: int = Query(default=1, ge=1, le=1),
+           mode: Literal['original', 'overlays'] = 'overlays'):
+    if not get_settings().dashboard_recorded_evidence:
+        raise HTTPException(status_code=404, detail='Recorded replay is not enabled')
+    query = urllib.parse.urlencode(dict(session_id=session_id, offset=offset, limit=limit, mode=mode))
+    value = request_edge('GET', '/internal/replay?' + query)
+    if value.get('source_mode') != 'recorded' or not _id(value.get('camera_id')):
+        raise unavailable()
+    if value.get('session_id') != session_id:
+        raise HTTPException(status_code=409, detail='The recognition session changed')
+    duration, count, samples = value.get('video_duration_ms'), value.get('sample_count'), value.get('samples')
+    if (type(duration) is not int or not 0 < duration <= 1_000_000_000
+            or type(count) is not int or not 1 <= count <= 300
+            or not isinstance(samples, list) or len(samples) > limit
+            or value.get('available') is not True or value.get('offset') != offset
+            or not 0 <= offset <= count):
+        raise unavailable()
+    expected = min(limit, count-offset)
+    next_offset = offset+expected if offset+expected < count else None
+    if len(samples) != expected or value.get('next_offset') != next_offset:
+        raise unavailable()
+    clean = []
+    for sample in samples:
+        if (not isinstance(sample, dict) or type(sample.get('video_position_ms')) is not int
+                or not 0 <= sample['video_position_ms'] <= duration):
+            raise unavailable()
+        evidence_view = evidence_metadata(dict(sample, session_id=session_id))
+        if not evidence_view['frame'] or len(evidence_view['frame']) > 650_000:
+            raise unavailable()
+        status = status_metadata(dict(source_mode='recorded', status='processing',
+            camera_id=value['camera_id'], vehicles_seen=sample.get('vehicles_seen', [])))
+        clean.append(dict(video_position_ms=sample['video_position_ms'], frame=evidence_view['frame'],
+                          vehicles=[dict(row, thumb=None) for row in evidence_view['vehicles']],
+                          vehicles_seen=status['vehicles_seen'],
+                          unique_model_accepted_unverified=_count(sample.get('unique_model_accepted_unverified'))))
+    response.headers['Cache-Control'] = 'no-store, max-age=0'
+    return dict(schema_version='1.0', source_mode='recorded', session_id=session_id,
+                camera_id=value['camera_id'], video_duration_ms=duration, available=True, reason=None,
+                sample_count=count, offset=offset, next_offset=next_offset, samples=clean)
 
 
 @router.post("/control")

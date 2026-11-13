@@ -23,6 +23,25 @@ def fixture(ids=('track-s0-1',)):
 
 
 class FullVideoReviewTests(unittest.TestCase):
+    def test_strongest_policy_preserves_earlier_stronger_window_across_duplicate_fragments(self):
+        manifest, predictions, labels = fixture(('track-s0-1', 'track-s0-2'))
+        policy = 'passed_vehicles_strongest_window_v1'
+        manifest['settings'] = dict(prediction_policy=policy)
+        predictions['prediction_policy'] = policy
+        labels['labels'][1].update(status='duplicate', plate=None, duplicate_of='track-s0-1')
+        predictions['tracks']['track-s0-1']['selection_strength'] = [2, 3, .9, .95, 5]
+        predictions['tracks']['track-s0-2'].update(top_guess=WRONG, candidates=[dict(plate=WRONG)],
+            selection_strength=[2, 3, .6, .8, 8], candidate_ms=2000)
+        report = score_review(manifest, predictions, labels, HASH)
+        self.assertEqual(report['passages'][0]['top_guess'], PLATE)
+        # Changing truth must not change which prediction was selected.
+        labels['labels'][0]['plate'] = WRONG
+        self.assertEqual(score_review(manifest, predictions, labels, HASH)['passages'][0]['top_guess'], PLATE)
+        predictions['tracks']['track-s0-2']['selection_strength'] = [2, 3, .9, .95, 5]
+        self.assertEqual(score_review(manifest, predictions, labels, HASH)['passages'][0]['top_guess'], PLATE)
+        predictions['tracks']['track-s0-1']['selection_strength'] = [2, 3, float('nan'), .95, 5]
+        with self.assertRaises(ValueError): score_review(manifest, predictions, labels, HASH)
+
     def test_reviewer_discarded_extra_is_not_a_detector_false_positive(self):
         manifest, predictions, labels = fixture()
         labels['extras']=[dict(id=MANUAL,position_ms=100,box=[0,0,50,50],image_path='assets/manual.png')]

@@ -118,6 +118,22 @@ class UnifiedDiagnosticTests(unittest.TestCase):
 
 
 class AlignedEvidenceTests(unittest.TestCase):
+    def test_prepared_dashboard_frames_are_reused_and_native_arrays_are_unchanged(self):
+        import cv2
+        import numpy as np
+        from sentinel_edge.live_detection_viewer import dashboard_view, display_frame
+        image = np.full((200, 400, 3), 75, dtype=np.uint8)
+        before = image.copy()
+        preview = display_frame(image, width=100)
+        data = fixture()
+        data.update(frame=preview, _dashboard_frame_width=100)
+        data['debug']['original_frame'] = preview
+        for mode in ('original', 'overlays'):
+            self.assertEqual(dashboard_view(data, width=100, mode=mode)['frame'], preview)
+        decoded = cv2.imdecode(np.frombuffer(__import__('base64').b64decode(preview), np.uint8), cv2.IMREAD_COLOR)
+        self.assertEqual(decoded.shape[:2], (50,100))
+        np.testing.assert_array_equal(image, before)
+
     def test_all_bounded_vehicle_metadata_is_kept_without_multiplying_thumbnail_budget(self):
         from sentinel_edge.live_detection_viewer import dashboard_view
         data = fixture()

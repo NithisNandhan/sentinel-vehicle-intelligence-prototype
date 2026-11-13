@@ -61,10 +61,13 @@ class LiveState:
         self.diagnostic_max_bytes = diagnostic_max_bytes
         self._retained_diagnostics = OrderedDict()
         self._retained_diagnostic_bytes = 0
+        from .recorded_replay import RecordedReplay
+        self.replay = RecordedReplay()
 
     def _clear_diagnostics(self):
         self._retained_diagnostics.clear()
         self._retained_diagnostic_bytes = 0
+        self.replay.clear()
 
     def _retain_diagnostics(self, value):
         if not self.recorded_diagnostics or self.camera_id not in self.recordings or not self.session_id:
@@ -216,6 +219,11 @@ class LiveState:
 
     def expire(self):
         with self.lock:
+            # EOF closes the decoder. Keep its bounded results/replay available
+            # while an operator reviews another tab; explicit stop/restart or
+            # worker exit clears them. Live/active sources still expire at 60 s.
+            if self.camera_id in self.recordings and self.value.get('status') == 'completed':
+                return
             if self.camera_id and self.clock() - self.last_heartbeat > 60:
                 self.select(None)
 
@@ -225,6 +233,18 @@ class LiveState:
                     (capture_stop is None or capture_stop is self.capture_stop)):
                 self.value = value
                 self._retain_diagnostics(value)
+                recording = self.recordings.get(self.camera_id)
+                if self.recorded_diagnostics and recording and value.get('status') == 'processing' and value.get('frame'):
+                    self.replay.append(value, session_id=self.session_id, camera_id=self.camera_id,
+                                       duration_ms=recording.duration_ms, frame_builder=dashboard_view)
+
+    def replay_page(self, session_id, *, offset=0, limit=1, mode='overlays'):
+        from .recorded_replay import ReplayUnavailable
+        with self.lock:
+            if not self.recorded_diagnostics or self.camera_id not in self.recordings:
+                raise ReplayUnavailable(404, 'Recorded replay is not available')
+            return self.replay.page(session_id, completed=self.value.get('status') == 'completed',
+                                    offset=offset, limit=limit, mode=mode)
 
     def heartbeat(self, camera_id):
         with self.lock:
@@ -323,6 +343,14 @@ def encoded(image, extension):
     return base64.b64encode(data).decode('ascii')
 
 
+def display_frame(image, width=1280):
+    """Compact dashboard preview only; native OCR/crop arrays are untouched."""
+    import cv2
+    if image.shape[1] > width:
+        image = cv2.resize(image, (width, round(image.shape[0]*width/image.shape[1])), interpolation=cv2.INTER_AREA)
+    return encoded(image, '.jpg')
+
+
 class StartupStop:
     """Propagate user cancellation and bound the wait for the first frame."""
     def __init__(self, parent, timeout=30, clock=time.monotonic):
@@ -415,7 +443,7 @@ def dashboard_view(snapshot, width=1280, rows=200, *, mode='overlays'):
     if mode not in ('original', 'overlays'):
         raise ValueError('Unknown frame display mode')
     frame = snapshot.get('debug', {}).get('original_frame') if mode == 'original' else snapshot.get('frame')
-    if frame:
+    if frame and snapshot.get('_dashboard_frame_width') != width:
         image = cv2.imdecode(np.frombuffer(base64.b64decode(frame), np.uint8), cv2.IMREAD_COLOR)
         if image is not None and image.shape[1] > width:
             image = cv2.resize(image, (width, round(image.shape[0]*width/image.shape[1])), interpolation=cv2.INTER_AREA)
@@ -698,7 +726,20 @@ def serve(config, cache, checkpoint, port=7780, lifetime=1800, bind_host='127.0.
                 return
             if not self.allowed():
                 return
-            if path == '/internal/diagnostics':
+            if path == '/internal/replay':
+                from .recorded_replay import ReplayUnavailable
+                query = parse_qs(parsed.query, keep_blank_values=True)
+                try:
+                    if (set(query) - {'session_id', 'offset', 'limit', 'mode'}
+                            or any(len(v) != 1 for v in query.values()) or 'session_id' not in query):
+                        raise ReplayUnavailable(400, 'Invalid replay query')
+                    body = state.replay_page(query['session_id'][0], offset=int(query.get('offset', ['0'])[0]),
+                                             limit=int(query.get('limit', ['1'])[0]), mode=query.get('mode', ['overlays'])[0])
+                except (ReplayUnavailable, ValueError) as error:
+                    self.reply(getattr(error, 'status', 400), json.dumps({'error': getattr(error, 'detail', 'Invalid replay query')}).encode())
+                    return
+                self.reply(200, json.dumps(body, allow_nan=False).encode())
+            elif path == '/internal/diagnostics':
                 from .unified_diagnostics import DiagnosticUnavailable, diagnostic_view
                 query = parse_qs(parsed.query, keep_blank_values=True)
                 if set(query) != {'session_id', 'track_id'} or any(len(values) != 1 for values in query.values()):

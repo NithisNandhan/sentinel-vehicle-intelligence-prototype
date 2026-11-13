@@ -175,6 +175,9 @@ def score_review(manifest, predictions, labels, manifest_sha256):
     values = predictions.get('tracks')
     if not isinstance(values, dict) or set(values) != set(auto):
         raise ValueError('Frozen predictions must cover exactly the recorded track IDs')
+    strongest = predictions.get('prediction_policy') == 'passed_vehicles_strongest_window_v1'
+    if strongest and manifest.get('settings', {}).get('prediction_policy') != predictions['prediction_policy']:
+        raise ValueError('Prediction selection policy does not match the frozen manifest')
     clean_predictions = {}
     for sid, row in values.items():
         if not isinstance(row, dict):
@@ -198,7 +201,19 @@ def score_review(manifest, predictions, labels, manifest_sha256):
         if candidate_ms is None:
             candidate_ms = row.get('last_ms', auto[sid]['last_ms'])
         candidate_ms = _number(candidate_ms, 'Candidate timestamp')
-        clean_predictions[sid] = dict(top=top, ranked=ranked, accepted=accepted_strings, candidate_ms=candidate_ms)
+        strength = ()
+        if strongest and top:
+            raw = row.get('selection_strength')
+            if (not isinstance(raw, list) or len(raw) != 5
+                    or any(type(v) not in (int, float) or not math.isfinite(v) for v in raw)
+                    or type(raw[0]) is not int or not 0 <= raw[0] <= 3
+                    or type(raw[1]) is not int or not 0 <= raw[1] <= 3
+                    or not 0 <= raw[2] <= 1 or not 0 <= raw[3] <= 1
+                    or type(raw[4]) is not int or raw[4] < raw[1] or raw[1] != min(raw[4], 3)):
+                raise ValueError('Strongest-window prediction lacks valid frozen strength')
+            strength = tuple(raw)
+        clean_predictions[sid] = dict(top=top, ranked=ranked, accepted=accepted_strings,
+                                     candidate_ms=candidate_ms, strength=strength)
     by_id = {r['id']: r for r in truth['labels']}
     groups = defaultdict(list)
     for sid in by_id:
@@ -214,7 +229,10 @@ def score_review(manifest, predictions, labels, manifest_sha256):
         auto_ids = [sid for sid in members if sid in auto]
         candidates = [(clean_predictions[sid]['candidate_ms'], sid, clean_predictions[sid])
                       for sid in auto_ids if clean_predictions[sid]['top']]
-        chosen = max(candidates, default=None, key=lambda x: (x[0], x[1]))
+        # Legacy captures keep their original latest-window policy. New captures
+        # use the frozen display strength; truth never participates in selection.
+        chosen = (min(candidates, default=None, key=lambda x: (tuple(-v for v in x[2]['strength']), x[0], x[1]))
+                  if strongest else max(candidates, default=None, key=lambda x: (x[0], x[1])))
         chosen = chosen[2] if chosen else dict(top=None, ranked=[])
         accepts = sorted({plate for sid in auto_ids for plate in clean_predictions[sid]['accepted']})
         plate = label['plate']
@@ -273,7 +291,8 @@ def score_review(manifest, predictions, labels, manifest_sha256):
                            'Reviewed tracks and manually added samples only; full-video miss coverage is not established. ')
                           + 'Frozen run on the previously developed-on Mumbai clip; not a fresh unseen or independent-camera test.',
                     unit='Human-labelled vehicle passage; duplicate tracker fragments are explicitly linked by the reviewer.',
-                    best_guess='Latest nonempty frozen hypothesis across linked fragments; no ground-truth-based selection.',
+                    best_guess=('Strongest frozen fusion window across linked fragments; equal strength uses earliest timestamp then track ID. No truth-based selection.'
+                                if strongest else 'Latest nonempty frozen hypothesis across linked fragments; no ground-truth-based selection.'),
                     precision='Distinct accepted strings per passage; earlier wrong strings remain errors even if later corrected. Unreadable truth is unverifiable and excluded from precision.',
                     inventory='End-to-end detection coverage requires the reviewer to review the complete clip and add all missed vehicles.',
                     scores='OCR model scores are not calibrated correctness probabilities.',

@@ -365,7 +365,7 @@ class RecordedPipelineTests(RecordedCase):
         state.complete(stop)
         final = state.snapshot(engineering=True)
         self.assertEqual((final['status'], final['source_mode'], final['session_id']), ('completed', 'recorded', session))
-        self.assertIn('frame', final)  # The last analysed position stays inspectable until idle expiry.
+        self.assertIn('frame', final)  # Completed results remain until explicit stop or a new run.
         self.assertEqual(state.operator_snapshot()['recognition_state'], 'completed')
         events = [payload for _, _, payload in delivery.outbox.next_batch()]
         self.assertEqual(len(events), 1)  # One accepted identifier, one event for this session.

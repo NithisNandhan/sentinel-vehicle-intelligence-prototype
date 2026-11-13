@@ -74,7 +74,17 @@ class ReviewStore:
         return path
 
     def public(self):
-        return dict(manifest=self.manifest,manifest_sha256=self.sha,labels=self.labels,finalized=self.finalized)
+        legacy_path=self.root/'legacy-reference-links.json'
+        legacy=json.loads(legacy_path.read_bytes()) if legacy_path.exists() else {}
+        if legacy and legacy.get('source_sha256')!=self.manifest['source']['sha256']:
+            raise ValueError('Legacy reference evidence belongs to another recording')
+        pending=sum(r['status']=='pending' for r in self.labels['labels'])
+        status=dict(tracked_fragments=len(self.manifest['tracks']),human_reviewed_entries=len(self.labels['labels'])-pending,
+            pending_entries=pending,added_missed_vehicles=len(self.labels['extras']),
+            inventory_complete=self.labels['inventory_complete'],accuracy_available=self.finalized,
+            existing_reference_count=legacy.get('human_reference_count',0),legacy_labels_imported=0,
+            prediction_policy=self.predictions.get('prediction_policy','legacy_last_window'))
+        return dict(manifest=self.manifest,manifest_sha256=self.sha,labels=self.labels,finalized=self.finalized,review_status=status)
 
     def check_revision(self,payload):
         if self.finalized:raise Conflict('This review has been finalised and is read-only')

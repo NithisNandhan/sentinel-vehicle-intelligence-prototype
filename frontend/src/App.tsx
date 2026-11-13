@@ -1,12 +1,14 @@
 import { useCallback, useEffect, useState } from 'react';
 import { Activity, ArrowUpRight, Check, CheckCheck, ChevronRight, Film, Pause, Play, RefreshCw, Settings, ShieldAlert, Square, Wifi, WifiOff } from 'lucide-react';
-import { changeAlertStatus, ensureLocalSession, formatTime, getAlerts, isActionable, wsUrl, type Alert, type AlertStatus, type RecognitionStatus } from './api';
+import { changeAlertStatus, ensureLocalSession, formatTime, getAlerts, isActionable, wsUrl, type Alert, type AlertStatus, type RecognitionStatus, type RecognitionReplaySample } from './api';
 import { failureMessage, formatVideoTime, framePlaceholderTitle, recognitionIsFresh, recognitionIsRunning, recognitionLabel, sessionLabel, vehicleEvidence, vehicleIsInspectable, vehicleReadingLabel } from './recognition';
 import { useRecognitionSession } from './useRecognitionSession';
 import Inspector, { imageData } from './Inspector';
 import DetailSheet from './DetailSheet';
 import WatchlistPage from './WatchlistPage';
 import ReviewPage from './ReviewPage';
+import ReplayPanel from './ReplayPanel';
+import { replaySessionMatches } from './replay';
 
 type Page = 'analyse' | 'alerts' | 'watchlist' | 'review';
 const title = (value: string) => value.replaceAll('_', ' ').replace(/^./, c => c.toUpperCase());
@@ -52,7 +54,11 @@ export default function App() {
   const [liveUpdates, setLiveUpdates] = useState(false);
   const [selectedSource, setSelectedSource] = useState('');
   const [inspect, setInspect] = useState<{ sessionId: string; trackId: string } | null>(null);
+  const [replayRun, setReplayRun] = useState<{ sessionId: string; cameraId: string } | null>(null);
+  const [replayView, setReplayView] = useState<{ sample: RecognitionReplaySample | null; positionMs: number }>({ sample: null, positionMs: 0 });
   const session = useRecognitionSession(ready);
+  const updateReplay = useCallback((sample: RecognitionReplaySample | null, positionMs: number) => setReplayView({ sample, positionMs }), []);
+  const exitReplay = useCallback(() => { setReplayRun(null); setReplayView({ sample: null, positionMs: 0 }); }, []);
 
   useEffect(() => { let cancelled = false; setBootError(''); setReady(false); ensureLocalSession().then(() => { if (!cancelled) setReady(true); }).catch(failure => { if (!cancelled) setBootError((failure as Error).message); }); return () => { cancelled = true; }; }, [attempt]);
   const refreshAlerts = useCallback(async () => {
@@ -74,26 +80,36 @@ export default function App() {
     connect(); return () => { cancelled = true; window.clearInterval(timer); if (reconnect) window.clearTimeout(reconnect); socket?.close(); };
   }, [ready, refreshAlerts]);
   useEffect(() => { if (!selectedSource && session.recordings.length) setSelectedSource(session.recordings[0].id); }, [selectedSource, session.recordings]);
-  useEffect(() => { setInspect(null); }, [session.status?.session_id, session.status?.camera_id]);
+  useEffect(() => {
+    if (session.status?.source_mode === 'recorded' && session.status.camera_id) setSelectedSource(session.status.camera_id);
+  }, [session.status?.session_id, session.status?.camera_id]);
+  useEffect(() => { setInspect(null); exitReplay(); }, [session.status?.session_id, session.status?.camera_id, exitReplay]);
+  useEffect(() => { if (session.status?.status !== 'completed' || session.status.source_mode !== 'recorded') exitReplay(); }, [session.status?.status, session.status?.source_mode, exitReplay]);
 
   const status = session.status;
+  const replaying = replaySessionMatches(replayRun, status);
   const fresh = recognitionIsFresh(status) && !session.error;
-  const rows = fresh && status?.source_mode === 'recorded' ? status.vehicles_seen || [] : [];
-  const matchingAlerts = status?.session_id ? alerts.filter(alert => alert.session_id === status.session_id && alert.source_mode === 'recorded') : [];
+  const rows = replaying ? replayView.sample?.vehicles_seen || [] : fresh && status?.source_mode === 'recorded' ? status.vehicles_seen || [] : [];
+  const matchingAlerts = status?.session_id ? alerts.filter(alert => alert.session_id === status.session_id && alert.source_mode === 'recorded'
+    && (!replaying || (replayView.sample && typeof alert.stream_pts_ms === 'number' && alert.stream_pts_ms <= replayView.positionMs))) : [];
   const activeAlerts = alerts.filter(isActionable).length;
   const running = recognitionIsRunning(status);
-  const evidence = fresh && session.evidence?.session_id === status?.session_id ? session.evidence : null;
+  const evidence = replaying ? replayView.sample ? { source_mode: 'recorded' as const, session_id: replayRun?.sessionId || null,
+    video_position_ms: replayView.sample.video_position_ms, frame: replayView.sample.frame, vehicles: replayView.sample.vehicles } : null
+    : fresh && session.evidence?.session_id === status?.session_id ? session.evidence : null;
   const frame = imageData(evidence?.frame, 'jpeg');
-  const position = evidence?.video_position_ms ?? status?.video_position_ms;
+  const position = replaying ? replayView.positionMs : evidence?.video_position_ms ?? status?.video_position_ms;
   const duration = status?.video_duration_ms;
   const progress = typeof position === 'number' && typeof duration === 'number' && duration > 0 ? Math.min(100, Math.max(0, position / duration * 100)) : 0;
   const device = status?.inference_device?.toUpperCase();
   async function start() {
-    if (!selectedSource) return;
+    if (!selectedSource || replaying) return;
     if (status?.camera_id && status.camera_id !== selectedSource && !window.confirm('Stop the current source and start the selected recording?')) return;
     setInspect(null); await session.start(selectedSource);
   }
   const deviceNotice = (current: RecognitionStatus | null) => current?.model_profile ? `${current.model_profile}${device ? ` · ${device} OCR` : ''}` : 'Runtime not loaded';
+  const rowStatus = replaying && replayView.positionMs < (duration || 0) ? 'processing' : status?.status;
+  const acceptedCount = replaying ? replayView.sample?.unique_model_accepted_unverified || 0 : status?.unique_model_accepted_unverified || 0;
 
   return <div className="app-shell">
     <header className="app-header"><button className="brand" aria-label="Sentinel home" onClick={() => setPage('analyse')}><span className="brand-symbol"><Activity size={20} strokeWidth={1.6} /></span>Sentinel</button><nav aria-label="Main navigation">{(['analyse', 'alerts', 'watchlist', 'review'] as Page[]).map(value => <button key={value} aria-current={page === value ? 'page' : undefined} className={page === value ? 'active' : ''} onClick={() => setPage(value)}>{title(value)}{value === 'alerts' && activeAlerts > 0 && <span className="nav-count">{activeAlerts}</span>}</button>)}</nav><div className="header-meta"><span className={`connection ${ready && !alertError ? '' : 'disconnected'}`}>{ready && !alertError ? <Wifi size={14} /> : <WifiOff size={14} />}{!ready ? 'Connecting' : alertError ? 'Reconnecting' : liveUpdates ? 'Service connected' : 'Connected · polling'}</span><details className="settings"><summary aria-label="Application settings"><Settings size={18} /></summary><div className="settings-panel"><strong>Local single-user mode</strong><p>One shared analysis session. No operator key is stored in this browser.</p><p>Recordings are processed only after you start analysis. Technical runtime details are in the Inspector.</p></div></details></div></header>
@@ -102,20 +118,21 @@ export default function App() {
         {page !== 'alerts' && alertError && <div className="notice warning" role="alert">Alert updates unavailable: {alertError} Analysis may still be available; central matches cannot be refreshed.</div>}
         <div hidden={page !== 'analyse'}>
           <div className="page-heading"><div><h1>Analyse footage</h1><p>Recorded CCTV · one shared recognition session</p></div><span className="runtime-label">{deviceNotice(status)}</span></div>
-          <section className="analysis-toolbar" aria-label="Recording controls"><div className="source-picker"><label htmlFor="recording-source">Recording</label><select id="recording-source" value={selectedSource} onChange={event => setSelectedSource(event.target.value)} disabled={session.busy || !session.recordings.length}>{!session.recordings.length && <option value="">No registered recordings</option>}{session.recordings.map(item => <option key={item.id} value={item.id}>{item.name}</option>)}</select></div><div className="recording-actions"><button className="button primary" onClick={() => void start()} disabled={!selectedSource || session.busy || (status?.camera_id === selectedSource && status?.status === 'processing')}><Play size={15} />{session.busy ? 'Working…' : status?.camera_id === selectedSource && status?.status === 'completed' ? 'Analyse again' : 'Start analysis'}</button>{status?.camera_id && status.status === 'paused' ? <button className="button" onClick={() => void session.control('resume')} disabled={session.busy}><Play size={15} /> Resume</button> : <button className="button" onClick={() => void session.control('pause')} disabled={session.busy || !running || status?.status === 'connecting'}><Pause size={15} /> Pause</button>}<button className="button quiet" onClick={() => { setInspect(null); void session.stop(); }} disabled={!status?.camera_id || session.busy}><Square size={14} /> Stop</button></div></section>
+          <section className="analysis-toolbar" aria-label="Recording controls"><div className="source-picker"><label htmlFor="recording-source">Recording</label><select id="recording-source" value={selectedSource} onChange={event => setSelectedSource(event.target.value)} disabled={replaying || session.busy || !session.recordings.length}>{!session.recordings.length && <option value="">No registered recordings</option>}{session.recordings.map(item => <option key={item.id} value={item.id}>{item.name}</option>)}</select></div><div className="recording-actions"><button className="button primary" onClick={() => void start()} disabled={replaying || !selectedSource || session.busy || (status?.camera_id === selectedSource && status?.status === 'processing')}><Play size={15} />{session.busy ? 'Working…' : status?.camera_id === selectedSource && status?.status === 'completed' ? 'Analyse again' : 'Start analysis'}</button>{status?.camera_id && status.status === 'paused' ? <button className="button" onClick={() => void session.control('resume')} disabled={replaying || session.busy}><Play size={15} /> Resume</button> : <button className="button" onClick={() => void session.control('pause')} disabled={replaying || session.busy || !running || status?.status === 'connecting'}><Pause size={15} /> Pause</button>}<button className="button quiet" onClick={() => { setInspect(null); void session.stop(); }} disabled={replaying || !status?.camera_id || session.busy}><Square size={14} /> Stop</button>{!replaying && status?.status === 'completed' && status.source_mode === 'recorded' && status.session_id && status.camera_id && <button className="button" disabled={session.busy || !fresh} onClick={() => { setInspect(null); setReplayView({ sample: null, positionMs: 0 }); setReplayRun({ sessionId: status.session_id!, cameraId: status.camera_id! }); }}><Play size={15} /> Replay at 1×</button>}</div></section>
+          {replaying && replayRun && <ReplayPanel sessionId={replayRun.sessionId} cameraId={replayRun.cameraId} mode={session.mode} onSample={updateReplay} onExit={exitReplay} />}
           {session.recordingError && <div className="notice warning" role="alert">Recording list unavailable: {session.recordingError} <button className="text-button" onClick={() => void session.refresh()}>Retry</button></div>}
-          {session.error && <div className="notice error" role="alert">{session.error} <button className="text-button" onClick={() => void session.refresh()}>Retry</button></div>}
+          {session.error && <div className="notice error" role="alert">{session.error}{replaying && replayView.sample ? ' Saved replay is using already-loaded samples.' : ''} <button className="text-button" onClick={() => void session.refresh()}>Retry</button></div>}
           {status?.failure_code && <div className="notice error" role="alert">{failureMessage(status.failure_code)}</div>}
           {!session.recordingError && !session.recordings.length && <div className="notice">No permitted recordings are registered. Add the video and its permission receipt using the recording-registration tool, then refresh.</div>}
-          <div className="analysis-workspace"><section className="frame-column"><div className="section-heading"><h2>Analysed frame</h2><span className="status neutral">{sessionLabel(status)}</span></div><div className="display-controls" role="group" aria-label="Frame display"><button className={session.mode === 'overlays' ? 'active' : ''} aria-pressed={session.mode === 'overlays'} onClick={() => session.setMode('overlays')}>Detection overlays</button><button className={session.mode === 'original' ? 'active' : ''} aria-pressed={session.mode === 'original'} onClick={() => session.setMode('original')}>Original frame</button></div>
-            <div className="frame-viewport">{frame ? <img src={frame} alt={`Analysed recorded frame at video ${formatVideoTime(position)}${session.mode === 'overlays' ? ', with aligned detection boxes' : ', original without overlays'}`} /> : <div className="frame-empty"><Film size={32} /><strong>{framePlaceholderTitle(status)}</strong><span>{session.evidenceError || (status?.camera_id ? 'Recorded evidence may be disabled, unavailable or still processing.' : 'Previewing this page does not start recognition.')}</span></div>}</div>
+          <div className={`analysis-workspace${replaying ? ' replay-workspace' : ''}`}><section className="frame-column"><div className="section-heading"><h2>{replaying ? 'Replayed analysis sample' : 'Analysed frame'}</h2><span className="status neutral">{replaying ? 'Replay · saved samples' : sessionLabel(status)}</span></div><div className="display-controls" role="group" aria-label="Frame display"><button className={session.mode === 'overlays' ? 'active' : ''} aria-pressed={session.mode === 'overlays'} disabled={replaying} onClick={() => session.setMode('overlays')}>Detection overlays</button><button className={session.mode === 'original' ? 'active' : ''} aria-pressed={session.mode === 'original'} disabled={replaying} onClick={() => session.setMode('original')}>Original frame</button></div>
+            <div className="frame-viewport">{frame ? <img src={frame} alt={`Analysed recorded frame at video ${formatVideoTime(evidence?.video_position_ms)}${session.mode === 'overlays' ? ', with aligned detection boxes' : ', original without overlays'}`} /> : <div className="frame-empty"><Film size={32} /><strong>{replaying ? 'Waiting for a saved replay sample' : framePlaceholderTitle(status)}</strong><span>{replaying ? 'Only the frame and readings available at the replay position are shown.' : session.evidenceError || (status?.camera_id ? 'Recorded evidence may be disabled, unavailable or still processing.' : 'Previewing this page does not start recognition.')}</span></div>}</div>
             <div className="video-progress" role="progressbar" aria-label="Analysed video position" aria-valuemin={0} aria-valuemax={100} aria-valuenow={Math.round(progress)}><span style={{ width: `${progress}%` }} /></div><div className="frame-meta"><span className="mono">{formatVideoTime(position)} / {formatVideoTime(duration)}</span><span>Analysed samples · not guaranteed real-time playback</span></div>
           </section><section className="surface reading-panel"><div className="section-heading padded"><h2>Vehicles &amp; plate readings</h2><span className="caption">{rows.length} tracks shown</span></div>{!rows.length ? <div className="empty"><strong>{status?.camera_id ? 'No vehicles tracked yet' : 'No analysis started'}</strong><p>{status?.camera_id ? 'Vehicles appear as tracking begins; plate readings update when available.' : 'Choose a permitted recording and start analysis.'}</p></div> : <div className="reading-list">{rows.slice(0, 200).map(row => {
             const visual = vehicleEvidence(row, evidence);
-            const inspectable = vehicleIsInspectable(row, rows);
-            return <button className="reading-row" key={row.key || row.track_id} onClick={() => inspectable && status?.session_id && setInspect({ sessionId: status.session_id, trackId: row.track_id })} disabled={!status?.session_id || !inspectable} title={!inspectable ? 'This track ID was reused in a newer scene. Inspect the newest row.' : undefined}><div className="reading-line"><strong className="plate-text">{vehicleReadingLabel(row, visual, status?.status)}</strong><ArrowUpRight size={15} /></div><div className="reading-line"><span className="caption">{title(row.vehicle_class)} · track {row.track_id}</span><span className="caption mono">{formatVideoTime(row.last_ms)}</span></div><div className="reading-status"><ReadingStatus state={row.state} observations={row.observations} />{visual?.reading && row.state !== 'model_accepted' && <span className="caption">Unverified suggestion</span>}</div></button>;
+            const inspectable = !replaying && vehicleIsInspectable(row, rows);
+            return <button className="reading-row" key={row.key || row.track_id} onClick={() => inspectable && status?.session_id && setInspect({ sessionId: status.session_id, trackId: row.track_id })} disabled={!status?.session_id || !inspectable} title={replaying ? 'Exit replay to inspect the latest retained diagnostics.' : !inspectable ? 'This track ID was reused in a newer scene. Inspect the newest row.' : undefined}><div className="reading-line"><strong className="plate-text">{vehicleReadingLabel(row, visual, rowStatus)}</strong><ArrowUpRight size={15} /></div><div className="reading-line"><span className="caption">{title(row.vehicle_class)} · track {row.track_id}</span><span className="caption mono">{formatVideoTime(row.last_ms)}</span></div><div className="reading-status"><ReadingStatus state={row.state} observations={row.observations} />{visual?.reading && row.state !== 'model_accepted' && <span className="caption">Unverified suggestion</span>}</div></button>;
           })}</div>}<div className="reading-footer">Best reading so far for each tracked vehicle, updated as evidence arrives and retained after it passes. Up to 200 recent tracks; model guesses remain unverified. Select a row to inspect evidence.</div></section></div>
-          <div className="run-summary"><span><strong>{rows.length}</strong> recent tracks</span><span><strong>{status?.unique_model_accepted_unverified ?? 0}</strong> model-accepted readings</span><span><strong>{rows.filter(row => row.state === 'uncertain').length}</strong> recent uncertain</span><button className="text-button" onClick={() => setPage('alerts')}><strong>{matchingAlerts.length}</strong> central matches this run</button><span className="summary-note">Accepted by model ≠ independently verified</span></div>
+          <div className="run-summary"><span><strong>{rows.length}</strong> recent tracks</span><span><strong>{acceptedCount}</strong> model-accepted readings</span><span><strong>{rows.filter(row => row.state === 'uncertain').length}</strong> recent uncertain</span><button className="text-button" onClick={() => setPage('alerts')}><strong>{matchingAlerts.length}</strong> central matches {replaying ? 'up to this replay position' : 'this run'}</button><span className="summary-note">Accepted by model ≠ independently verified</span></div>
         </div>
         {page === 'alerts' && <AlertsPage alerts={alerts} error={alertError} refresh={refreshAlerts} />}
         {page === 'watchlist' && <WatchlistPage />}

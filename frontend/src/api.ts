@@ -265,6 +265,36 @@ export interface RecognitionEvidence {
   }[];
 }
 
+export interface RecognitionReplaySample {
+  video_position_ms: number;
+  frame: string | null;
+  vehicles: RecognitionEvidence['vehicles'];
+  vehicles_seen: NonNullable<RecognitionStatus['vehicles_seen']>;
+  unique_model_accepted_unverified: number;
+}
+
+export interface RecognitionReplayPage {
+  schema_version: '1.0';
+  source_mode: 'recorded';
+  session_id: string;
+  camera_id: string;
+  video_duration_ms: number;
+  available: boolean;
+  reason: string | null;
+  sample_count: number;
+  offset: number;
+  next_offset: number | null;
+  samples: RecognitionReplaySample[];
+}
+
+/** Read an existing recorded-analysis sample; never starts inference. */
+export function getRecognitionReplay(sessionId: string, offset = 0,
+  mode: 'original' | 'overlays' = 'overlays', signal?: AbortSignal): Promise<RecognitionReplayPage> {
+  if (!Number.isInteger(offset) || offset < 0 || offset >= 300) throw new Error('Invalid replay page.');
+  const query = new URLSearchParams({ session_id: sessionId, offset: String(offset), limit: '1', mode });
+  return request(`/v1/recognition/replay?${query}`, { cache: 'no-store', signal }, true);
+}
+
 /** Resolves to null when the view is switched off or no recording is being analysed. */
 export async function getRecognitionEvidence(mode: 'original' | 'overlays' = 'overlays'): Promise<RecognitionEvidence | null> {
   try { return await request<RecognitionEvidence>(`/v1/recognition/evidence?mode=${mode}`, { cache: 'no-store' }, true); }

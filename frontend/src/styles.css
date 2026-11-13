@@ -31,3 +31,5 @@
 .review-list { display: grid; gap: 8px; margin-top: 12px; }
 .button-row { display: flex; gap: 8px; flex-wrap: wrap; }
 .audit { padding-left: 1.25rem; }
+.replay-workspace .reading-row:disabled{opacity:1;cursor:default}
+.replay-panel{padding:16px 20px;margin-bottom:20px;border-color:#b5cec4}.replay-panel>.caption{margin-top:12px}.replay-controls{display:flex;align-items:center;gap:20px;margin-top:14px}.replay-scrub{display:flex;align-items:center;gap:14px;flex:1}.replay-scrub input{flex:1;min-width:100px;accent-color:var(--accent)}.replay-scrub .mono{font-size:12px;white-space:nowrap}.replay-loading{display:flex;gap:16px;align-items:center;padding-top:12px;color:var(--muted)}.replay-loading progress{accent-color:var(--accent);max-width:180px}@media(max-width:640px){.replay-controls{align-items:stretch;flex-direction:column;gap:12px}.replay-loading{align-items:flex-start;flex-direction:column}}

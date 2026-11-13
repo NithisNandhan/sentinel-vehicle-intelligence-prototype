@@ -20,6 +20,13 @@ module=importlib.util.module_from_spec(spec);spec.loader.exec_module(module)
 
 
 class ReviewServerTests(unittest.TestCase):
+    def test_review_status_is_pending_and_does_not_reveal_frozen_predictions(self):
+        public=self.store.public()
+        self.assertFalse(public['review_status']['accuracy_available'])
+        self.assertEqual(public['review_status']['pending_entries'],1)
+        self.assertEqual(public['review_status']['legacy_labels_imported'],0)
+        self.assertNotIn('predictions',public)
+
     def setUp(self):
         self.directory=tempfile.TemporaryDirectory();self.root=Path(self.directory.name)
         (self.root/'assets').mkdir();self.video=self.root/'source.mp4';self.video.write_bytes(b'0123456789')
