@@ -65,6 +65,10 @@ no central events.
 
 ## Remaining limits
 
+Follow-up: [text-support safeguards and the tracking comparison](TEXT_SUPPORT_AND_TRACKING_20261113.md)
+now keep the inspected weak windscreen/trim proposals out of fusion while
+preserving them for review. The measurements below describe the earlier v2 run.
+
 The changes fix the demonstrated tracker-3 contamination; they do not establish
 perfect physical identity. Visual review of all 14 saved multi-crop sheets found
 a residual tracker-148 switch at 13.5–15 seconds involving a tiny non-plate trim

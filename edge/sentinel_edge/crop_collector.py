@@ -22,7 +22,7 @@ class CollectedFrame(VideoFrame):
 
 class CropCollector(SampledFrames):
     def __init__(self, frames, stop, vehicle, detector, *, roi_budget=None,
-                 adaptive_sampling=False, full_image_fallback=False, **kwargs):
+                 adaptive_sampling=False, full_image_fallback=False, continuous_tracking=False, **kwargs):
         super().__init__(frames,stop,**kwargs)
         if roi_budget is not None and not 1 <= roi_budget <= 8:
             raise ValueError('Invalid collector ROI budget')
@@ -30,6 +30,8 @@ class CropCollector(SampledFrames):
         self.collected_crops = self.input_dropped = 0
         self.roi_searches = self.roi_unsearched_tracks = 0
         self.adaptive_sampling, self.full_image_fallback = adaptive_sampling,full_image_fallback
+        self.continuous_tracking = bool(continuous_tracking)
+        self.tracking_frames = 0
         self.full_image_calls = self.full_image_crops = 0
 
     @staticmethod
@@ -50,7 +52,7 @@ class CropCollector(SampledFrames):
             # at the idle cadence unless a recent sample contained a vehicle.
             with SampledFrames(self.frames,self.stop,interval_ms=250 if self.adaptive_sampling else self.interval_ms,
                     max_frames=self.max_frames,max_bytes=self.max_bytes,max_age_ms=self.max_age_ms,
-                    block=self.block) as tap:
+                    block=self.block,every_frame=self.continuous_tracking) as tap:
                 while not self.stop.is_set():
                     item = tap.take(sequence)
                     self.decoded, self.input_dropped = tap.decoded,tap.dropped_samples
@@ -69,12 +71,18 @@ class CropCollector(SampledFrames):
                         last_selected_pts = active_until_pts = last_full_scan_pts = None
                     desired_interval = (250 if self.adaptive_sampling and active_until_pts is not None
                                         and frame.pts_ms <= active_until_pts else self.interval_ms)
-                    if last_selected_pts is not None and frame.pts_ms-last_selected_pts < desired_interval:
+                    due = last_selected_pts is None or frame.pts_ms-last_selected_pts >= desired_interval
+                    if not self.continuous_tracking and not due:
                         continue
-                    last_selected_pts = frame.pts_ms
                     tick = time.monotonic()
                     tracks = self.vehicle.track(frame.image)
+                    self.tracking_frames += 1
                     vehicle_ms = (time.monotonic()-tick)*1000
+                    # Update the tracker on every source frame, but keep plate
+                    # searches/OCR at the existing independent sample cadence.
+                    if not due:
+                        continue
+                    last_selected_pts = frame.pts_ms
                     eligible = []
                     for track in tracks:
                         box = clipped_box(frame.image,track.box)

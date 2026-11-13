@@ -64,6 +64,9 @@ def observe_tracked(config,camera,model,detector,vehicle,state,stop, *, debug=Fa
     collector_options = dict(adaptive_sampling=True,full_image_fallback=True) if plate_recovery else {}
     if recorded:
         collector_options['block'] = True
+        import os
+        if os.getenv('SENTINEL_CONTINUOUS_TRACKING', 'false').lower() == 'true':
+            collector_options['continuous_tracking'] = True
     source = recorded.frames if recorded else (lambda token:viewer_frames(config,camera,token))
     with LatestFrames(source,stop,vehicle,pipeline.detector,
                       **collector_options) as tap:
@@ -138,6 +141,8 @@ def observe_tracked(config,camera,model,detector,vehicle,state,stop, *, debug=Fa
                 details['stage_ms'] = {key:round(value,2) for key,value in details['stage_ms'].items()}
                 details['overwritten_frames'] = (getattr(tap,'input_dropped',0)+getattr(tap,'dropped_samples',0))
                 details['sampled_frames'] = getattr(tap,'sampled',0)
+                details['vehicle_tracking_frames'] = getattr(tap,'tracking_frames',0)
+                details['continuous_tracking_enabled'] = bool(getattr(tap,'continuous_tracking',False))
                 details['dropped_sampled_frames'] = getattr(tap,'dropped_samples',0)
                 details['decode_queue_peak_bytes'] = getattr(tap,'peak_bytes',0)
                 details['collector_input_drops'] = getattr(tap,'input_dropped',0)
@@ -183,7 +188,8 @@ def observe_tracked(config,camera,model,detector,vehicle,state,stop, *, debug=Fa
                 error = RuntimeError('Recording could not be analysed')
                 error.failure_code = getattr(tap,'failure_code','RecordingFailure')
                 raise error
-            return pipeline.summary()
+            return dict(pipeline.summary(), vehicle_tracking_frames=getattr(tap,'tracking_frames',0),
+                        continuous_tracking_enabled=bool(getattr(tap,'continuous_tracking',False)))
         if tap.failed or not pipeline.metrics['analysed_frames'] or not stop.is_set():
             error = RuntimeError('Experimental viewer stream unavailable')
             error.failure_code = getattr(tap,'failure_code','NoUsableFrames')

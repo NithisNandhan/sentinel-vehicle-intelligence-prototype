@@ -20,6 +20,25 @@ module=importlib.util.module_from_spec(spec);spec.loader.exec_module(module)
 
 
 class ReviewServerTests(unittest.TestCase):
+    def test_withheld_images_are_integrity_checked_without_becoming_score_units(self):
+        stream=io.BytesIO();Image.new('RGB',(20,10),'gray').save(stream,format='PNG')
+        asset=self.root/'assets/withheld-1.png';asset.write_bytes(stream.getvalue())
+        self.manifest['rejected_proposals']=[dict(path='assets/withheld-1.png',image_sha256=module.digest(asset),
+                                                reason='Insufficient text evidence',used_for_fusion=False)]
+        module.write_json(self.root/'manifest.json',self.manifest)
+        predictions=json.loads((self.root/'predictions.json').read_bytes())
+        predictions['manifest_sha256']=module.digest(self.root/'manifest.json')
+        predictions['withheld_proposals']=[dict(raw_text='PRIVATE_PREDICTION')]
+        module.write_json(self.root/'predictions.json',predictions)
+        (self.root/'labels.json').unlink()
+        restored=module.ReviewStore(self.root,self.video)
+        self.assertEqual(len(restored.labels['labels']),1)
+        self.assertNotIn('PRIVATE_PREDICTION',json.dumps(restored.public()))
+        self.assertIn('assets/withheld-1.png',{a['path'] for a in restored.review_assets})
+        asset.write_bytes(b'altered image')
+        with self.assertRaisesRegex(ValueError,'frozen review image changed'):
+            module.ReviewStore(self.root,self.video)
+
     def test_review_status_is_pending_and_does_not_reveal_frozen_predictions(self):
         public=self.store.public()
         self.assertFalse(public['review_status']['accuracy_available'])

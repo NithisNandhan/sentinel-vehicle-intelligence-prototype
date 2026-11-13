@@ -23,13 +23,14 @@ class SampledFrame(VideoFrame):
 
 class SampledFrames(LatestFrames):
     def __init__(self, frames, stop, *, interval_ms=500, max_frames=8,
-                 max_bytes=48*1024*1024, max_age_ms=2500, block=False):
+                 max_bytes=48*1024*1024, max_age_ms=2500, block=False, every_frame=False):
         if interval_ms < 150 or not 1 <= max_frames <= 16 or max_bytes < 1 or max_age_ms < interval_ms:
             raise ValueError('Invalid sampled decode bounds')
         super().__init__(frames, stop)
         self.interval_ms, self.max_frames = interval_ms, max_frames
         self.max_bytes, self.max_age_ms = max_bytes, max_age_ms
         self.block = block
+        self.every_frame = bool(every_frame)
         self.queue = deque()
         self.bytes_used = self.peak_bytes = self.sampled = self.dropped_samples = 0
 
@@ -71,7 +72,7 @@ class SampledFrames(LatestFrames):
                     if pts is None:
                         continue
                     last_pts = pts
-                    if sampled_pts is not None and pts-sampled_pts < self.interval_ms:
+                    if not self.every_frame and sampled_pts is not None and pts-sampled_pts < self.interval_ms:
                         continue
                     sampled_pts = pts
                     if frame.image.nbytes > self.max_bytes:

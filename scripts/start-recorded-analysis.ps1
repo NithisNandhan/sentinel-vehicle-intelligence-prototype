@@ -7,11 +7,16 @@ param(
     # Process as fast as this machine allows instead of at most real time.
     # Frames are never dropped in either mode.
     [switch]$Unpaced,
+    # Trial only: update vehicle tracking on every decoded frame; OCR remains sampled.
+    [switch]$ContinuousTracking,
     [ValidateRange(1, 64)]
     [int]$CpuThreads = 4,
     [switch]$SkipBuild
 )
 $ErrorActionPreference = 'Stop'
+if ($PSBoundParameters.ContainsKey('ContinuousTracking')) {
+    $env:SENTINEL_CONTINUOUS_TRACKING = $ContinuousTracking.IsPresent.ToString().ToLowerInvariant()
+}
 $projectRoot = Split-Path -Parent $PSScriptRoot
 $dockerCommand = Get-Command docker -ErrorAction SilentlyContinue
 $dockerExecutable = if ($dockerCommand) { $dockerCommand.Source } else {

@@ -110,6 +110,23 @@ def _reconstruction(value):
             "candidates": _candidates(value.get("candidates"))}
 
 
+def _rejected_proposals(value):
+    """Withheld diagnostic proposals are never admitted frame evidence."""
+    result = []
+    for row in (value if isinstance(value, list) else [])[:3]:
+        if not isinstance(row, dict):
+            continue
+        pts = _integer(row.get('pts_ms'))
+        width, height = _integer(row.get('width'), 8192), _integer(row.get('height'), 8192)
+        if pts is None or not width or not height:
+            continue
+        result.append(dict(pts_ms=pts, width=width, height=height,
+            text=_plate(row.get('text')) or '', characters=_characters(row.get('characters')),
+            image=_png(row.get('image'), 80_000), reason=_label(row.get('reason')),
+            used_for_fusion=False))
+    return result
+
+
 def passed_track_identity(snapshot, track_id):
     """Newest run-list row for an ID, including its recognition passage.
 
@@ -247,7 +264,9 @@ def diagnostic_view(snapshot, models, session_id, track_id, *, enabled):
              "seen_pts_ms": _integer(selected.get("seen_pts_ms")), "observations": _integer(selected.get("observations")) or 0,
              "recognition_state": recognition_state if isinstance(recognition_state, str) and recognition_state in _STATES else "unreadable",
              "masked_plate": masked, "best_reading": _plate(best.get("plate")), "model_score": _number(best.get("score"), score=True),
-             "gate_reasons": reasons, "frames": frames, "candidates": _candidates(selected.get("candidates")),
+             "gate_reasons": reasons, "frames": frames,
+             "rejected_proposals": _rejected_proposals(selected.get('rejected_proposals')),
+             "candidates": _candidates(selected.get("candidates")),
              "reconstruction": _reconstruction(selected.get("reconstruction"))}
     passage = selected.get('passage_id')
     if isinstance(passage, str) and IDENTIFIER.fullmatch(passage):

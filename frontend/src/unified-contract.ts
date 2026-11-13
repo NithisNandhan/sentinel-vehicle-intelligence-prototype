@@ -60,6 +60,17 @@ export type ReconstructionEvidence = {
   candidates?: Array<PlateCandidate>;
 };
 
+export type RejectedProposal = {
+  pts_ms: number;
+  width: number;
+  height: number;
+  text?: string;
+  characters?: Array<CharacterEvidence>;
+  image?: string | null;
+  reason?: string;
+  used_for_fusion?: false;
+};
+
 export type TrackDiagnostics = {
   track_id: string;
   row_key?: string | null;
@@ -75,6 +86,7 @@ export type TrackDiagnostics = {
   model_score?: number | null;
   gate_reasons?: Array<string>;
   frames?: Array<FrameEvidence>;
+  rejected_proposals?: Array<RejectedProposal>;
   candidates?: Array<PlateCandidate>;
   reconstruction?: ReconstructionEvidence | null;
 };

@@ -46,12 +46,16 @@ class ReviewStore:
             raise ValueError('Frozen run/prediction identity mismatch')
         if digest(self.video)!=self.manifest['source']['sha256']:raise ValueError('The review video changed')
         if not self.manifest.get('run',{}).get('reached_eof'):raise ValueError('The video run did not finish')
-        for row in self.manifest['tracks']:
-            for asset in [row.get('vehicle_preview'),*row.get('samples',[])]:
-                if not asset:continue
-                path=self.asset_path(asset['path'])
-                if asset.get('image_sha256') and digest(path)!=asset['image_sha256']:
-                    raise ValueError('A frozen review image changed')
+        proposals=self.manifest.get('rejected_proposals',[])
+        if not isinstance(proposals,list) or len(proposals)>512 or any(not isinstance(p,dict) for p in proposals):
+            raise ValueError('Invalid withheld-proposal evidence')
+        self.review_assets=[asset for row in self.manifest['tracks']
+                            for asset in [row.get('vehicle_preview'),*row.get('samples',[])] if asset]
+        self.review_assets.extend(proposals)
+        for asset in self.review_assets:
+            path=self.asset_path(asset['path'])
+            if asset.get('image_sha256') and digest(path)!=asset['image_sha256']:
+                raise ValueError('A frozen review image changed')
         self.finalized=(self.root/'finalized.json').exists();self.report=None
         if self.finalized:
             frozen=json.loads((self.root/'finalized.json').read_text(encoding='utf-8'))
@@ -208,7 +212,7 @@ def make_handler(store,port):
                 elif path.startswith('/assets/'):
                     relative=path.lstrip('/')
                     with store.lock:
-                        known={a['path'] for r in store.manifest['tracks'] for a in [r.get('vehicle_preview'),*r.get('samples',[])] if a}
+                        known={a['path'] for a in store.review_assets}
                         known.update(e['image_path'] for e in store.labels['extras'])
                     if relative not in known:self.json(404,dict(error='Unknown review image'));return
                     self.reply(200,store.asset_path(relative).read_bytes(),'image/png')

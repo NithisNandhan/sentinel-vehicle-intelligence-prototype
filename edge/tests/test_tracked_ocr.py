@@ -176,6 +176,44 @@ class PlateContinuityIntegrationTests(unittest.TestCase):
         with patch('sentinel_edge.tracked_ocr.crop_quality', return_value=.9):
             return engine.process(image, tracks, stamp, **kwargs)
 
+    def test_unsupported_proposal_is_visible_but_cannot_move_plate_clock_or_fuse(self):
+        engine = self.engine()
+        self.process(engine,self.image(0),self.tracks(),0)
+        old = engine.histories['1']
+        previous_box = old.last_plate_box
+        engine.ocr.probabilities = lambda crop: [[1.]+[0.]*(len(TOKENS)-1)]
+        displays = self.process(engine,self.image(1),self.tracks(),500)
+        self.assertEqual(displays,[])
+        self.assertEqual(old.reader.observation_count,1)
+        self.assertEqual(old.last_plate_pts_ms,0)
+        self.assertEqual(old.last_plate_box,previous_box)
+        self.assertEqual(engine.metrics['withheld_text_proposals'],1)
+        proposal = engine.rejected_proposals[0]
+        self.assertFalse(proposal['used_for_fusion'])
+        self.assertEqual(proposal['passage_id'],old.passage_id)
+        np.testing.assert_array_equal(proposal['crop'],self.image(1)[5:35,5:150])
+        # It cannot keep a stale plate history alive through a sequence of misses.
+        self.process(engine,self.image(2),self.tracks(),1500)
+        self.assertNotEqual(engine.histories['1'].passage_id,old.passage_id)
+        self.assertEqual(engine.histories['1'].reader.observation_count,0)
+
+    def test_debug_withheld_previews_are_separate_and_bound_to_passage(self):
+        engine = self.engine()
+        engine.debug_enabled = True
+        from sentinel_edge.reconstruction import CropBank
+        engine.crop_bank = CropBank()
+        engine.ocr.probabilities = lambda crop: [[1.]+[0.]*(len(TOKENS)-1)]
+        for i in range(5):self.process(engine,self.image(i),self.tracks(),i*150)
+        track = engine.debug_snapshot()['tracks'][0]
+        self.assertEqual(track['frames'],[])
+        self.assertEqual(track['observations'],0)
+        self.assertEqual(len(track['rejected_proposals']),3)
+        self.assertTrue(all(p['used_for_fusion'] is False for p in track['rejected_proposals']))
+        self.assertTrue(all(p['image'] for p in track['rejected_proposals']))
+        self.assertEqual(engine.crop_bank.bytes_used,0)
+        engine.reset()
+        self.assertEqual(engine._rejected_debug,{})
+
     def test_confident_text_conflict_splits_reused_id_before_fusion(self):
         from sentinel_edge.plate_options import PlateOptions
         outcomes = []

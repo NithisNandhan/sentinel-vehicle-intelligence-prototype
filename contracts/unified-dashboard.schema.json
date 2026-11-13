@@ -431,6 +431,75 @@
       "title": "FrameEvidence",
       "type": "object"
     },
+    "RejectedProposal": {
+      "additionalProperties": false,
+      "properties": {
+        "pts_ms": {
+          "maximum": 1000000000,
+          "minimum": 0,
+          "title": "Pts Ms",
+          "type": "integer"
+        },
+        "width": {
+          "maximum": 8192,
+          "minimum": 1,
+          "title": "Width",
+          "type": "integer"
+        },
+        "height": {
+          "maximum": 8192,
+          "minimum": 1,
+          "title": "Height",
+          "type": "integer"
+        },
+        "text": {
+          "default": "",
+          "maxLength": 25,
+          "title": "Text",
+          "type": "string"
+        },
+        "characters": {
+          "items": {
+            "$ref": "#/$defs/CharacterEvidence"
+          },
+          "maxItems": 25,
+          "title": "Characters",
+          "type": "array"
+        },
+        "image": {
+          "anyOf": [
+            {
+              "maxLength": 80000,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Image"
+        },
+        "reason": {
+          "default": "",
+          "maxLength": 240,
+          "title": "Reason",
+          "type": "string"
+        },
+        "used_for_fusion": {
+          "const": false,
+          "default": false,
+          "title": "Used For Fusion",
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "pts_ms",
+        "width",
+        "height"
+      ],
+      "title": "RejectedProposal",
+      "type": "object"
+    },
     "ReconstructionEvidence": {
       "additionalProperties": false,
       "properties": {
@@ -661,6 +730,14 @@
             "$ref": "#/$defs/FrameEvidence"
           },
           "title": "Frames",
+          "type": "array"
+        },
+        "rejected_proposals": {
+          "items": {
+            "$ref": "#/$defs/RejectedProposal"
+          },
+          "maxItems": 3,
+          "title": "Rejected Proposals",
           "type": "array"
         },
         "candidates": {

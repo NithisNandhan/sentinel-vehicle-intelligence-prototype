@@ -42,6 +42,11 @@ directory for another recording. No credentials are embedded in the script.
 
 ## Finish the actual accuracy report
 
+The newer text-support capture and separate withheld-proposal section supersede
+the passage-only capture below for current review. See
+[the tracking comparison](TEXT_SUPPORT_AND_TRACKING_20261113.md). Open
+http://127.0.0.1:7798/; earlier captures/labels remain unchanged.
+
 Use the passage-aware Mumbai capture at
 `data/benchmarks/full-video-passage-review-v2-20261113/`. The older
 `full-video-human-review-20261113` capture groups by raw tracker ID and contains

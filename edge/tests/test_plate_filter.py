@@ -43,6 +43,13 @@ class FilterTests(unittest.TestCase):
         self.assertEqual(confident_characters(rows_for(TEXT, .55)), 0)
         self.assertEqual(confident_characters(rows_for('AA', .9)), 1)  # Repeat without blank collapses.
 
+    def test_support_uses_peak_of_entire_character_run_not_its_first_timestep(self):
+        rows=rows_for('A',.55)+rows_for('A',.95)
+        self.assertEqual(confident_characters(rows),1)
+        blank=[1.]+[0.]*(len(TOKENS)-1)
+        self.assertEqual(confident_characters(rows+[blank]+rows_for('A',.9)),2)
+        self.assertEqual(confident_characters([blank]),0)
+
     def test_reasons(self):
         screen, crop = NonPlateFilter(), np.zeros((20, 80, 3), np.uint8)
         self.assertIsNone(screen.reason(crop, rows_for(TEXT, .9), .8))
@@ -60,8 +67,11 @@ class FilterTests(unittest.TestCase):
 
 class FusionSafetyTests(unittest.TestCase):
     def test_fusion_never_accepts_a_low_confidence_invented_reading_even_without_the_filter(self):
-        history = run(engine(.55))
-        self.assertEqual(history.reader.observation_count, 4)  # Off: weak evidence is kept, as before.
+        pipeline = engine(.55)
+        history = run(pipeline)
+        self.assertEqual(history.reader.observation_count, 0)
+        self.assertEqual(pipeline.rejected_proposals[0]['raw_text'],TEXT)
+        self.assertFalse(pipeline.rejected_proposals[0]['used_for_fusion'])
         self.assertIsNone(history.reader.accepted(.85))
 
     def test_with_the_filter_a_non_plate_never_becomes_evidence(self):
@@ -69,9 +79,9 @@ class FusionSafetyTests(unittest.TestCase):
         history = run(pipeline)
         self.assertEqual(history.reader.observation_count, 0)
         self.assertIsNone(history.reader.accepted(.85))
-        self.assertEqual(pipeline.metrics['non_plate_rejections'], 4)
+        self.assertEqual(pipeline.metrics['withheld_text_proposals'], 4)
         self.assertEqual(pipeline.metrics['distinct_ocr_observations'], 0)
-        self.assertIn('confident', history.last_plate_failure)
+        self.assertIn('Insufficient text evidence', history.last_plate_failure)
         self.assertEqual(history.plate_detections, 0)
 
     def test_a_low_detector_score_is_rejected_before_it_can_reset_the_reader(self):

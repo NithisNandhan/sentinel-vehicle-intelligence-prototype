@@ -188,3 +188,27 @@ def test_diagnostic_passage_binding_is_forwarded_without_arbitrary_text(local, m
     assert response.json()['track']['passage_id'] is None
     assert response.json()['track']['passage_start_reason'] is None
     assert 'SECRET' not in response.text
+
+
+def test_withheld_proposals_are_allowlisted_and_cannot_add_fusion_observations(local, monkeypatch):
+    value = diagnostic()
+    value['track']['observations'] = 3
+    value['track']['rejected_proposals'] = [dict(pts_ms=500, width=100, height=30, text='MH47',
+        image='eA==', reason='Insufficient text evidence: no character reaches 0.6', used_for_fusion=True,
+        secret='SECRET') for _ in range(8)]
+    monkeypatch.setattr(recognition, 'request_edge', lambda method, path: value)
+    response = local.get('/v1/recognition/diagnostics?session_id=s-test&track_id=7', headers=KEY)
+    assert response.status_code == 200
+    track = response.json()['track']
+    assert track['observations'] == 3
+    assert len(track['rejected_proposals']) == 3
+    assert all(row['used_for_fusion'] is False for row in track['rejected_proposals'])
+    assert track['rejected_proposals'][0]['text'] == 'MH47'
+    assert 'SECRET' not in response.text
+    value['track']['rejected_proposals'] = [dict(pts_ms=True, width=100, height=30),
+        dict(pts_ms=500, width=100, height=30, image='A'*80001, text='https://SECRET', reason='rtsp://SECRET')]
+    response = local.get('/v1/recognition/diagnostics?session_id=s-test&track_id=7', headers=KEY)
+    assert response.status_code == 200
+    rows = response.json()['track']['rejected_proposals']
+    assert len(rows) == 1
+    assert rows[0]['image'] is None and rows[0]['text'] == '' and rows[0]['reason'] == ''

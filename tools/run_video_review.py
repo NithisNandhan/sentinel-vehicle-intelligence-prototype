@@ -10,6 +10,7 @@ from datetime import datetime,timezone
 from dataclasses import asdict
 import hashlib
 import json
+import math
 import os
 from pathlib import Path
 import re
@@ -21,6 +22,8 @@ from sentinel_edge.recorded_source import RecordingLibrary,read_recording,new_se
 
 PREDICTION_POLICY='passed_vehicles_strongest_window_v1'
 GROUPING_POLICY='recognition_passage_v1'
+MAX_WITHHELD_PROPOSALS=512
+MAX_WITHHELD_NATIVE_BYTES=32*1024*1024
 
 
 def utc():return datetime.now(timezone.utc).isoformat().replace('+00:00','Z')
@@ -38,19 +41,23 @@ def identity_guard_settings():
     The source hashes bind fixed thresholds not exposed as runtime options;
     these are conservative evidence guards, not calibrated identity proofs.
     """
-    from sentinel_edge import plate_continuity,plate_identity,plate_ownership
+    from sentinel_edge import plate_continuity,plate_identity,plate_ownership,tracked_ocr,crop_collector,sampled_frames,plate_filter
     return dict(
         plate_ownership=dict(policy='unique_native_vehicle_containment_v1',
             minimum_area_fraction=.85,plate_center_inside=True,
             compared_regions='all_current_vehicle_boxes',before_ocr_and_fusion=True),
         plate_continuity=asdict(plate_continuity.DEFAULT_POLICY),
+        vehicle_tracking=dict(every_decoded_frame=os.getenv('SENTINEL_CONTINUOUS_TRACKING','false').lower()=='true',
+            recorded_only=True,ocr_sampling_unchanged=True),
+        fusion_text_support=dict(minimum_confident_characters=1,character_peak=.6,
+            withheld_proposals_preserved=True,no_character_support_does_not_mean_non_plate=True),
         independent_ocr_conflict=dict(policy='independent_reading_conflict_v1',
             equal_length_differing_characters_min=3,character_score_min=.9,
             terminal_digits=4,terminal_differing_characters_min=2,
             unequal_prefix_lengths_allowed=True,veto_only_never_merge=True,
             scores_are_uncalibrated=True),
         source_sha256={module.__name__.rsplit('.',1)[-1]:file_hash(Path(module.__file__))
-            for module in (plate_ownership,plate_continuity,plate_identity)})
+            for module in (plate_ownership,plate_continuity,plate_identity,tracked_ocr,crop_collector,sampled_frames,plate_filter)})
 
 
 def reference_coverage(manifest,review,reference_view):
@@ -120,6 +127,8 @@ class ReviewObserver:
         self.segment=0;self.tracks={};self.predictions={};self.native={}
         self.last_position=0;self.samples=0;self.started=time.monotonic()
         self.pipeline=None
+        self.withheld_proposals=[];self.withheld_predictions=[];self.withheld_native=[]
+        self.withheld_seen=0;self.withheld_bytes=0;self.withheld_keys=set()
 
     def identity(self,track_id,passage_id=None):
         value=str(track_id)
@@ -175,6 +184,75 @@ class ReviewObserver:
 
     def publish(self,snapshot,stop=None):
         pass
+
+    def capture_withheld(self,frame,pipeline):
+        """Retain rejected observations for inspection, outside accuracy units.
+
+        Low OCR evidence does not prove a region is not a plate. The native
+        image and reason remain visible, while raw OCR stays in predictions
+        hidden during blind labelling. No crop becomes a fusion/scoring vote.
+        """
+        import numpy as np
+        for item in getattr(pipeline,'rejected_proposals',[]) or []:
+            if item.get('used_for_fusion') is not False or item.get('pts_ms')!=frame.pts_ms:
+                raise ValueError('Withheld proposal must be a non-fusion observation of the current frame')
+            track_id=item['track_id'];passage_id=item.get('passage_id')
+            self.identity(track_id,passage_id)
+            crop=item.get('crop');box=item.get('box')
+            if (not isinstance(crop,np.ndarray) or crop.dtype!=np.uint8 or crop.ndim!=3
+                    or crop.shape[2]!=3 or min(crop.shape[:2])<1
+                    or not isinstance(box,(tuple,list)) or len(box)!=4
+                    or any(isinstance(v,bool) or not isinstance(v,(int,float)) or not math.isfinite(v) for v in box)
+                    or not 0<=box[0]<box[2]<=frame.image.shape[1]
+                    or not 0<=box[1]<box[3]<=frame.image.shape[0]):
+                raise ValueError('Invalid native withheld proposal')
+            digest=hashlib.sha256(crop.tobytes()).hexdigest()
+            key=(self.segment,str(track_id),passage_id,frame.pts_ms,digest)
+            if key in self.withheld_keys:continue
+            self.withheld_seen+=1
+            if (len(self.withheld_proposals)>=MAX_WITHHELD_PROPOSALS
+                    or self.withheld_bytes+crop.nbytes>MAX_WITHHELD_NATIVE_BYTES):
+                continue
+            raw=item.get('raw_text');characters=item.get('characters',())
+            reason=item.get('reason')
+            if (raw is not None and (not isinstance(raw,str) or len(raw)>128)
+                    or not isinstance(reason,str) or not 1<=len(reason)<=256
+                    or not isinstance(characters,(tuple,list)) or len(characters)>128):
+                raise ValueError('Invalid withheld OCR diagnostic')
+            def character(value):
+                if isinstance(value,dict):text,score=value.get('character'),value.get('score')
+                elif isinstance(value,(tuple,list)) and len(value)==2:text,score=value
+                else:raise ValueError('Invalid withheld character score')
+                if (not isinstance(text,str) or len(text)!=1 or isinstance(score,bool)
+                        or not isinstance(score,(int,float)) or not math.isfinite(score) or not 0<=score<=1):
+                    raise ValueError('Invalid withheld character score')
+                return dict(character=text,score=float(score))
+            clean=[]
+            for value in characters:
+                entry=character(value)
+                alternatives=value.get('alternatives',[]) if isinstance(value,dict) else []
+                if not isinstance(alternatives,(tuple,list)) or len(alternatives)>3:
+                    raise ValueError('Invalid withheld character alternatives')
+                entry['alternatives']=[character(alt) for alt in alternatives]
+                clean.append(entry)
+            uid=f'withheld-{len(self.withheld_proposals)+1:06d}'
+            position=frame.pts_ms-self.recording.start_pts_ms
+            row=dict(id=uid,tracker_id=str(track_id),passage_id=passage_id,segment=self.segment,
+                position_ms=position,box=list(map(float,box)),width=crop.shape[1],height=crop.shape[0],
+                reason=reason,used_for_fusion=False,path=f'assets/{uid}.png',pixel_sha256=digest)
+            history=pipeline.histories.get(track_id)
+            if history is not None and getattr(history,'passage_id',None)==passage_id:
+                row['vehicle_box']=list(map(float,history.box))
+            self.withheld_proposals.append(row);self.withheld_native.append(crop.copy())
+            self.withheld_predictions.append(dict(id=uid,raw_text=raw,characters=clean,
+                position_ms=position,passage_id=passage_id,used_for_fusion=False))
+            self.withheld_bytes+=crop.nbytes;self.withheld_keys.add(key)
+
+    def withheld_retention(self):
+        return dict(seen=self.withheld_seen,retained=len(self.withheld_proposals),
+            omitted=self.withheld_seen-len(self.withheld_proposals),
+            truncated=self.withheld_seen>len(self.withheld_proposals),
+            maximum_proposals=MAX_WITHHELD_PROPOSALS,maximum_native_bytes=MAX_WITHHELD_NATIVE_BYTES)
 
     def on_sample(self,frame,tracks,displays,pipeline):
         from sentinel_edge.live_detection_viewer import crop_box,clipped_box
@@ -240,6 +318,7 @@ class ReviewObserver:
                         if selected is None or selected[1]['position_ms']!=candidate_ms:
                             raise ValueError('Selected OCR window has no admitted crop')
                         self.native[uid]['selected']=selected
+        self.capture_withheld(frame,pipeline)
         if self.samples%5==0:
             progress=dict(status='processing',position_ms=position,analysed_frames=self.samples,
                 tracked_fragments=len(self.tracks),seconds=round(time.monotonic()-self.started,1))
@@ -266,6 +345,8 @@ class ReviewObserver:
             for number,(crop,sample) in enumerate(chosen[:6]):
                 sample['path']=f'assets/{uid}-plate-{number}.png'
                 sample['image_sha256']=save(sample['path'],crop);row['samples'].append(sample)
+        for row,crop in zip(self.withheld_proposals,self.withheld_native):
+            row['image_sha256']=save(row['path'],crop)
 
 
 def main(args):
@@ -325,11 +406,14 @@ def main(args):
             wall_seconds=round(time.monotonic()-began,2),pipeline_summary=summary),
         scope='Complete permitted recorded clip, previously used in development; not an unseen CCTV test',
         predictions_hidden_during_labelling=True,
+        rejected_proposals=observer.withheld_proposals,
+        withheld_proposal_retention=observer.withheld_retention(),
         tracks=sorted(observer.tracks.values(),key=lambda r:(r['first_ms'],r['id'])))
     write_json(args.output/'manifest.json',manifest)
     manifest_sha=file_hash(args.output/'manifest.json')
     write_json(args.output/'predictions.json',dict(schema_version=1,manifest_sha256=manifest_sha,
         source_sha256=recording.sha256,tracks=observer.predictions,
+        withheld_proposals=observer.withheld_predictions,
         prediction_policy=PREDICTION_POLICY,
         caveat='Scores are uncalibrated. Top guesses and actual model acceptances are separate.'))
     if getattr(args,'reference_review',None) and getattr(args,'reference_view',None):

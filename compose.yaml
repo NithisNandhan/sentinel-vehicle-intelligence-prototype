@@ -248,6 +248,8 @@ services:
       # Opt-in: keep vehicles ByteTrack has not yet confirmed (often motorcycles
       # between 500 ms samples). Fusion and acceptance thresholds are unchanged.
       SENTINEL_KEEP_UNCONFIRMED_VEHICLES: ${SENTINEL_KEEP_UNCONFIRMED_VEHICLES:-false}
+      # Recorded-only trial: vehicle tracking on every source frame; OCR stays sampled.
+      SENTINEL_CONTINUOUS_TRACKING: ${SENTINEL_CONTINUOUS_TRACKING:-false}
       # Optional: apply it only to frames at least this tall (2160 = 4K); 0 = every height.
       SENTINEL_KEEP_UNCONFIRMED_MIN_HEIGHT: ${SENTINEL_KEEP_UNCONFIRMED_MIN_HEIGHT:-0}
       # Opt-in plate options (docs/WORK_LOG.md); all off by default.

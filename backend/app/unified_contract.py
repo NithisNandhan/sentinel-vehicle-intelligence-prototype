@@ -85,6 +85,17 @@ class FrameEvidence(ContractModel):
     working_image: str | None = None
 
 
+class RejectedProposal(ContractModel):
+    pts_ms: int = Field(ge=0, le=1_000_000_000)
+    width: int = Field(ge=1, le=8192)
+    height: int = Field(ge=1, le=8192)
+    text: str = Field(default='', max_length=25)
+    characters: list[CharacterEvidence] = Field(default_factory=list, max_length=25)
+    image: str | None = Field(default=None, max_length=80_000)
+    reason: str = Field(default='', max_length=240)
+    used_for_fusion: Literal[False] = False
+
+
 class ReconstructionEvidence(ContractModel):
     status: str
     reason: str = ""
@@ -113,6 +124,7 @@ class TrackDiagnostics(ContractModel):
     model_score: float | None = None
     gate_reasons: list[str] = Field(default_factory=list)
     frames: list[FrameEvidence] = Field(default_factory=list)
+    rejected_proposals: list[RejectedProposal] = Field(default_factory=list, max_length=3)
     candidates: list[PlateCandidate] = Field(default_factory=list)
     reconstruction: ReconstructionEvidence | None = None
 

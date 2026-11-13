@@ -30,7 +30,13 @@ class ObserverIntegrationTests(unittest.TestCase):
         self.assertEqual(conflict['terminal_differing_characters_min'],2)
         self.assertEqual(conflict['character_score_min'],.9)
         self.assertTrue(conflict['veto_only_never_merge'])
-        self.assertEqual(set(settings['source_sha256']),{'plate_ownership','plate_continuity','plate_identity'})
+        self.assertEqual(set(settings['source_sha256']),{'plate_ownership','plate_continuity','plate_identity',
+            'tracked_ocr','crop_collector','sampled_frames','plate_filter'})
+        support=settings['fusion_text_support']
+        self.assertEqual(support['minimum_confident_characters'],1)
+        self.assertEqual(support['character_peak'],.6)
+        self.assertTrue(support['withheld_proposals_preserved'])
+        self.assertTrue(support['no_character_support_does_not_mean_non_plate'])
         for digest in settings['source_sha256'].values():self.assertRegex(digest,r'^[a-f0-9]{64}$')
 
     def reference_fixture(self,folder,tracks):
@@ -185,7 +191,69 @@ class ObserverIntegrationTests(unittest.TestCase):
             with self.assertRaisesRegex(ValueError,'no recognition passage'):
                 observer.accept('synthetic',7,SimpleNamespace(plate='MH01AB1234'),500)
 
-    def run_fixture(self, directory, summary_acceptances=1):
+    def withheld_fixture(self,folder):
+        observer,pipeline,_=self.observer_fixture(folder)
+        frame=SimpleNamespace(pts_ms=500,image=np.zeros((80,120,3),dtype=np.uint8))
+        proposal=dict(track_id=7,passage_id='weak-passage',box=[10,30,110,60],pts_ms=500,
+            crop=np.full((30,100,3),40,dtype=np.uint8),reason='Insufficient text evidence',
+            raw_text='AB12',characters=[dict(character='A',score=.2,
+                alternatives=[dict(character='B',score=.1)])],used_for_fusion=False)
+        pipeline.rejected_proposals=[proposal]
+        return observer,pipeline,frame,proposal
+
+    def test_withheld_proposals_survive_even_without_displays_and_are_not_accuracy_units(self):
+        with tempfile.TemporaryDirectory() as folder:
+            observer,pipeline,frame,_=self.withheld_fixture(folder)
+            observer.on_sample(frame,[],[],pipeline)
+            self.assertEqual(observer.tracks,{})
+            self.assertEqual(observer.predictions,{})
+            self.assertEqual(len(observer.withheld_proposals),1)
+            public=observer.withheld_proposals[0]
+            self.assertNotIn('raw_text',public);self.assertNotIn('characters',public)
+            self.assertFalse(public['used_for_fusion'])
+            self.assertEqual(public['position_ms'],500)
+            self.assertEqual(observer.withheld_predictions[0]['raw_text'],'AB12')
+            self.assertEqual(observer.withheld_predictions[0]['characters'][0]['alternatives'][0]['character'],'B')
+            observer.export_assets()
+            image=__import__('cv2').imread(str(Path(folder)/public['path']))
+            self.assertEqual(int(image[0,0,0]),40)
+            self.assertRegex(public['image_sha256'],r'^[a-f0-9]{64}$')
+
+    def test_withheld_native_image_is_copied_and_same_frame_duplicates_are_not_recounted(self):
+        with tempfile.TemporaryDirectory() as folder:
+            observer,pipeline,frame,proposal=self.withheld_fixture(folder)
+            observer.on_sample(frame,[],[],pipeline)
+            observer.on_sample(frame,[],[],pipeline)
+            proposal['crop'][:]=0
+            self.assertEqual(observer.withheld_seen,1)
+            self.assertEqual(len(observer.withheld_proposals),1)
+            self.assertEqual(int(observer.withheld_native[0][0,0,0]),40)
+
+    def test_withheld_retention_caps_are_explicit(self):
+        with tempfile.TemporaryDirectory() as folder:
+            observer,pipeline,frame,proposal=self.withheld_fixture(folder)
+            pipeline.rejected_proposals.append({**proposal,'track_id':8})
+            with patch.object(runner,'MAX_WITHHELD_PROPOSALS',1):
+                observer.on_sample(frame,[],[],pipeline)
+            self.assertEqual(observer.withheld_retention()['retained'],1)
+            self.assertEqual(observer.withheld_retention()['omitted'],1)
+            self.assertTrue(observer.withheld_retention()['truncated'])
+        with tempfile.TemporaryDirectory() as folder:
+            observer,pipeline,frame,_=self.withheld_fixture(folder)
+            with patch.object(runner,'MAX_WITHHELD_NATIVE_BYTES',1):
+                observer.on_sample(frame,[],[],pipeline)
+            self.assertEqual(observer.withheld_retention()['retained'],0)
+            self.assertTrue(observer.withheld_retention()['truncated'])
+
+    def test_stale_or_fusion_used_withheld_observation_is_rejected(self):
+        for update in ({'pts_ms':0},{'used_for_fusion':True},{'box':[0,0,999,999]},
+                       {'characters':[dict(character='A',score=float('nan'))]}):
+            with self.subTest(update=update),tempfile.TemporaryDirectory() as folder:
+                observer,pipeline,frame,proposal=self.withheld_fixture(folder)
+                proposal.update(update)
+                with self.assertRaises(ValueError):observer.on_sample(frame,[],[],pipeline)
+
+    def run_fixture(self, directory, summary_acceptances=1,withheld=False):
         recording = SimpleNamespace(path=Path('synthetic.mp4'), sha256='b'*64,
                                     recording_id='synthetic', duration_ms=1000, start_pts_ms=0)
         context = MagicMock()
@@ -201,7 +269,12 @@ class ObserverIntegrationTests(unittest.TestCase):
             delivery = kwargs.get('delivery')
             self.assertIs(delivery, state)
             state.pipeline=SimpleNamespace(metrics={'scene_resets':0},histories={
-                7:SimpleNamespace(passage_id='fixture-passage')})
+                7:SimpleNamespace(passage_id='fixture-passage',box=[0,0,120,80])})
+            if withheld:
+                state.pipeline.rejected_proposals=[dict(track_id=7,passage_id='fixture-passage',
+                    box=[10,30,110,60],crop=np.ones((30,100,3),dtype=np.uint8),pts_ms=500,
+                    reason='Insufficient text evidence',raw_text='PRIVATEOCR',characters=[],used_for_fusion=False)]
+                state.on_sample(SimpleNamespace(pts_ms=500,image=np.ones((80,120,3),dtype=np.uint8)),[],[],state.pipeline)
             delivery.accept('synthetic', 7, SimpleNamespace(plate='MH01AB1234'), 500,
                             recorded=kwargs['recorded'])
             counted = kwargs['recorded']
@@ -231,6 +304,19 @@ class ObserverIntegrationTests(unittest.TestCase):
             self.assertIn('identity_guards',manifest['settings'])
             self.assertEqual(predictions['tracks']['passage-s0-fixture-passage']['accepted'],
                              [{'plate': 'MH01AB1234', 'pts_ms': 500}])
+
+    def test_withheld_text_is_hidden_in_frozen_manifest_and_never_adds_a_scoring_track(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root=self.run_fixture(directory,withheld=True)
+            manifest=json.loads((root/'manifest.json').read_text())
+            predictions=json.loads((root/'predictions.json').read_text())
+            self.assertEqual(len(manifest['tracks']),1)
+            self.assertEqual(len(predictions['tracks']),1)
+            self.assertEqual(len(manifest['rejected_proposals']),1)
+            self.assertEqual(manifest['withheld_proposal_retention']['retained'],1)
+            self.assertNotIn('PRIVATEOCR',json.dumps(manifest))
+            self.assertNotIn('characters',manifest['rejected_proposals'][0])
+            self.assertEqual(predictions['withheld_proposals'][0]['raw_text'],'PRIVATEOCR')
 
     def test_incomplete_acceptance_capture_cannot_be_published_as_complete(self):
         with tempfile.TemporaryDirectory() as directory:

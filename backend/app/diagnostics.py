@@ -56,6 +56,25 @@ def candidates(values):
     return result
 
 
+def rejected_proposals(values):
+    result = []
+    for item in values[:3] if isinstance(values, list) else []:
+        if not isinstance(item, dict):
+            continue
+        pts, width, height = item.get('pts_ms'), item.get('width'), item.get('height')
+        if (type(pts) is not int or not 0 <= pts <= 1_000_000_000
+                or type(width) is not int or not 1 <= width <= 8192
+                or type(height) is not int or not 1 <= height <= 8192):
+            continue
+        reason = item.get('reason')
+        reason = reason if (isinstance(reason, str) and len(reason) <= 240
+            and '://' not in reason and '\\' not in reason and not any(ord(c) < 32 for c in reason)) else ''
+        result.append(dict(pts_ms=pts, width=width, height=height, image=image(item.get('image')),
+            text=text(item.get('text')) or '', characters=characters(item.get('characters')),
+            reason=reason, used_for_fusion=False))
+    return result
+
+
 def snapshot(value):
     track = value.get("track")
     if not isinstance(track, dict):
@@ -103,5 +122,6 @@ def snapshot(value):
                   "recognition_state": track.get("recognition_state") if track.get("recognition_state") in STATES else "reading",
                   "masked_plate": text(track.get("masked_plate")), "best_reading": text(track.get("best_reading")),
                   "model_score": number(track.get("model_score")), "gate_reasons": reasons, "frames": frames,
+                  "rejected_proposals": rejected_proposals(track.get('rejected_proposals')),
                   "candidates": candidates(track.get("candidates")), "reconstruction": reconstruction},
     })

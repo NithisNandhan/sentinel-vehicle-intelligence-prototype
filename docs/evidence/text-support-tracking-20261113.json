@@ -1,0 +1,98 @@
+{
+  "schema_version": 1,
+  "scope": "Permitted Mumbai development recording, not an unseen test",
+  "source_sha256": "6b7064605b3d4d12c6c1da4566cbcec1cd2e3e3bd7b77814865fe9df22045f65",
+  "same_models": true,
+  "same_guard_source_hashes": true,
+  "selected": {
+    "capture": "full-video-text-supported-sparse-v2-20261113",
+    "manifest_sha256": "31a64b8c285473796916fb04f55d9ea23e481d6b1312f244fdf2e2bae868b303",
+    "decoded_frames": 928,
+    "analysed_frames": 62,
+    "tracking_frames": 62,
+    "admitted_observations": 103,
+    "withheld_proposals": 41,
+    "records": 144,
+    "unique_model_accepted_unverified": 3,
+    "wall_seconds": 127.18,
+    "withheld_retention": {
+      "seen": 41,
+      "retained": 41,
+      "omitted": 0,
+      "truncated": false,
+      "maximum_proposals": 512,
+      "maximum_native_bytes": 33554432
+    }
+  },
+  "experimental": {
+    "capture": "full-video-text-supported-continuous-20261113",
+    "manifest_sha256": "0be881b5486f6313208771cee50eea6c0ba606a3f5aef65beaf0791b6bc07dbd",
+    "decoded_frames": 928,
+    "analysed_frames": 62,
+    "tracking_frames": 928,
+    "admitted_observations": 127,
+    "withheld_proposals": 67,
+    "records": 291,
+    "unique_model_accepted_unverified": 1,
+    "wall_seconds": 220.14,
+    "withheld_retention": {
+      "seen": 67,
+      "retained": 67,
+      "omitted": 0,
+      "truncated": false,
+      "maximum_proposals": 512,
+      "maximum_native_bytes": 33554432
+    }
+  },
+  "accepted_controls_lost_by_experiment": 2,
+  "new_unverified_acceptances_by_experiment": 0,
+  "decision": "Keep sampled tracking; continuous mode remains experimental and disabled",
+  "known_negative_examples_withheld": 8,
+  "known_negative_examples_total": 8,
+  "human_reference_crops_in_diagnostic": 21,
+  "human_reference_crops_withheld": 2,
+  "withheld_human_readable_references": [
+    "09"
+  ],
+  "withheld_human_unreadable_references": [
+    "08"
+  ],
+  "accepted_control_crops_withheld": 0,
+  "accepted_control_crops_total": 17,
+  "accuracy_available": false,
+  "review_pending": 144,
+  "ui_rehearsal": {
+    "passed": true,
+    "session_id": "s-20261113T180521-3e0fedc6",
+    "device": "gpu",
+    "decoded_frames": 928,
+    "analysed_frames": 62,
+    "final_rows": 144,
+    "early_rows": 13,
+    "paused_clock_stable": true,
+    "scrubbing": true,
+    "no_future_inventory": true,
+    "source_time_clock": true,
+    "inference_mutations": 0
+  },
+  "withheld_ui_smoke": {
+    "passed": true,
+    "session_id": "s-20261113T180521-3e0fedc6",
+    "device": "gpu",
+    "decoded_frames": 928,
+    "analysed_frames": 62,
+    "accepted_readings": 3,
+    "inspector_track": "39",
+    "withheld_in_inspector": 1,
+    "all_used_for_fusion_false": true,
+    "review_withheld_cards": 41,
+    "native_asset_http": 200
+  },
+  "central_events_sent_by_observers": 0,
+  "remaining_limits": [
+    "Physical vehicle identity is not fully human-validated",
+    "Readable reference09 has insufficient OCR character support",
+    "Partial and occluded crops can still weaken temporal readings",
+    "Model acceptance is not an accuracy measurement"
+  ]
+}

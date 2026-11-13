@@ -1,6 +1,6 @@
 """Bounded per-vehicle CTC histories; pixels and plate strings stay in memory."""
 from dataclasses import dataclass, field, replace
-from collections import Counter, deque
+from collections import Counter, deque, OrderedDict
 import hashlib
 import hmac
 import secrets
@@ -74,6 +74,8 @@ class TrackedOCR:
         self.widths, self.qualities = deque(maxlen=512), deque(maxlen=512)
         self.last_pts = None
         self.last_sample = None
+        self.rejected_proposals = []  # Current sample only; never OCR/reconstruction votes.
+        self._rejected_debug = OrderedDict()  # At most 32 passages x 3 bounded PNG previews.
         self.maximum_observations = self.maximum_span = 0
         self.offset = 0
         self.on_accepted = on_accepted
@@ -93,6 +95,30 @@ class TrackedOCR:
 
     def _new_reader(self):
         return CTCPlateReader(self.ocr.tokens, **self.options.reader_options())
+
+    def _withhold(self, track_id, state, crop, box, pts_ms, rows, reason):
+        from .ctc_fusion import greedy_text
+        from .recognition_debug import characters
+        proposal = dict(track_id=track_id, passage_id=state.passage_id, box=box, crop=crop,
+                        pts_ms=pts_ms, reason=reason, raw_text=greedy_text(rows,self.ocr.tokens)[:25],
+                        characters=characters(rows,self.ocr.tokens), used_for_fusion=False)
+        self.rejected_proposals.append(proposal)
+        self.metrics['withheld_text_proposals'] += 1
+        state.last_plate_failure = reason
+        state.failures[reason] += 1
+        if self.debug_enabled:
+            from .live_detection_viewer import encoded
+            preview = encoded(crop,'.png')
+            item = dict(pts_ms=pts_ms,width=crop.shape[1],height=crop.shape[0],
+                        image=preview if len(preview)<=80_000 else None,
+                        text=proposal['raw_text'],characters=proposal['characters'],
+                        reason=reason,used_for_fusion=False)
+            key=(track_id,state.passage_id)
+            retained=self._rejected_debug.pop(key,[])
+            retained.append(item)
+            self._rejected_debug[key]=retained[-3:]
+            while len(self._rejected_debug)>32:
+                self._rejected_debug.popitem(last=False)
 
     def _read(self, crop, posterior_cache, *, rectified=False):
         """CTC rows for one crop, shared within the original frame through the cache."""
@@ -226,6 +252,8 @@ class TrackedOCR:
         for key in list(self.histories):
             self._finalize(key, self.histories[key], 'reset')
         self.histories.clear()
+        self.rejected_proposals.clear()
+        self._rejected_debug.clear()
         if self.crop_bank is not None:
             self.crop_bank.clear()
         self.last_sample = self.last_pts = None
@@ -244,9 +272,12 @@ class TrackedOCR:
         from .recognition_debug import describe_track
         histories = sorted(self.histories.items(), key=lambda item: item[1].seen_pts, reverse=True)
         evidence_ids = {key for key, _ in histories[:16]}
-        return {'tracks': [describe_track(key, state,
-                    self.crop_bank.get(key) if key in evidence_ids else [], self.threshold)
-                           for key, state in histories], 'stage_ms': dict(self.stage_ms),
+        tracks = []
+        for key,state in histories:
+            track = describe_track(key,state,self.crop_bank.get(key) if key in evidence_ids else [],self.threshold)
+            track['rejected_proposals'] = list(self._rejected_debug.get((key,state.passage_id),()))
+            tracks.append(track)
+        return {'tracks': tracks, 'stage_ms': dict(self.stage_ms),
                 'roi_budget': self.roi_budget if self.roi_budget is not None else 'all eligible tracks',
                 'track_history_capacity': MAX_TRACK_HISTORIES,
                 'crop_bytes': self.crop_bank.bytes_used,
@@ -258,6 +289,7 @@ class TrackedOCR:
         if self.last_pts is not None and pts_ms <= self.last_pts:
             self.reset()
         self.last_pts = pts_ms
+        self.rejected_proposals = []
         self.metrics['analysed_frames'] += 1
         self.metrics['vehicle_box_instances'] += len(tracks)
         self.metrics['vehicle_frames'] += bool(tracks)
@@ -381,10 +413,20 @@ class TrackedOCR:
                 view = warp_polygon(crop,relative)
                 if view is not None:
                     relative_quad, working = relative, view
-            screened = None
+            # A texture with no supported character is not proof of a non-plate.
+            # Keep its native proposal for inspection, but do not let it move
+            # plate continuity or contaminate an established reading history.
+            digest = hashlib.sha256(crop.tobytes()).hexdigest()
+            screened = next((sample[2] for sample in state.reader.samples if sample[1]==digest),None)
+            if screened is None:
+                screened = self._read(working,posterior_cache,rectified=relative_quad is not None)
+            from .plate_filter import confident_characters
+            if not confident_characters(screened):
+                self._withhold(track.track_id,state,crop,global_box,pts_ms,screened,
+                               'Insufficient text evidence: no character reaches 0.6')
+                continue
             if self.non_plates is not None:
                 # Screen before a non-plate can move the plate centre or reset this vehicle's reader.
-                screened = self._read(working,posterior_cache,rectified=relative_quad is not None)
                 score = prepared.get('confidence') if prepared is not None else getattr(self.detector,'last_confidence',None)
                 reason = self.non_plates.reason(crop,screened,score)
                 if reason:

@@ -18,13 +18,16 @@ ASPECT_RANGE = (.8, 8.)         # Width/height: two-line plates ~1.5, single-lin
 
 def confident_characters(rows, peak=CONFIDENT_PEAK):
     """Greedy CTC characters (blank = index 0) whose peak probability reaches `peak`."""
-    count, previous = 0, None
+    count, previous, run_peak = 0, None, 0.
     for row in rows:
         index = max(range(len(row)), key=row.__getitem__)
-        if index and index != previous and row[index] >= peak:
-            count += 1
+        if index != previous:
+            count += bool(previous and run_peak >= peak)
+            run_peak = row[index] if index else 0.
+        elif index:
+            run_peak = max(run_peak,row[index])
         previous = index
-    return count
+    return count + bool(previous and run_peak >= peak)
 
 
 class NonPlateFilter:

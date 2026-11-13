@@ -36,6 +36,30 @@ def fixture():
 
 
 class UnifiedDiagnosticTests(unittest.TestCase):
+    def test_withheld_proposals_stay_separate_bounded_and_never_become_fusion_votes(self):
+        data = fixture()
+        track = data['debug']['tracks'][0]
+        track['rejected_proposals'] = [dict(pts_ms=600, width=100, height=30, text='MH47', image=PNG,
+            characters=[dict(character='M', score=.4, alternatives=[])],
+            reason='Insufficient text evidence: no character reaches 0.6', used_for_fusion=True,
+            credential='SECRET') for _ in range(7)]
+        clean = self.view(data)['track']
+        self.assertEqual(len(clean['rejected_proposals']), 3)
+        self.assertEqual(clean['rejected_proposals'][0]['image'], PNG)
+        self.assertEqual(clean['rejected_proposals'][0]['text'], 'MH47')
+        self.assertTrue(all(row['used_for_fusion'] is False for row in clean['rejected_proposals']))
+        self.assertEqual(clean['observations'], 3)
+        self.assertEqual(len(clean['frames']), 1)
+        self.assertEqual(clean['reconstruction']['contributing_originals'], 3)
+        self.assertNotIn('SECRET', json.dumps(clean))
+        track['rejected_proposals'] = [dict(pts_ms=True, width=1, height=1),
+            dict(pts_ms=600, width=100, height=30, image='A'*80001, text='rtsp://SECRET',
+                 reason='https://SECRET', characters=[dict(character='A', score=math.nan)])]
+        withheld = self.view(data)['track']['rejected_proposals']
+        self.assertEqual(len(withheld), 1)
+        self.assertIsNone(withheld[0]['image'])
+        self.assertEqual((withheld[0]['text'], withheld[0]['reason'], withheld[0]['characters']), ('', '', []))
+
     def test_passage_identity_is_bounded_and_keeps_current_row_binding(self):
         data = fixture()
         track = data['debug']['tracks'][0]

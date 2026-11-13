@@ -58,6 +58,17 @@ class QueueTests(unittest.TestCase):
         self.assertEqual(tap.bytes_used,0)
         self.assertFalse(parent.is_set())
 
+    def test_every_frame_mode_keeps_pts_and_existing_memory_bounds(self):
+        tap,_ = self.run_tap([(i*33,False) for i in range(5)],every_frame=True)
+        self.assertEqual(tap.sampled,5)
+        self.assertEqual([tap.take(0)[1].pts_ms for _ in range(5)],[0,33,66,99,132])
+        tap.__exit__()
+        bounded,_ = self.run_tap([(i*33,False) for i in range(8)],every_frame=True,max_frames=2,max_bytes=600)
+        self.assertEqual(len(bounded.queue),2)
+        self.assertLessEqual(bounded.peak_bytes,600)
+        self.assertEqual(bounded.dropped_samples,6)
+        bounded.__exit__()
+
     def test_cut_flushes_old_vehicle_pixels_even_if_cut_frame_unsampled(self):
         tap,_ = self.run_tap([(0,False),(500,False),(600,True),(1100,False)])
         _,frame = tap.take(0)
@@ -92,6 +103,42 @@ class QualityBankTests(unittest.TestCase):
 
 
 class CollectorTests(unittest.TestCase):
+    def test_continuous_tracker_does_not_run_plate_search_on_intermediate_frames(self):
+        parent=threading.Event(); tracked=[]; searched=[]
+        frames=[('recorded',VideoFrame(np.full((60,180,3),i,np.uint8),i*100,False)) for i in range(11)]
+        def track(image):
+            index=int(image[0,0,0]);tracked.append(index)
+            # The current track identity must come from the intervening updates.
+            return [VehicleTrack(str(index),(0,0,180,60),2)]
+        vehicle=SimpleNamespace(reset=lambda:None,track=track)
+        detector=SimpleNamespace(box=lambda image:searched.append(int(image[0,0,0])) or (10,10,110,40))
+        with CropCollector(iter(frames),parent,vehicle,detector,continuous_tracking=True,block=True) as collector:
+            collector.thread.join(2)
+            self.assertFalse(collector.thread.is_alive())
+            self.assertFalse(collector.failed)
+            self.assertEqual(tracked,list(range(11)))
+            self.assertEqual(searched,[0,5,10])
+            self.assertEqual(collector.tracking_frames,11)
+            self.assertEqual(collector.decoded,11)
+            packets=[collector.take(0)[1] for _ in range(3)]
+            self.assertEqual([p.pts_ms for p in packets],[0,500,1000])
+            self.assertEqual([p.tracks[0].track_id for p in packets],['0','5','10'])
+            self.assertEqual(collector.collected_crops,3)
+            self.assertEqual(collector.bytes_used,0)
+
+    def test_continuous_tracker_carries_a_cut_between_ocr_samples(self):
+        resets=[]
+        frames=[('recorded',VideoFrame(np.zeros((60,180,3),np.uint8),pts,cut))
+                for pts,cut in [(0,False),(100,False),(200,True),(300,False),(700,False)]]
+        vehicle=SimpleNamespace(reset=lambda:resets.append(1),track=lambda image:[])
+        with CropCollector(iter(frames),threading.Event(),vehicle,SimpleNamespace(box=lambda image:None),
+                           continuous_tracking=True,block=True) as collector:
+            collector.thread.join(2)
+            self.assertFalse(collector.failed)
+            self.assertEqual([p.pts_ms for _,p in collector.queue],[0,200,700])
+            self.assertTrue(collector.queue[1][1].discontinuity)
+            self.assertEqual(len(resets),2)
+
     def test_default_collector_searches_every_eligible_vehicle(self):
         parent = threading.Event()
         image = np.zeros((100,1000,3),np.uint8)
@@ -197,7 +244,7 @@ class CollectorTests(unittest.TestCase):
         from sentinel_edge.tracked_ocr import TrackedOCR
         tokens = ('','A')
         calls = []
-        ocr = SimpleNamespace(tokens=tokens,probabilities=lambda image:[[1.,0.]])
+        ocr = SimpleNamespace(tokens=tokens,probabilities=lambda image:[[0.,1.]])
         detector = SimpleNamespace(box=lambda image:calls.append(True))
         pipeline = TrackedOCR(ocr,detector)
         image = np.zeros((60,180,3),np.uint8)

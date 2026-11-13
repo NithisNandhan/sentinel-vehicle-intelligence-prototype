@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { getDiagnostics } from './api';
 import { diagnosticIdentityMatches, formatVideoTime } from './recognition';
-import type { CharacterEvidence, DiagnosticsSnapshot } from './unified-contract';
+import type { CharacterEvidence, DiagnosticsSnapshot, RejectedProposal } from './unified-contract';
 import DetailSheet from './DetailSheet';
 
 export function imageData(value: string | null | undefined, kind = 'png'): string | undefined {
@@ -11,6 +11,20 @@ export function imageData(value: string | null | undefined, kind = 'png'): strin
 function Characters({ characters }: { characters?: CharacterEvidence[] }) {
   if (!characters?.length) return null;
   return <details className="character-details"><summary>Character scores and alternatives</summary><div className="characters">{characters.map((char, index) => <div key={index}><strong>{char.character}</strong><span>{char.score.toFixed(3)}</span><small>{char.alternatives?.map(alt => `${alt.character} ${alt.score.toFixed(3)}`).join(' · ')}</small></div>)}</div></details>;
+}
+
+
+export function WithheldProposals({ proposals }: { proposals: RejectedProposal[] }) {
+  if (!proposals.length) return null;
+  return <section className="inspection-section"><h3>Withheld proposals · not used for reading</h3>
+    <p className="caption">These candidate crops did not pass the evidence checks. They contribute no observations or reconstruction votes. A withheld proposal may still be a real plate; this is not a non-plate verdict.</p>
+    {proposals.map((proposal, index) => <article className="frame-evidence" key={`withheld-${proposal.pts_ms}-${index}`}>
+      <div className="section-heading"><span className="mono">{proposal.text || 'No raw OCR text'}</span><span className="caption">{formatVideoTime(proposal.pts_ms)}</span></div>
+      {imageData(proposal.image) ? <div className="crop-frame"><img src={imageData(proposal.image)} alt={`Withheld candidate crop at ${formatVideoTime(proposal.pts_ms)}`} /></div> : <p className="muted">Native preview unavailable within the display limit.</p>}
+      <p>{proposal.reason || 'Insufficient evidence for the reading history'}</p><p className="caption">{proposal.width} × {proposal.height} native pixels · raw OCR suggestion · excluded from fusion</p>
+      <Characters characters={proposal.characters} />
+    </article>)}
+  </section>;
 }
 
 export default function Inspector({ sessionId, trackId, rowKey, onClose }: { sessionId: string; trackId: string; rowKey?: string; onClose: () => void }) {
@@ -45,6 +59,7 @@ export default function Inspector({ sessionId, trackId, rowKey, onClose }: { ses
   const native = [...frames].reverse().find(frame => frame.working_view === 'text_quad') || frames[frames.length - 1];
   const candidates = track?.candidates || [];
   const reconstruction = track?.reconstruction;
+  const rejected = track?.rejected_proposals || [];
   return <DetailSheet title={`Track ${trackId}`} subtitle="Recognition Inspector" onClose={onClose}>
     {error && <div role="alert" className="notice error">{error}<p>Evidence may be disabled, expired or unavailable. Closing this panel does not stop analysis.</p></div>}
     {!track && !error && <div className="empty">Loading model evidence…</div>}
@@ -52,7 +67,7 @@ export default function Inspector({ sessionId, trackId, rowKey, onClose }: { ses
       <div className="inspector-reading"><span className="overline">Best available reading · unverified</span><strong className="plate-text">{track.best_reading || track.masked_plate || 'No complete reading'}</strong><p>{track.observations || 0} distinct observations · video {formatVideoTime(track.seen_pts_ms)}</p></div>
       {track.passage_id && <p className="caption">Recognition passage {track.passage_id}{track.passage_start_reason ? ` · started: ${track.passage_start_reason.replaceAll('_', ' ')}` : ''}. Evidence is combined only within this passage.</p>}
       <section className="inspection-section"><div className="section-heading"><h3>Native crop</h3><button className="button quiet" onClick={() => setZoom(!zoom)} aria-pressed={zoom}>{zoom ? 'Fit crop' : 'Enlarge crop'}</button></div>
-        {imageData(native?.image) ? <div className={`crop-frame ${zoom ? 'zoomed' : ''}`}><img src={imageData(native?.image)} alt="Native plate crop, unchanged source pixels" /></div> : <p className="muted">No retained native crop for this track.</p>}
+        {imageData(native?.image) ? <div className={`crop-frame ${zoom ? 'zoomed' : ''}`}><img src={imageData(native?.image)} alt="Native plate crop, unchanged source pixels" /></div> : <p className="muted">No admitted native crop for this passage.{rejected.length ? ' Withheld candidate crops are shown below.' : ''}</p>}
         <p className="caption">{native ? `${native.width} × ${native.height} native pixels · ${formatVideoTime(native.pts_ms)}. ` : ''}Enlargement adds no image detail.</p>
         {!!native?.crop_sources?.length && <p className="caption">Crop source: {native.crop_sources.join(' + ')}.</p>}
       </section>
@@ -60,6 +75,7 @@ export default function Inspector({ sessionId, trackId, rowKey, onClose }: { ses
         {imageData(native.working_image) ? <div className="crop-frame"><img src={imageData(native.working_image)} alt="OCR working crop straightened using detected text corners" /></div> : <p className="muted">The straightened view exceeds the display limit.</p>}
         <p className="caption">Automatically outlined and straightened. Interpolation adds no detail. This and the native crop are one source observation; the OCR character scores describe this working view.</p>
       </section>}
+      <WithheldProposals proposals={rejected} />
       <section className="inspection-section"><h3>Acceptance checks</h3><ul className="gate-list">{(track.gate_reasons || []).map((reason, index) => <li key={index}>{reason}</li>)}</ul><p className="caption">Model acceptance does not establish an independently correct registration.</p></section>
       <section className="inspection-section"><h3>Reconstruction · derived evidence</h3><p>{reconstruction?.status || 'Not available'}{reconstruction?.reason ? ` · ${reconstruction.reason}` : ''}</p>{imageData(reconstruction?.image) && <div className="crop-frame"><img src={imageData(reconstruction?.image)} alt="Derived multi-frame reconstruction, not an independent source frame" /></div>}{reconstruction?.text && <p className="plate-text">{reconstruction.text}</p>}{!!reconstruction?.contributing_originals && <p className="caption">{reconstruction.contributing_originals} contributing originals · not an extra observation</p>}<Characters characters={reconstruction?.characters} /></section>
       <section className="inspection-section"><div className="section-heading"><h3>Ranked candidates</h3><span className="caption">{candidates.length} retained</span></div>
