@@ -1,4 +1,12 @@
 import type { RecognitionEvidence, RecognitionState, RecognitionStatus } from './api';
+import type { DiagnosticsSnapshot } from './unified-contract';
+
+/** A live Inspector selection must never follow a reused tracker into another passage. */
+export function diagnosticIdentityMatches(snapshot: DiagnosticsSnapshot, sessionId: string, trackId: string, rowKey?: string): boolean {
+  if (snapshot.session_id !== sessionId || snapshot.track.track_id !== trackId) return false;
+  if (rowKey && snapshot.track.row_key && snapshot.track.row_key !== rowKey) return false;
+  return !rowKey?.includes('-p-') || snapshot.track.row_key === rowKey;
+}
 
 export function recognitionLabel(state: RecognitionState | string): string {
   switch (state) {
@@ -21,7 +29,7 @@ export function recognitionTone(state: RecognitionState | string): string {
 type VehicleRow = NonNullable<RecognitionStatus['vehicles_seen']>[number];
 type VehicleEvidence = RecognitionEvidence['vehicles'][number];
 
-/** Match scene-aware identities where available, avoiding a reused track ID. */
+/** Match passage-aware identities where available, avoiding a reused track ID. */
 export function vehicleEvidence(row: VehicleRow, evidence: RecognitionEvidence | null): VehicleEvidence | undefined {
   const candidates = evidence?.vehicles || [];
   if (row.key) return candidates.find(item => item.key === row.key)
@@ -29,9 +37,10 @@ export function vehicleEvidence(row: VehicleRow, evidence: RecognitionEvidence |
   return candidates.find(item => item.track_id === row.track_id);
 }
 
-/** The Inspector accepts a track ID, so only its newest scene row is safe. */
+/** The Inspector accepts a track ID, so only its newest passage row is safe. */
 export function vehicleIsInspectable(row: VehicleRow, newestFirst: readonly VehicleRow[]): boolean {
-  const newest = newestFirst.find(item => item.track_id === row.track_id);
+  const newest = newestFirst.filter(item => item.track_id === row.track_id).reduce<VehicleRow | undefined>(
+    (best, item) => !best || (item.last_ms || 0) > (best.last_ms || 0) ? item : best, undefined);
   if (!newest) return false;
   return row.key ? row.key === newest.key : row === newest;
 }

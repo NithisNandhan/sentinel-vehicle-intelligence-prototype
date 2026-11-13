@@ -79,7 +79,9 @@ def describe_track(track_id, history, samples, threshold):
         reasons.append('Original and reconstructed OCR disagree; reading withheld')
     if not reader.observation_count:
         reasons.insert(0, history.last_plate_failure or ('Vehicle ROI has not yet been searched' if not history.searches else 'No distinct usable plate observation'))
-    return {'track_id': track_id, 'vehicle_box': history.box, 'vehicle_class': history.vehicle_class,
+    return {'track_id': track_id, 'passage_id': getattr(history, 'passage_id', None),
+            'passage_start_reason': getattr(history, 'passage_start_reason', None),
+            'vehicle_box': history.box, 'vehicle_class': history.vehicle_class,
             'seen_pts_ms': history.seen_pts, 'observations': reader.observation_count,
             'recognition_state': 'model_accepted' if accepted else 'uncertain' if candidates else 'reading' if reader.observation_count < 3 else 'unreadable',
             'masked_plate': mask_plate(candidates[0].plate) if candidates else None,

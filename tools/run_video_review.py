@@ -7,6 +7,7 @@ sampling and gates. Review evidence is retained only for this permitted file.
 import argparse
 import ast
 from datetime import datetime,timezone
+from dataclasses import asdict
 import hashlib
 import json
 import os
@@ -19,6 +20,7 @@ from sentinel_edge.awiros_experiment import file_hash
 from sentinel_edge.recorded_source import RecordingLibrary,read_recording,new_session_id
 
 PREDICTION_POLICY='passed_vehicles_strongest_window_v1'
+GROUPING_POLICY='recognition_passage_v1'
 
 
 def utc():return datetime.now(timezone.utc).isoformat().replace('+00:00','Z')
@@ -28,6 +30,27 @@ def write_json(path,value):
     temporary=path.with_suffix('.tmp')
     temporary.write_text(json.dumps(value,indent=2,allow_nan=False)+'\n',encoding='utf-8')
     temporary.replace(path)
+
+
+def identity_guard_settings():
+    """Effective text-free ownership and veto-only OCR separation policies.
+
+    The source hashes bind fixed thresholds not exposed as runtime options;
+    these are conservative evidence guards, not calibrated identity proofs.
+    """
+    from sentinel_edge import plate_continuity,plate_identity,plate_ownership
+    return dict(
+        plate_ownership=dict(policy='unique_native_vehicle_containment_v1',
+            minimum_area_fraction=.85,plate_center_inside=True,
+            compared_regions='all_current_vehicle_boxes',before_ocr_and_fusion=True),
+        plate_continuity=asdict(plate_continuity.DEFAULT_POLICY),
+        independent_ocr_conflict=dict(policy='independent_reading_conflict_v1',
+            equal_length_differing_characters_min=3,character_score_min=.9,
+            terminal_digits=4,terminal_differing_characters_min=2,
+            unequal_prefix_lengths_allowed=True,veto_only_never_merge=True,
+            scores_are_uncalibrated=True),
+        source_sha256={module.__name__.rsplit('.',1)[-1]:file_hash(Path(module.__file__))
+            for module in (plate_ownership,plate_continuity,plate_identity)})
 
 
 def reference_coverage(manifest,review,reference_view):
@@ -98,20 +121,32 @@ class ReviewObserver:
         self.last_position=0;self.samples=0;self.started=time.monotonic()
         self.pipeline=None
 
-    def identity(self,track_id):
+    def identity(self,track_id,passage_id=None):
         value=str(track_id)
         if not re.fullmatch(r'[A-Za-z0-9_-]{1,40}',value):raise ValueError('Unsafe tracker identity')
-        return f'track-s{self.segment}-{value}'
+        if passage_id:
+            if not re.fullmatch(r'[A-Za-z0-9_-]{1,64}',str(passage_id)):
+                raise ValueError('Unsafe passage identity')
+            return f'passage-s{self.segment}-{passage_id}'
+        # Small/unprocessed detections have no recognition history and cannot
+        # contribute plate evidence. Do not silently mix them into a passage.
+        return f'track-s{self.segment}-{value}-unprocessed'
 
-    def ensure(self,track_id,position):
-        uid=self.identity(track_id)
+    def ensure(self,track_id,position,*,history=None,passage_id=None):
+        passage_id=passage_id or getattr(history,'passage_id',None)
+        uid=self.identity(track_id,passage_id)
         if uid not in self.tracks:
             self.tracks[uid]=dict(id=uid,tracker_id=str(track_id),segment=self.segment,
+                tracker_ids=[],passage_id=passage_id,
+                identity_kind='recognition_passage' if passage_id else 'unprocessed_detection',
+                passage_start_reason=getattr(history,'passage_start_reason',None),
                 first_ms=position,last_ms=position,vehicle_class=None,analysed_samples=0,
                 plate_crop_count=0,vehicle_preview=None,samples=[],plate_observations=[])
             self.predictions[uid]=dict(first_ms=position,last_ms=position,top_guess=None,
                 candidate_ms=None,candidates=[],accepted=[],observations=0,selection_strength=[])
-            self.native[uid]=dict(vehicle=None,area=0,plates=[],selected=None)
+            self.native[uid]=dict(vehicle=None,area=0,plates=[],selected=None,latest_ocr=None)
+        if str(track_id) not in self.tracks[uid]['tracker_ids']:
+            self.tracks[uid]['tracker_ids'].append(str(track_id))
         return uid,self.tracks[uid],self.predictions[uid]
 
     def depth(self):return 0
@@ -119,7 +154,10 @@ class ReviewObserver:
     def accept(self,camera_id,track_id,candidate,pts_ms,*,recorded=None):
         if self.pipeline is not None:self.segment=self.pipeline.metrics['scene_resets']
         position=pts_ms-self.recording.start_pts_ms
-        _,_,prediction=self.ensure(track_id,position)
+        history=self.pipeline.histories.get(track_id) if self.pipeline is not None else None
+        if self.pipeline is not None and not getattr(history,'passage_id',None):
+            raise ValueError('Accepted reading has no recognition passage')
+        _,_,prediction=self.ensure(track_id,position,history=history)
         if candidate.plate not in {r['plate'] for r in prediction['accepted']}:
             prediction['accepted'].append(dict(plate=candidate.plate,pts_ms=position))
         return True
@@ -127,7 +165,13 @@ class ReviewObserver:
     def on_passage(self,outcome):
         # The true acceptance callback above is the operational gate. A partial
         # final result is never silently upgraded into an accepted plate.
-        pass
+        if self.pipeline is not None:self.segment=self.pipeline.metrics['scene_resets']
+        _,row,_=self.ensure(outcome.track_ids[-1],outcome.first_pts-self.recording.start_pts_ms,
+                          passage_id=outcome.passage_id)
+        row['tracker_ids']=list(dict.fromkeys([*row['tracker_ids'],*map(str,outcome.track_ids)]))
+        row['passage_end_reason']=outcome.cause
+        row['passage_first_ms']=outcome.first_pts-self.recording.start_pts_ms
+        row['passage_last_ms']=outcome.last_pts-self.recording.start_pts_ms
 
     def publish(self,snapshot,stop=None):
         pass
@@ -142,7 +186,8 @@ class ReviewObserver:
         position=frame.pts_ms-self.recording.start_pts_ms
         self.last_position=position;self.samples+=1
         for track in tracks:
-            uid,row,prediction=self.ensure(track.track_id,position)
+            history=pipeline.histories.get(track.track_id)
+            uid,row,prediction=self.ensure(track.track_id,position,history=history)
             row['last_ms']=position;row['analysed_samples']+=1
             row['vehicle_class']=int(track.vehicle_class)
             prediction['last_ms']=position
@@ -154,33 +199,47 @@ class ReviewObserver:
                     self.native[uid].update(vehicle=crop,area=area)
                     row['vehicle_preview']=dict(path=f'assets/{uid}-vehicle.png',position_ms=position,box=list(box))
         for display in displays:
-            uid,row,prediction=self.ensure(display['track_id'],position)
+            history=pipeline.histories.get(display['track_id'])
+            passage_id=getattr(history,'passage_id',None)
+            if not passage_id or display.get('passage_id',passage_id)!=passage_id:
+                raise ValueError('Plate crop has no matching recognition passage')
+            uid,row,prediction=self.ensure(display['track_id'],position,history=history)
             row['last_ms']=position;row['plate_crop_count']+=1
             crop=display['crop'];quality=crop_quality(crop)
             digest=hashlib.sha256(crop.tobytes()).hexdigest()
             sample=dict(position_ms=position,box=list(map(float,display['box'])),
                 width=crop.shape[1],height=crop.shape[0],quality=quality,pixel_sha256=digest)
-            row['plate_observations'].append(dict(position_ms=position,box=sample['box'],pixel_sha256=digest))
+            row['plate_observations'].append(dict(position_ms=position,box=sample['box'],pixel_sha256=digest,
+                passage_id=passage_id,tracker_id=str(display['track_id']),
+                vehicle_box=list(map(float,display.get('vehicle_box',history.box)))))
             retained=self.native[uid]['plates']
             if not any(item[1]['pixel_sha256']==digest for item in retained):
                 retained.append((crop.copy(),sample))
                 retained.sort(key=lambda item:(-item[1]['quality'],item[1]['position_ms']))
                 del retained[6:]
-            history=pipeline.histories.get(display['track_id'])
             if history is not None and history.reader.observation_count:
+                candidate_ms=history.reader.samples[-1][0]-self.recording.start_pts_ms
+                # A duplicate crop can leave the OCR clock unchanged. Preserve
+                # the admitted image rather than attaching today's different
+                # crop to an earlier reading merely because its ID is the same.
+                if candidate_ms==position:
+                    self.native[uid]['latest_ocr']=(crop.copy(),dict(sample))
                 ranked=history.reader.candidates()
                 if ranked:
                     state=recognition_state(display['ocr_status'])
                     strength=PassedVehicles._strength(state,display['observations'],ranked[0])
                     if prediction['top_guess'] is None or strength>tuple(prediction['selection_strength']):
                         prediction.update(top_guess=ranked[0].plate,
-                            candidate_ms=history.reader.samples[-1][0]-self.recording.start_pts_ms,
+                            candidate_ms=candidate_ms,
                             selection_strength=list(strength),selected_state=state,
                             observations=history.reader.observation_count,
                             candidates=[dict(plate=c.plate,score=c.score,
                                 minimum_character_score=c.minimum_character_score,
                                 format_adjusted=c.format_adjusted) for c in ranked[:20]])
-                        self.native[uid]['selected']=(crop.copy(),dict(sample))
+                        selected=self.native[uid]['latest_ocr']
+                        if selected is None or selected[1]['position_ms']!=candidate_ms:
+                            raise ValueError('Selected OCR window has no admitted crop')
+                        self.native[uid]['selected']=selected
         if self.samples%5==0:
             progress=dict(status='processing',position_ms=position,analysed_frames=self.samples,
                 tracked_fragments=len(self.tracks),seconds=round(time.monotonic()-self.started,1))
@@ -210,6 +269,8 @@ class ReviewObserver:
 
 
 def main(args):
+    runner_sha=file_hash(Path(__file__))
+    guards=identity_guard_settings()
     if args.output.exists():raise ValueError('Use a new run folder; frozen runs must not be overwritten')
     args.output.mkdir(parents=True)
     write_json(args.output/'progress.json',dict(status='loading_models',started_at=utc()))
@@ -246,15 +307,19 @@ def main(args):
     accepted_strings={item['plate'] for row in observer.predictions.values() for item in row['accepted']}
     if len(accepted_strings)!=summary['unique_model_accepted_unverified']:
         raise ValueError('Acceptance observer does not reconcile with pipeline summary')
+    if file_hash(Path(__file__))!=runner_sha or identity_guard_settings()!=guards:
+        raise ValueError('Review runner or identity guard source changed during the capture; use a new run')
     observer.export_assets()
     settings=dict(options=options.manifest(),keep_unconfirmed_vehicles=keep,
         keep_unconfirmed_min_height=os.getenv('SENTINEL_KEEP_UNCONFIRMED_MIN_HEIGHT','0'),
         ocr_min_confidence=config.ocr_min_confidence,normal_dashboard_sampling=True,
         review_crops_per_track_max=6,review_track_count_cap=None,prediction_policy=PREDICTION_POLICY,
+        grouping_policy=GROUPING_POLICY,
+        identity_guards=guards,
         text_detector_configured=bool(os.getenv('SENTINEL_TEXT_DETECTOR_ASSETS','')))
     manifest=dict(schema_version=1,run_id=counted.session_id,source=source,models=identity,
         settings=settings,run=dict(started_at=started_at,completed_at=utc(),commit=args.commit,
-            runner_sha256=file_hash(Path(__file__)),reached_eof=True,decoded_frames=counted.decoded,
+            runner_sha256=runner_sha,reached_eof=True,decoded_frames=counted.decoded,
             last_decoded_ms=counted.last_pts-recording.start_pts_ms,
             last_analysed_ms=observer.last_position,analysed_frames=observer.samples,
             wall_seconds=round(time.monotonic()-began,2),pipeline_summary=summary),

@@ -168,3 +168,23 @@ def test_diagnostics_contract_sanitization_and_stale(local, monkeypatch):
     prior = len(calls)
     assert local.get("/v1/recognition/diagnostics?session_id=s-test&track_id=7", headers=KEY).status_code == 404
     assert len(calls) == prior
+
+
+def test_diagnostic_passage_binding_is_forwarded_without_arbitrary_text(local, monkeypatch):
+    value = diagnostic()
+    value['track'].update(row_key='0-p-aaaaaaaaaaaaaaaa', passage_id='aaaaaaaaaaaaaaaa',
+                          passage_start_reason='vehicle_inconsistent')
+    monkeypatch.setattr(recognition, 'request_edge', lambda method, path: value)
+    response = local.get('/v1/recognition/diagnostics?session_id=s-test&track_id=7', headers=KEY)
+    assert response.status_code == 200
+    track = response.json()['track']
+    assert track['row_key'] == '0-p-aaaaaaaaaaaaaaaa'
+    assert track['passage_id'] == 'aaaaaaaaaaaaaaaa'
+    assert track['passage_start_reason'] == 'vehicle_inconsistent'
+    value['track'].update(row_key='https://SECRET', passage_id='../SECRET', passage_start_reason='rtsp://SECRET')
+    response = local.get('/v1/recognition/diagnostics?session_id=s-test&track_id=7', headers=KEY)
+    assert response.status_code == 200
+    assert response.json()['track']['row_key'] is None
+    assert response.json()['track']['passage_id'] is None
+    assert response.json()['track']['passage_start_reason'] is None
+    assert 'SECRET' not in response.text

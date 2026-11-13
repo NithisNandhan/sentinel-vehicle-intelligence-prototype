@@ -113,7 +113,8 @@ def observe_tracked(config,camera,model,detector,vehicle,state,stop, *, debug=Fa
                 shown[display['track_id']] = plain[display['track_id']] if debug else display['masked_plate']
             seen.update(pipeline.metrics['scene_resets'],
                         frame.pts_ms-(recorded.recording.start_pts_ms if recorded else 0),tracks,displays,plain,
-                        reading_details=reading_details)
+                        reading_details=reading_details,
+                        passage_ids={key: history.passage_id for key, history in pipeline.histories.items()})
             for track in tracks:
                 draw_vehicle(view,track,scale,shown.get(track.track_id))
             for display in displays:

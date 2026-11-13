@@ -59,6 +59,26 @@ def _conflict(left, right):
                     for (a, pa), (b, pb) in zip(left, right)) >= 3)
 
 
+def reading_conflict_reason(left, right):
+    """Veto fusion on strong disagreement, never infer identity from agreement.
+
+    A partly missed prefix changes CTC length; complete-reading comparison then
+    cannot detect that a following motorcycle supplied a different plate. When
+    both observations end with four digits, two confidently different terminal
+    digits are enough to keep their evidence separate. This conservative check
+    can fragment one vehicle if OCR is confidently wrong; it cannot confirm it.
+    """
+    if _conflict(left, right):
+        return 'full_text'
+    if len(left) < 4 or len(right) < 4:
+        return None
+    a, b = left[-4:], right[-4:]
+    if (all(c in '0123456789' for c, _ in (*a, *b))
+            and sum(c != d and pc >= .9 and pd >= .9 for (c, pc), (d, pd) in zip(a, b)) >= 2):
+        return 'numeric_suffix'
+    return None
+
+
 def _same_text(left, right):
     return (len(left) >= 7 and len(left) == len(right)
             and all(a == b for (a, _), (b, _) in zip(left, right))

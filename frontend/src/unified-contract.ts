@@ -62,6 +62,9 @@ export type ReconstructionEvidence = {
 
 export type TrackDiagnostics = {
   track_id: string;
+  row_key?: string | null;
+  passage_id?: string | null;
+  passage_start_reason?: string | null;
   vehicle_box?: Array<number>;
   vehicle_class?: string | number;
   seen_pts_ms?: number | null;

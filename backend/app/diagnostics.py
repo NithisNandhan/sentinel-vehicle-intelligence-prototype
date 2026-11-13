@@ -7,6 +7,7 @@ from .unified_contract import DiagnosticsSnapshot
 TEXT = re.compile(r"^[A-Z0-9?*]{0,25}$")
 MODEL = re.compile(r"^[A-Za-z0-9_.+: -]{0,160}$")
 BASE64 = re.compile(r"^[A-Za-z0-9+/]*={0,2}$")
+IDENTIFIER = re.compile(r"^[A-Za-z0-9_.:-]{1,80}$")
 MODEL_KEYS = {"ocr_model", "ocr_device", "ocr_checkpoint_sha256", "vehicle_model", "vehicle_device",
               "vehicle_model_sha256", "plate_model", "plate_model_sha256", "plate_device", "detector_device", "detector_profile"}
 STAGES = {"vehicle", "plate", "ocr", "reconstruction", "fusion"}
@@ -23,6 +24,10 @@ def text(value):
 
 def number(value):
     return value if type(value) in {int, float} and math.isfinite(value) else None
+
+
+def identifier(value):
+    return value if isinstance(value, str) and IDENTIFIER.fullmatch(value) else None
 
 
 def characters(values):
@@ -89,7 +94,10 @@ def snapshot(value):
                    if key in MODEL_KEYS and (item is None or isinstance(item, str) and MODEL.fullmatch(item))},
         "stage_ms": {key: item for key, item in (stages.items() if isinstance(stages, dict) else [])
                      if key in STAGES and number(item) is not None and item >= 0},
-        "track": {"track_id": track.get("track_id"), "vehicle_box": track.get("vehicle_box", []),
+        "track": {"track_id": track.get("track_id"), "row_key": identifier(track.get('row_key')),
+                  "passage_id": identifier(track.get('passage_id')),
+                  "passage_start_reason": identifier(track.get('passage_start_reason')),
+                  "vehicle_box": track.get("vehicle_box", []),
                   "vehicle_class": track.get("vehicle_class") if (type(track.get("vehicle_class")) is int or track.get("vehicle_class") in {"car", "truck", "bus", "motorcycle", "bicycle", "vehicle"}) else "vehicle", "seen_pts_ms": track.get("seen_pts_ms"),
                   "observations": track.get("observations", 0),
                   "recognition_state": track.get("recognition_state") if track.get("recognition_state") in STATES else "reading",

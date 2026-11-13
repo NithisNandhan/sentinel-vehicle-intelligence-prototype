@@ -4,7 +4,7 @@ import { imageData } from './Inspector';
 import {
   failureMessage, formatVideoTime, framePlaceholderTitle, retainEvidence, processingHeading, recognitionCount, recognitionIsFresh, recognitionIsRunning,
   recognitionLabel, recognitionTone, sessionLabel, sourceDescription, sourceLabel, staleLimit,
-  vehicleEvidence, vehicleIsInspectable, vehicleReadingLabel,
+  vehicleEvidence, vehicleIsInspectable, vehicleReadingLabel, diagnosticIdentityMatches,
 } from './recognition';
 
 const status: RecognitionStatus = {
@@ -18,6 +18,14 @@ const recording: RecognitionStatus = {
 };
 
 describe('operator recognition presentation', () => {
+  it('pins the Inspector to its selected passage even when the tracker ID and text repeat', () => {
+    const snapshot = { session_id: 's-1', camera_id: 'rec-1', track: { track_id: '3', row_key: '0-p-first' } };
+    expect(diagnosticIdentityMatches(snapshot, 's-1', '3', '0-p-first')).toBe(true);
+    expect(diagnosticIdentityMatches(snapshot, 's-1', '3', '0-p-other')).toBe(false);
+    expect(diagnosticIdentityMatches({ ...snapshot, track: { track_id: '3' } }, 's-1', '3', '0-p-first')).toBe(false);
+    expect(diagnosticIdentityMatches({ ...snapshot, track: { track_id: '3' } }, 's-1', '3', '0-3')).toBe(true);
+    expect(diagnosticIdentityMatches(snapshot, 's-other', '3', '0-p-first')).toBe(false);
+  });
   it('never describes a model acceptance as a verified plate', () => {
     expect(recognitionLabel('model_accepted')).toBe('Model-accepted · unverified');
     expect(recognitionTone('model_accepted')).toBe('warn');
@@ -199,6 +207,14 @@ describe('vehicle rows before and after a plate reading', () => {
     expect(vehicleIsInspectable(row, rows)).toBe(false);
     expect(vehicleIsInspectable(otherTrack, rows)).toBe(true);
     expect(vehicleIsInspectable(row, [])).toBe(false);
+  });
+
+  it('opens the most recently seen passage after an older passage gets a new tracker ID', () => {
+    const inactive = { ...row, key: '0-p-inactive', last_ms: 500 };
+    const reassociated = { ...row, key: '0-p-reassociated', last_ms: 1000 };
+    const rows = [inactive, reassociated];
+    expect(vehicleIsInspectable(reassociated, rows)).toBe(true);
+    expect(vehicleIsInspectable(inactive, rows)).toBe(false);
   });
 
   it('keeps legacy unique rows inspectable and disables older unkeyed duplicates', () => {

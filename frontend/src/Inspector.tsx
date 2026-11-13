@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { getDiagnostics } from './api';
-import { formatVideoTime } from './recognition';
+import { diagnosticIdentityMatches, formatVideoTime } from './recognition';
 import type { CharacterEvidence, DiagnosticsSnapshot } from './unified-contract';
 import DetailSheet from './DetailSheet';
 
@@ -13,7 +13,7 @@ function Characters({ characters }: { characters?: CharacterEvidence[] }) {
   return <details className="character-details"><summary>Character scores and alternatives</summary><div className="characters">{characters.map((char, index) => <div key={index}><strong>{char.character}</strong><span>{char.score.toFixed(3)}</span><small>{char.alternatives?.map(alt => `${alt.character} ${alt.score.toFixed(3)}`).join(' · ')}</small></div>)}</div></details>;
 }
 
-export default function Inspector({ sessionId, trackId, onClose }: { sessionId: string; trackId: string; onClose: () => void }) {
+export default function Inspector({ sessionId, trackId, rowKey, onClose }: { sessionId: string; trackId: string; rowKey?: string; onClose: () => void }) {
   const [snapshot, setSnapshot] = useState<DiagnosticsSnapshot | null>(null);
   const [error, setError] = useState('');
   const [expanded, setExpanded] = useState(false);
@@ -27,7 +27,9 @@ export default function Inspector({ sessionId, trackId, onClose }: { sessionId: 
       try {
         const next = await getDiagnostics(sessionId, trackId);
         if (!cancelled) {
-          if (next.session_id !== sessionId || next.track.track_id !== trackId) { setSnapshot(null); setError('The analysis session changed. Select the vehicle again.'); }
+          if (!diagnosticIdentityMatches(next, sessionId, trackId, rowKey)) {
+            setSnapshot(null); setError('The selected vehicle passage changed. Close this panel and select its current row.');
+          }
           else { setSnapshot(next); setError(''); }
         }
       } catch (failure) { if (!cancelled) { setSnapshot(null); setError((failure as Error).message); } }
@@ -35,7 +37,7 @@ export default function Inspector({ sessionId, trackId, onClose }: { sessionId: 
     }
     void load(); const timer = window.setInterval(() => void load(), 2000);
     return () => { cancelled = true; window.clearInterval(timer); };
-  }, [sessionId, trackId]);
+  }, [sessionId, trackId, rowKey]);
   const track = snapshot?.track;
   const frames = track?.frames || [];
   // Keep the native/working comparison on the same timestamp. Prefer the
@@ -48,6 +50,7 @@ export default function Inspector({ sessionId, trackId, onClose }: { sessionId: 
     {!track && !error && <div className="empty">Loading model evidence…</div>}
     {track && <>
       <div className="inspector-reading"><span className="overline">Best available reading · unverified</span><strong className="plate-text">{track.best_reading || track.masked_plate || 'No complete reading'}</strong><p>{track.observations || 0} distinct observations · video {formatVideoTime(track.seen_pts_ms)}</p></div>
+      {track.passage_id && <p className="caption">Recognition passage {track.passage_id}{track.passage_start_reason ? ` · started: ${track.passage_start_reason.replaceAll('_', ' ')}` : ''}. Evidence is combined only within this passage.</p>}
       <section className="inspection-section"><div className="section-heading"><h3>Native crop</h3><button className="button quiet" onClick={() => setZoom(!zoom)} aria-pressed={zoom}>{zoom ? 'Fit crop' : 'Enlarge crop'}</button></div>
         {imageData(native?.image) ? <div className={`crop-frame ${zoom ? 'zoomed' : ''}`}><img src={imageData(native?.image)} alt="Native plate crop, unchanged source pixels" /></div> : <p className="muted">No retained native crop for this track.</p>}
         <p className="caption">{native ? `${native.width} × ${native.height} native pixels · ${formatVideoTime(native.pts_ms)}. ` : ''}Enlargement adds no image detail.</p>

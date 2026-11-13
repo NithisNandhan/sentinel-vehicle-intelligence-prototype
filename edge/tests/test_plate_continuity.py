@@ -23,6 +23,12 @@ class PlateContinuityTests(unittest.TestCase):
             self.assertEqual(continuity_reason(changed, 0, normal, 500), 'scale_change')
         self.assertIsNone(continuity_reason(normal, 0, (0, 0, 250, 100), 500))
 
+    def test_two_line_to_single_line_switch_splits_even_when_dimensions_are_plausible(self):
+        # Verified residual tracker3 switch: scooter followed by a motorcycle.
+        left, right = (1805,1711,1916,1795), (1886,1769,2028,1814)
+        self.assertEqual(continuity_reason(left,9500,right,10000),'aspect_change')
+        self.assertEqual(continuity_reason(right,9500,left,10000),'aspect_change')
+
     def test_jump_boundary_is_inclusive(self):
         # A 30 by 40 box has diagonal 50: permitted displacement is exactly 75.
         self.assertIsNone(continuity_reason((0, 0, 30, 40), 0, (75, 0, 105, 40), 500))

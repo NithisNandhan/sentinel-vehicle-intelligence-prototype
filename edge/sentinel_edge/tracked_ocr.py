@@ -36,6 +36,7 @@ class History:
     reconstruction: object | None = None
     # Passage bookkeeping (result states and plate-level tracking; unused otherwise).
     passage_id: str = ''
+    passage_start_reason: str = 'initial'
     track_ids: list = field(default_factory=list)
     first_pts: int = 0
     first_box: tuple | None = None
@@ -49,6 +50,9 @@ class History:
     signatures: list = field(default_factory=list)
     confirmed_plate: str | None = None
     crop_inputs: deque = field(default_factory=lambda: deque(maxlen=8))
+    # Veto only: independent confident OCR disagreement can split a passage;
+    # agreement never establishes a vehicle's identity or bypasses acceptance.
+    identity_anchor: tuple = ()
 
 
 class TrackedOCR:
@@ -137,7 +141,8 @@ class TrackedOCR:
         if self.crop_bank is not None:
             self.crop_bank.drop(key)
         fresh = History(self._new_reader(), state.box, state.vehicle_class, state.seen_pts,
-                        passage_id=new_passage_id(), track_ids=[key], first_pts=state.seen_pts,
+                        passage_id=new_passage_id(), passage_start_reason=cause,
+                        track_ids=[key], first_pts=state.seen_pts,
                         first_box=state.box, vehicle_samples=int(current), searches=int(current))
         self.histories[key] = fresh
         return fresh
@@ -292,10 +297,12 @@ class TrackedOCR:
             if self.crop_bank is not None:
                 self.crop_bank.drop(old_id)
             self.metrics['track_reassociations'] += 1
+        vehicle_boxes = [(track.track_id, clipped_box(image, track.box)) for track in tracks]
         for track in tracks:
             box = clipped_box(image,track.box)
             if box[2]-box[0] < 64 or box[3]-box[1] < 32:
                 continue
+            start_reason = 'initial'
             old = self.histories.get(track.track_id)
             if old and not track_consistent(old.box,box,old.vehicle_class,track.vehicle_class):
                 self._finalize(track.track_id, old, 'vehicle_inconsistent')
@@ -303,6 +310,7 @@ class TrackedOCR:
                 if self.crop_bank is not None:
                     self.crop_bank.drop(track.track_id)
                 self.metrics['consistency_resets'] += 1
+                start_reason = 'vehicle_inconsistent'
             state = self.histories.get(track.track_id)
             if state is None:
                 if len(self.histories) >= MAX_TRACK_HISTORIES:
@@ -313,7 +321,8 @@ class TrackedOCR:
                         self.crop_bank.drop(oldest)
                 from .passages import new_passage_id
                 state = self.histories[track.track_id] = History(self._new_reader(),box,track.vehicle_class,pts_ms,
-                                                                 passage_id=new_passage_id(),track_ids=[track.track_id],
+                                                                 passage_id=new_passage_id(), passage_start_reason=start_reason,
+                                                                 track_ids=[track.track_id],
                                                                  first_pts=pts_ms,first_box=box)
                 if self.reconstruction_enabled:
                     from .live_reconstruction import ReconstructionState
@@ -352,6 +361,16 @@ class TrackedOCR:
                 state.last_plate_failure = 'Plate proposal is smaller than 24 by 8 native pixels'
                 state.failures[state.last_plate_failure] += 1
                 continue
+            global_box = (local[0]+state.box[0],local[1]+state.box[1],local[2]+state.box[0],local[3]+state.box[1])
+            from .plate_ownership import ownership_reason
+            ownership = ownership_reason(global_box, track.track_id, vehicle_boxes)
+            if ownership:
+                self.metrics['plate_ownership_rejections'] += 1
+                self.metrics['plate_ownership_rejection_'+ownership] += 1
+                state.last_plate_failure = ('Plate ownership is ambiguous between overlapping vehicles'
+                                            if ownership == 'overlapping_vehicles' else 'Plate is outside its vehicle region')
+                state.failures[state.last_plate_failure] += 1
+                continue  # Never move a plate clock/centre or add OCR votes for an ambiguous owner.
             crop = prepared['crop'] if prepared is not None else crop_box(region,local)
             sources = tuple(prepared.get('sources',(prepared.get('source','vehicle_roi'),))) if prepared is not None else tuple(getattr(self.detector,'last_sources',()))
             quad = prepared.get('text_quad') if prepared is not None else getattr(self.detector,'last_text_quad',None)
@@ -373,7 +392,6 @@ class TrackedOCR:
                     state.last_plate_failure = reason
                     state.failures[reason] += 1
                     continue
-            global_box = (local[0]+state.box[0],local[1]+state.box[1],local[2]+state.box[0],local[3]+state.box[1])
             reason = continuity_reason(state.last_plate_box, state.last_plate_pts_ms, global_box, pts_ms)
             if reason:
                 state = self._restart_history(track.track_id, state, 'plate_continuity_'+reason, current=True)
@@ -383,11 +401,6 @@ class TrackedOCR:
             if state.plate_center and sum((a-b)**2 for a,b in zip(center,state.plate_center)) > .12:
                 state = self._restart_history(track.track_id, state, 'plate_region', current=True)
                 self.metrics['plate_region_resets'] += 1
-            state.plate_detections += 1
-            state.plate_center = center
-            # A screened duplicate is still a geometric observation, but never
-            # another OCR/reconstruction vote. Rejected proposals cannot refresh it.
-            state.last_plate_box, state.last_plate_pts_ms = global_box, pts_ms
             crop = prepared['crop'] if prepared is not None else crop_box(region,local)
             quality = crop_quality(crop)
             self.metrics['plate_crops'] += 1
@@ -408,13 +421,30 @@ class TrackedOCR:
                                                 if old.shape == thumb.shape):
                     duplicate = True
                     self.metrics['near_duplicate_crops'] += 1
+            rows = None
+            if not duplicate and separated:
+                rows = screened if screened is not None else self._read(working,posterior_cache,rectified=relative_quad is not None)
+                from .ctc_fusion import greedy_reading
+                from .plate_identity import reading_conflict_reason, _strength
+                independent = tuple(greedy_reading(rows, self.ocr.tokens))
+                text_conflict = reading_conflict_reason(state.identity_anchor, independent) if state.identity_anchor else None
+                if text_conflict:
+                    state = self._restart_history(track.track_id, state, 'plate_text_conflict', current=True)
+                    self.metrics['plate_text_conflict_resets'] += 1
+                    self.metrics['plate_text_conflict_'+text_conflict] += 1
+                if not state.identity_anchor or _strength(independent) > _strength(state.identity_anchor):
+                    state.identity_anchor = independent
+            state.plate_detections += 1
+            state.plate_center = center
+            # A screened duplicate still refreshes geometry, but never adds an
+            # OCR vote. A conflicting frame belongs only to its fresh passage.
+            state.last_plate_box, state.last_plate_pts_ms = global_box, pts_ms
             if self.options.result_states:
                 from .layout import classify as classify_layout
                 state.layouts.append(classify_layout(crop).layout)
                 del state.layouts[:-16]
                 state.max_plate_height = max(state.max_plate_height, crop.shape[0])
-            if not duplicate and separated:
-                rows = screened if screened is not None else self._read(working,posterior_cache,rectified=relative_quad is not None)
+            if rows is not None:
                 if state.reader.add(rows,timestamp_ms=pts_ms,source_id=source,quality=quality):
                     state.crop_inputs.append({'source_id':source,'sources':sources,'quad':relative_quad})
                     self.metrics['distinct_ocr_observations'] += 1
@@ -466,6 +496,8 @@ class TrackedOCR:
             displays.append({'box':global_box,'crop':crop,'observations':count,'ocr_status':status,
                 'masked_plate':mask_plate(candidates[0].plate) if candidates else None,
                 'candidate_count':len(candidates),'track_id':track.track_id,
+                'passage_id':state.passage_id,'passage_start_reason':state.passage_start_reason,
+                'vehicle_box':state.box,
                 'format_adjusted':bool(candidates and candidates[0].format_adjusted)})
         self.offset += len(selection) if self.roi_budget is None else self.roi_budget
         self.last_sample = displays[-1] if displays else None

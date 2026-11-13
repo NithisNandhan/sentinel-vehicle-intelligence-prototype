@@ -23,6 +23,29 @@ def display(track_id='5', status=READING, observations=1, masked=None):
 
 
 class PassedVehiclesTests(unittest.TestCase):
+    def test_reused_tracker_id_starts_a_clean_row_for_each_passage(self):
+        seen = PassedVehicles(keep_text=True)
+        first = display(status=ACCEPTED, observations=4)
+        first['passage_id'] = 'aaaaaaaaaaaaaaaa'
+        seen.update(0, 0, [track()], [first], {'5': TEXT}, passage_ids={'5': first['passage_id']})
+        old_thumb = seen.engineering()[0]['thumb']
+        seen.update(0, 500, [track()], [], {}, passage_ids={'5': 'bbbbbbbbbbbbbbbb'})
+        newest, old = seen.engineering()
+        self.assertEqual((newest['reading'], newest['observations'], newest['thumb']), (None, 0, None))
+        self.assertNotEqual(newest['key'], old['key'])
+        self.assertEqual((old['reading'], old['thumb']), (TEXT, old_thumb))
+
+    def test_reassociated_tracker_keeps_one_passage_row_and_updates_inspector_id(self):
+        seen = PassedVehicles(keep_text=True)
+        passage = 'aaaaaaaaaaaaaaaa'
+        seen.update(0, 0, [track()], [display(status=UNCERTAIN, observations=3)],
+                    {'5': TEXT}, passage_ids={'5': passage})
+        key = seen.engineering()[0]['key']
+        seen.update(0, 500, [track('9')], [], {}, passage_ids={'9': passage})
+        self.assertEqual(len(seen.engineering()), 1)
+        row = seen.engineering()[0]
+        self.assertEqual((row['key'], row['track_id'], row['reading']), (key, '9', TEXT))
+
     def test_stronger_fusion_window_survives_later_blurry_guesses_and_disappearance(self):
         seen = PassedVehicles(keep_text=True)
         def update(text, count, score, minimum):

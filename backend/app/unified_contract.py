@@ -100,6 +100,9 @@ class ReconstructionEvidence(ContractModel):
 
 class TrackDiagnostics(ContractModel):
     track_id: str
+    row_key: str | None = None
+    passage_id: str | None = None
+    passage_start_reason: str | None = None
     vehicle_box: list[int] = Field(default_factory=list)
     vehicle_class: str | int = "vehicle"
     seen_pts_ms: int | None = None

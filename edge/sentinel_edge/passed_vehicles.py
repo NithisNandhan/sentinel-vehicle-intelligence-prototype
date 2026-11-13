@@ -26,22 +26,26 @@ class PassedVehicles:
         self.limit, self.keep_text, self.hmac_key = limit, keep_text, hmac_key
         self.watchlist = None   # None: not known (central unreachable). A set once fetched.
 
-    def update(self, segment, position_ms, tracks, displays, readings, *, reading_details=None):
+    def update(self, segment, position_ms, tracks, displays, readings, *, reading_details=None, passage_ids=None):
         """Retain the strongest observed fusion window, not the last OCR string.
 
         `reading_details` contains the already-fused PlateCandidate objects.
         Its scores are ranking signals, never correctness probabilities.
         This display-only choice does not change automatic acceptance/delivery.
         """
+        identities = dict(passage_ids or {})
+        for display in displays:
+            if display.get('passage_id'):
+                identities[display['track_id']] = display['passage_id']
         for track in tracks:
-            row = self._row(segment, track.track_id, position_ms)
+            row = self._row(segment, track.track_id, position_ms, identities.get(track.track_id))
             row['last_ms'] = position_ms
             row['vehicle_class'] = CLASS_NAMES.get(track.vehicle_class, 'vehicle')
             confidence = getattr(track, 'confidence', None)
             if confidence is not None:
                 row['confidence'] = max(row['confidence'] or 0., round(float(confidence), 3))
         for display in displays:
-            row = self._row(segment, display['track_id'], position_ms)
+            row = self._row(segment, display['track_id'], position_ms, identities.get(display['track_id']))
             row['last_ms'] = position_ms
             state = recognition_state(display['ocr_status'])
             reading = readings.get(display['track_id'])
@@ -65,14 +69,18 @@ class PassedVehicles:
         while len(self.rows) > self.limit:
             self.rows.popitem(last=False)
 
-    def _row(self, segment, track_id, position_ms):
-        key = (segment, str(track_id))
+    def _row(self, segment, track_id, position_ms, passage_id=None):
+        # Tracker IDs can switch owners within a scene; conversely one passage
+        # can be reassociated to a new tracker ID. Only the passage owns OCR.
+        key = (segment, 'passage', passage_id) if passage_id else (segment, 'track', str(track_id))
         row = self.rows.get(key)
         if row is None:
-            row = self.rows[key] = {'key': f'{segment}-{track_id}', 'track_id': str(track_id), 'vehicle_class': 'vehicle',
+            row = self.rows[key] = {'key': f'{segment}-p-{passage_id}' if passage_id else f'{segment}-{track_id}',
+                                    'track_id': str(track_id), 'passage_id': passage_id, 'vehicle_class': 'vehicle',
                                     'confidence': None, 'first_ms': position_ms, 'last_ms': position_ms,
                                     'observations': 0, 'state': 'unreadable', 'masked_plate': None,
                                     '_reading': None, '_thumb': None, '_reading_strength': ()}
+        row['track_id'] = str(track_id)
         return row
 
     @staticmethod

@@ -111,21 +111,24 @@ def _reconstruction(value):
 
 
 def passed_track_identity(snapshot, track_id):
-    """Newest run-list row for an ID, including its scene-segment identity.
+    """Newest run-list row for an ID, including its recognition passage.
 
     The engineering running list is newest-first. Its reading is used only to
     authorize a previously observed accepted DTO, never to create OCR evidence.
     """
     debug = snapshot.get('debug')
     rows = debug.get('passed') if isinstance(debug, dict) else None
-    row = next((item for item in (rows if isinstance(rows, list) else [])[:512]
-                if isinstance(item, dict) and item.get('track_id') == track_id), None)
+    matches = [item for item in (rows if isinstance(rows, list) else [])[:512]
+               if isinstance(item, dict) and item.get('track_id') == track_id]
+    row = max(matches, key=lambda item: _integer(item.get('last_ms')) or 0, default=None)
     if row is None:
         return None
     key = row.get('key')
     if not isinstance(key, str) or not IDENTIFIER.fullmatch(key):
         return None
-    return dict(key=key, reading=_plate(row.get('reading')), state=row.get('state'))
+    passage = row.get('passage_id')
+    passage = passage if isinstance(passage, str) and IDENTIFIER.fullmatch(passage) else None
+    return dict(key=key, passage_id=passage, reading=_plate(row.get('reading')), state=row.get('state'))
 
 
 def _retained_view(snapshot, session_id, camera_id, track_id):
@@ -146,6 +149,8 @@ def _retained_view(snapshot, session_id, camera_id, track_id):
     if key is not None:
         latest = passed_track_identity(snapshot, track_id)
         if latest is None or latest['key'] != key:
+            return None
+        if latest['passage_id'] is not None and candidate['track'].get('passage_id') != latest['passage_id']:
             return None
         if (not _plate(candidate['track'].get('best_reading'))
                 or latest['state'] != candidate['track'].get('recognition_state')
@@ -190,6 +195,9 @@ def diagnostic_view(snapshot, models, session_id, track_id, *, enabled):
     if selected is None:
         raise DiagnosticUnavailable(404, "Track evidence is no longer available")
     chosen = passed_track_identity(snapshot, track_id)
+    if (chosen is not None and chosen['passage_id'] is not None
+            and selected.get('passage_id') != chosen['passage_id']):
+        raise DiagnosticUnavailable(404, 'The selected passage evidence is no longer retained')
     current_best = selected.get('best_guess') if isinstance(selected.get('best_guess'), dict) else {}
     if (chosen is not None and chosen['reading']
             and (current_best.get('plate') != chosen['reading']
@@ -235,11 +243,16 @@ def diagnostic_view(snapshot, models, session_id, track_id, *, enabled):
         masked = None
     recognition_state = selected.get("recognition_state")
     track = {"track_id": track_id, "vehicle_box": list(box), "vehicle_class": kind,
+             "row_key": chosen['key'] if chosen is not None else None,
              "seen_pts_ms": _integer(selected.get("seen_pts_ms")), "observations": _integer(selected.get("observations")) or 0,
              "recognition_state": recognition_state if isinstance(recognition_state, str) and recognition_state in _STATES else "unreadable",
              "masked_plate": masked, "best_reading": _plate(best.get("plate")), "model_score": _number(best.get("score"), score=True),
              "gate_reasons": reasons, "frames": frames, "candidates": _candidates(selected.get("candidates")),
              "reconstruction": _reconstruction(selected.get("reconstruction"))}
+    passage = selected.get('passage_id')
+    if isinstance(passage, str) and IDENTIFIER.fullmatch(passage):
+        track['passage_id'] = passage
+        track['passage_start_reason'] = _label(selected.get('passage_start_reason'), 80) or None
     model_view = {key: (_label(value, 128) or None) for key, value in models.items() if key in _MODELS}
     stages = (retained.get('stage_ms') if retained is not None else
               debug.get("stage_ms") if isinstance(debug, dict) else {})

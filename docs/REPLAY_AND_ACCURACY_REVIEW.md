@@ -42,20 +42,37 @@ directory for another recording. No credentials are embedded in the script.
 
 ## Finish the actual accuracy report
 
-The frozen current Mumbai capture is local at
-`data/benchmarks/full-video-human-review-20261113/`. Launch the blind human
+Use the passage-aware Mumbai capture at
+`data/benchmarks/full-video-passage-review-v2-20261113/`. The older
+`full-video-human-review-20261113` capture groups by raw tracker ID and contains
+mixed-vehicle records (including `track-s0-3`); do not score those as one vehicle.
+Its saved human labels remain untouched. Launch the blind human
 reviewer if it is not already running:
 
 ```powershell
-python tools/serve_video_review.py --run data/benchmarks/full-video-human-review-20261113 --video data/recordings/footage.mp4 --port 7796
+python tools/serve_video_review.py --run data/benchmarks/full-video-passage-review-v2-20261113 --video data/recordings/footage.mp4 --port 7797
 ```
 
-Open http://127.0.0.1:7796/. The capture decoded all 928 frames and analysed 62
-samples, producing 51 tracker records. These are not yet 51 verified unique
-vehicles. Initially all 51 decisions are pending and the full inventory is not
-attested. The 18 older human reference crops are only partial ground truth;
+Open http://127.0.0.1:7797/. The capture decodes all 928 frames and analyses 62
+samples. Review cards represent separate recognition passages, not a verified
+inventory of unique vehicles. All decisions initially remain pending and the
+full inventory is not attested. The 18 older human reference crops are only partial ground truth;
 timestamp/geometry links are review suggestions, and no old transcription was
 automatically imported.
+
+The dashboard and reviewer now bind readings/crops to the same passage identity.
+Tracker ID reuse, geometry breaks and independent confident OCR disagreements
+start a clean history. A proposal covered substantially by two current vehicle
+regions is withheld before OCR fusion. A plate aspect-ratio change over twofold
+also breaks continuity. OCR disagreement is a veto only: three confident
+conflicting characters in equal-length readings, or two conflicting terminal
+digits when both readings end in four digits. Agreement never establishes
+identity or relaxes acceptance. These heuristics can split one real vehicle into
+several records, especially when OCR is confidently wrong. Review duplicates
+against the video rather than automatically joining similar registrations.
+
+The Inspector is pinned to the selected passage; if its evidence is unavailable,
+it reports that instead of displaying another vehicle with the reused tracker ID.
 
 For each record, independently inspect the vehicle and native plate crops:
 

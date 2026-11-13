@@ -25,6 +25,26 @@ def evidence(track_id='204', state='model_accepted'):
 
 
 class RecordedDiagnosticRetentionTests(unittest.TestCase):
+    def test_same_tracker_and_reading_cannot_reuse_another_passage_evidence(self):
+        state = self.state()
+        first = evidence()
+        first['passage_id'] = 'aaaaaaaaaaaaaaaa'
+        old = dict(key='0-p-aaaaaaaaaaaaaaaa', track_id='204', passage_id='aaaaaaaaaaaaaaaa',
+                   state='model_accepted', reading='GJ01AB1234')
+        self.publish(state, [first], passed=[old])
+        new = dict(old, key='0-p-bbbbbbbbbbbbbbbb', passage_id='bbbbbbbbbbbbbbbb')
+        self.publish(state, [], passed=[new, old], video_position_ms=900)
+        self.assert_unavailable(state, '204')
+        # Equal OCR text and state cannot authorize an old passage's image.
+        self.publish(state, [first], passed=[new, old], video_position_ms=900)
+        self.assert_unavailable(state, '204')
+        second = evidence()
+        second.update(passage_id='bbbbbbbbbbbbbbbb', frames=[], seen_pts_ms=900)
+        self.publish(state, [second], passed=[new, old], video_position_ms=900)
+        view = self.view(state)
+        self.assertEqual(view['track']['passage_id'], 'bbbbbbbbbbbbbbbb')
+        self.assertEqual(view['track']['frames'], [])
+
     def test_selected_uncertain_window_stays_coherent_when_current_guess_weakens(self):
         state = self.state()
         passed = [dict(key='0-204', track_id='204', state='uncertain', reading='GJ01AB1234')]

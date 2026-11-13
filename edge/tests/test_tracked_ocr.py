@@ -90,9 +90,11 @@ class TrackedOCRTests(unittest.TestCase):
 
     def test_default_search_visits_every_eligible_track_without_three_roi_cap(self):
         engine = self.engine()
-        tracks = [VehicleTrack(str(i),(0,0,180,60),2) for i in range(10)]
+        # Distinct vehicles, not ten overlapping identities for one region.
+        tracks = [VehicleTrack(str(i),(i*180,0,(i+1)*180,60),2) for i in range(10)]
+        image = np.tile(self.image(1), (1,10,1))
         with patch('sentinel_edge.tracked_ocr.crop_quality',return_value=.9):
-            displays = engine.process(self.image(1),tracks,0)
+            displays = engine.process(image,tracks,0)
         self.assertEqual(len(displays),10)
         self.assertEqual(engine.metrics['eligible_vehicle_tracks'],10)
         self.assertEqual(engine.metrics['plate_roi_searches'],10)
@@ -174,6 +176,71 @@ class PlateContinuityIntegrationTests(unittest.TestCase):
         with patch('sentinel_edge.tracked_ocr.crop_quality', return_value=.9):
             return engine.process(image, tracks, stamp, **kwargs)
 
+    def test_confident_text_conflict_splits_reused_id_before_fusion(self):
+        from sentinel_edge.plate_options import PlateOptions
+        outcomes = []
+        engine = self.engine()
+        engine.options = PlateOptions(result_states=True)
+        engine.on_finalized = outcomes.append
+        self.process(engine,self.image(0),self.tracks(),0)
+        self.process(engine,self.image(1),self.tracks(),500)
+        old = engine.histories['1']
+        changed = 'MH47BM5621'
+        def other(crop):
+            result = []
+            for letter in changed:
+                row = [0.]*len(TOKENS);row[TOKENS.index(letter)] = 1.
+                result.append(row)
+            return result
+        engine.ocr.probabilities = other
+        displays = self.process(engine,self.image(2),self.tracks(),1000)
+        fresh = engine.histories['1']
+        self.assertNotEqual(fresh.passage_id, old.passage_id)
+        self.assertEqual(fresh.reader.observation_count,1)
+        self.assertEqual(fresh.passage_start_reason,'plate_text_conflict')
+        self.assertEqual(displays[0]['passage_id'],fresh.passage_id)
+        self.assertEqual(outcomes[0].last_pts,500)
+        self.assertEqual(outcomes[0].plate_detections,2)
+        self.assertEqual(outcomes[0].vehicle_samples,2)
+        self.assertEqual(fresh.plate_detections,1)
+        self.assertEqual(fresh.vehicle_samples,1)
+        self.assertEqual(engine.summary()['unique_model_accepted_unverified'],0)
+
+    def test_uncertain_character_disagreement_is_not_an_identity_split(self):
+        engine = self.engine()
+        self.process(engine,self.image(0),self.tracks(),0)
+        passage = engine.histories['1'].passage_id
+        def uncertain(crop):
+            result = []
+            for letter in 'MH47BM5621':
+                row = [0.]*len(TOKENS);row[TOKENS.index(letter)] = .8;row[0] = .2
+                result.append(row)
+            return result
+        engine.ocr.probabilities = uncertain
+        self.process(engine,self.image(1),self.tracks(),500)
+        self.assertEqual(engine.histories['1'].passage_id,passage)
+        self.assertEqual(engine.histories['1'].reader.observation_count,2)
+
+    def test_partial_prefix_with_conflicting_suffix_does_not_enter_previous_reader(self):
+        engine = self.engine()
+        def rows_for(text):
+            result = []
+            for letter in text:
+                row = [0.]*len(TOKENS); row[TOKENS.index(letter)] = 1.
+                blank = [0.]*len(TOKENS); blank[0] = 1.
+                result.extend((row,blank))
+            return result
+        engine.ocr.probabilities = lambda crop: rows_for('MH47BM5561')
+        self.process(engine,self.image(0),self.tracks(),0)
+        old = engine.histories['1']
+        engine.ocr.probabilities = lambda crop: rows_for('DLH5533')
+        self.process(engine,self.image(1),self.tracks(),500)
+        fresh = engine.histories['1']
+        self.assertNotEqual(fresh.passage_id,old.passage_id)
+        self.assertEqual(fresh.reader.observation_count,1)
+        self.assertEqual(old.reader.observation_count,1)
+        self.assertEqual(engine.metrics['plate_text_conflict_numeric_suffix'],1)
+
     def test_known_global_box_pair_at_exact_2500ms_starts_fresh_reader(self):
         engine = self.engine()
         boxes = iter([(1946,1690,2150,1775), (1336,1567,1469,1632)])
@@ -198,9 +265,9 @@ class PlateContinuityIntegrationTests(unittest.TestCase):
 
     def test_interleaved_tracks_retain_independent_evidence(self):
         engine = self.engine()
-        tracks = [VehicleTrack(key,(0,0,180,60),2) for key in ('1','2')]
+        tracks = [VehicleTrack(str(i+1),(i*180,0,(i+1)*180,60),2) for i in range(2)]
         for i in range(6):
-            image = self.image(i)
+            image = np.tile(self.image(i), (1,2,1))
             key = str(1+i%2)
             prepared = {'box':(5,5,150,35), 'crop':image[5:35,5:150],
                         'calls':0, 'fallback':False, 'ms':0}

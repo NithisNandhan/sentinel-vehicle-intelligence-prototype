@@ -1,0 +1,69 @@
+{
+  "schema_version": 1,
+  "source_sha256": "6b7064605b3d4d12c6c1da4566cbcec1cd2e3e3bd7b77814865fe9df22045f65",
+  "scope": "Previously used Mumbai development recording; no unseen-camera accuracy claim",
+  "capture_manifest_sha256": "3894668c2116736fe9b996c0e9208f737acda6284277529abec8dd69c334a0d2",
+  "capture_predictions_sha256": "ca07142bfa43cd466fe820c2ffd420cb22c7dd5e0a176b8e84fc249515bf3b05",
+  "previous_labels_sha256_preserved": "12ed000b6e4dae804087fc04025da0be4bbb92faf9e7094b4501666c8545ce6e",
+  "frames": 928,
+  "analysed_samples": 62,
+  "records": 163,
+  "records_with_crops": 102,
+  "plate_observations": 144,
+  "ambiguous_ownership_rejections": 39,
+  "unique_model_accepted_unverified": 3,
+  "accepted_registration_set_unchanged_from_previous": true,
+  "raw_tracker3_verified_switch_timestamps_now_separate": true,
+  "accuracy_available": false,
+  "manual_decisions_pending": 163,
+  "remaining_observed_problems": [
+    "Tracker148 at13.5-15s still switches motorcycles and includes a tiny nonplate crop",
+    "Truck280 has windscreen false proposals in another passage"
+  ],
+  "ui_rehearsal": {
+    "passed": true,
+    "session_id": "s-20261113T132837-175e5ff0",
+    "device": "gpu",
+    "decoded_frames": 928,
+    "analysed_frames": 62,
+    "final_rows": 164,
+    "early_rows": 13,
+    "paused_clock_stable": true,
+    "scrubbing": true,
+    "no_future_inventory": true,
+    "source_time_clock": true,
+    "inference_mutations": 0
+  },
+  "current_guard_sha256": {
+    "edge\\sentinel_edge\\tracked_ocr.py": "e7bc99bd35024dcc593e4404ca2d110541915287bca31049c4fc74e22fd9aece",
+    "edge\\sentinel_edge\\plate_ownership.py": "bf0ef9bcca5e34fb4d19b975412280e9351b4958f264ab8c1d7beb88699a0360",
+    "edge\\sentinel_edge\\plate_continuity.py": "27b62b156e1e176573dff08dd830c3dd1937253eaba3c202857da9d608142cd6",
+    "edge\\sentinel_edge\\plate_identity.py": "e21d689a3226b649408182556edfe831c0e965556762cee278dbcf65656a2b77"
+  },
+  "capture_provenance_note": "Frozen v2 capture is unchanged. These current source hashes are posthoc corroboration, not a retroactive edit of its startup provenance.",
+  "inspector_smoke": {
+    "status": "completed",
+    "device": "gpu",
+    "decoded_frames": 928,
+    "analysed_frames": 62,
+    "accepted_inspectors": [
+      {
+        "track": "280",
+        "http": 200,
+        "same_passage": true,
+        "frames": 5
+      },
+      {
+        "track": "204",
+        "http": 200,
+        "same_passage": true,
+        "frames": 6
+      },
+      {
+        "track": "243",
+        "older_passage_disabled": true
+      }
+    ],
+    "review_http": 200
+  }
+}

@@ -36,6 +36,20 @@ def fixture():
 
 
 class UnifiedDiagnosticTests(unittest.TestCase):
+    def test_passage_identity_is_bounded_and_keeps_current_row_binding(self):
+        data = fixture()
+        track = data['debug']['tracks'][0]
+        track.update(passage_id='aaaaaaaaaaaaaaaa', passage_start_reason='vehicle_inconsistent')
+        data['debug']['passed'] = [dict(key='0-p-aaaaaaaaaaaaaaaa', track_id='det-1',
+            passage_id='aaaaaaaaaaaaaaaa', reading='GJ01AB1234', state='model_accepted')]
+        view = self.view(data)['track']
+        self.assertEqual(view['row_key'], '0-p-aaaaaaaaaaaaaaaa')
+        self.assertEqual(view['passage_id'], 'aaaaaaaaaaaaaaaa')
+        self.assertEqual(view['passage_start_reason'], 'vehicle_inconsistent')
+        data['debug']['passed'][0]['passage_id'] = 'bbbbbbbbbbbbbbbb'
+        with self.assertRaises(DiagnosticUnavailable):
+            self.view(data)
+
     def test_working_crop_is_bounded_and_source_labels_are_allowlisted(self):
         data=fixture()
         frame=data['debug']['tracks'][0]['frames'][0]

@@ -16,12 +16,14 @@ class PlateContinuityPolicy:
     max_gap_ms: int = 1000
     max_scale_change: float = 2.5
     max_relative_jump: float = 1.5
+    max_aspect_change: float = 2.
 
     def __post_init__(self):
         if (not isinstance(self.max_gap_ms, int) or isinstance(self.max_gap_ms, bool)
                 or self.max_gap_ms < 0 or not _finite(self.max_scale_change)
                 or self.max_scale_change < 1 or not _finite(self.max_relative_jump)
-                or self.max_relative_jump < 0):
+                or self.max_relative_jump < 0 or not _finite(self.max_aspect_change)
+                or self.max_aspect_change < 1):
             raise ValueError('Invalid plate continuity bounds')
 
 
@@ -71,6 +73,8 @@ def continuity_reason(previous_box, previous_pts_ms, current_box, pts_ms, policy
     cw, ch, cx, cy = current
     if max(pw/cw, cw/pw, ph/ch, ch/ph) > policy.max_scale_change:
         return 'scale_change'
+    if max((pw/ph)/(cw/ch), (cw/ch)/(pw/ph)) > policy.max_aspect_change:
+        return 'aspect_change'
     diagonal = max(math.hypot(pw, ph), math.hypot(cw, ch))
     if math.hypot(cx-px, cy-py)/diagonal > policy.max_relative_jump:
         return 'relative_jump'
