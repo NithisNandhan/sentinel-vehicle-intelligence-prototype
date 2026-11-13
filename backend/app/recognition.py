@@ -199,13 +199,14 @@ def status_metadata(value: dict) -> dict:
     # Vehicles seen in this run: masked text and counts only, never a crop or full reading.
     result["vehicles_seen"] = []
     seen = value.get("vehicles_seen")
-    for row in (seen if isinstance(seen, list) else [])[:50]:
+    for row in (seen if isinstance(seen, list) else [])[:200]:
         if not isinstance(row, dict) or not _id(row.get("track_id")):
             continue
         masked, state, kind = row.get("masked_plate"), row.get("state"), row.get("vehicle_class")
         confidence, watch = row.get("confidence"), row.get("watchlist")
         accepted = state == "model_accepted"
         result["vehicles_seen"].append({
+            "key": row.get("key") if _id(row.get("key")) else row["track_id"],
             "track_id": row["track_id"],
             "vehicle_class": kind if isinstance(kind, str) and kind in _VEHICLE_CLASSES else "vehicle",
             "confidence": round(confidence, 3) if type(confidence) in (int, float) and math.isfinite(confidence)
@@ -317,12 +318,13 @@ def evidence(response: Response, mode: Literal["original", "overlays"] = "overla
     session = value.get("session_id")
     rows = []
     listed = value.get("vehicles")
-    for row in (listed if isinstance(listed, list) else [])[:30]:
+    for index, row in enumerate((listed if isinstance(listed, list) else [])[:200]):
         if not isinstance(row, dict) or not _id(row.get("track_id")):
             continue
         state, kind, reading = row.get("state"), row.get("vehicle_class"), row.get("reading")
         confidence, watch = row.get("confidence"), row.get("watchlist")
         rows.append({
+            "key": row.get("key") if _id(row.get("key")) else None,
             "track_id": row["track_id"],
             "vehicle_class": kind if isinstance(kind, str) and kind in _VEHICLE_CLASSES else "vehicle",
             "confidence": round(confidence, 3) if type(confidence) in (int, float) and math.isfinite(confidence)
@@ -331,7 +333,7 @@ def evidence(response: Response, mode: Literal["original", "overlays"] = "overla
             "observations": _count(row.get("observations")),
             "state": state if isinstance(state, str) and state in _STATES else "unreadable",
             "reading": reading if isinstance(reading, str) and _READING.fullmatch(reading) else None,
-            "thumb": _image(row.get("thumb"), 80_000),
+            "thumb": _image(row.get("thumb"), 80_000) if index < 30 else None,
             "watchlist": watch if isinstance(watch, str) and watch in {"possible_match", "no_match"} else None,
         })
     return {"source_mode": "recorded",

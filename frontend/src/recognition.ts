@@ -18,6 +18,34 @@ export function recognitionTone(state: RecognitionState | string): string {
   return 'neutral';
 }
 
+type VehicleRow = NonNullable<RecognitionStatus['vehicles_seen']>[number];
+type VehicleEvidence = RecognitionEvidence['vehicles'][number];
+
+/** Match scene-aware identities where available, avoiding a reused track ID. */
+export function vehicleEvidence(row: VehicleRow, evidence: RecognitionEvidence | null): VehicleEvidence | undefined {
+  const candidates = evidence?.vehicles || [];
+  if (row.key) return candidates.find(item => item.key === row.key)
+    || candidates.find(item => !item.key && item.track_id === row.track_id);
+  return candidates.find(item => item.track_id === row.track_id);
+}
+
+/** The Inspector accepts a track ID, so only its newest scene row is safe. */
+export function vehicleIsInspectable(row: VehicleRow, newestFirst: readonly VehicleRow[]): boolean {
+  const newest = newestFirst.find(item => item.track_id === row.track_id);
+  if (!newest) return false;
+  return row.key ? row.key === newest.key : row === newest;
+}
+
+/** A tracked vehicle is visible before OCR has produced text, and remains at EOF. */
+export function vehicleReadingLabel(row: VehicleRow, visual: VehicleEvidence | undefined,
+  status: RecognitionStatus['status'] | undefined): string {
+  const reading = visual?.reading || row.masked_plate;
+  if (reading) return reading;
+  if (status === 'processing' || status === 'connecting') return 'Reading plate…';
+  if (status === 'paused') return 'Plate reading paused';
+  return 'No plate reading';
+}
+
 export function isRecorded(status: RecognitionStatus | null): boolean {
   return status?.source_mode === 'recorded';
 }

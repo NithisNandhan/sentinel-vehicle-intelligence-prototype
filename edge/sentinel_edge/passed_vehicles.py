@@ -11,6 +11,7 @@ unverified, and never replaces the central alert, which still requires an
 accepted reading.
 """
 from collections import OrderedDict
+import math
 
 from .privacy import plate_hmac
 from .recognition_contract import recognition_state
@@ -25,8 +26,13 @@ class PassedVehicles:
         self.limit, self.keep_text, self.hmac_key = limit, keep_text, hmac_key
         self.watchlist = None   # None: not known (central unreachable). A set once fetched.
 
-    def update(self, segment, position_ms, tracks, displays, readings):
-        """`readings` maps track_id to the current best full string, or None."""
+    def update(self, segment, position_ms, tracks, displays, readings, *, reading_details=None):
+        """Retain the strongest observed fusion window, not the last OCR string.
+
+        `reading_details` contains the already-fused PlateCandidate objects.
+        Its scores are ranking signals, never correctness probabilities.
+        This display-only choice does not change automatic acceptance/delivery.
+        """
         for track in tracks:
             row = self._row(segment, track.track_id, position_ms)
             row['last_ms'] = position_ms
@@ -38,15 +44,23 @@ class PassedVehicles:
             row = self._row(segment, display['track_id'], position_ms)
             row['last_ms'] = position_ms
             state = recognition_state(display['ocr_status'])
-            improved = display['observations'] > row['observations']
-            if RANK[state] >= RANK[row['state']]:
+            reading = readings.get(display['track_id'])
+            detail = (reading_details or {}).get(display['track_id'])
+            strength = self._strength(state, display['observations'], detail)
+            chosen = bool(reading) and (row['_reading'] is None or strength > row['_reading_strength'])
+            if chosen:
                 row['state'] = state
-                row['masked_plate'] = display['masked_plate'] or row['masked_plate']
-                reading = readings.get(display['track_id'])
-                if reading:
-                    row['_reading'] = reading
-            if improved or row['_thumb'] is None:
-                row['observations'] = max(row['observations'], display['observations'])
+                from .privacy import mask_plate
+                row['masked_plate'] = mask_plate(reading)
+                row['_reading'] = reading
+                row['_reading_strength'] = strength
+                row['_thumb'] = self._thumbnail(display['crop'])
+            elif row['_reading'] is None and RANK[state] >= RANK[row['state']]:
+                row['state'] = state
+            # Count evidence progress even when a later weak window is rejected.
+            # Never replace the selected reading's image with a different guess.
+            row['observations'] = max(row['observations'], display['observations'])
+            if row['_thumb'] is None and (not row['_reading'] or reading == row['_reading']):
                 row['_thumb'] = self._thumbnail(display['crop'])
         while len(self.rows) > self.limit:
             self.rows.popitem(last=False)
@@ -58,8 +72,19 @@ class PassedVehicles:
             row = self.rows[key] = {'key': f'{segment}-{track_id}', 'track_id': str(track_id), 'vehicle_class': 'vehicle',
                                     'confidence': None, 'first_ms': position_ms, 'last_ms': position_ms,
                                     'observations': 0, 'state': 'unreadable', 'masked_plate': None,
-                                    '_reading': None, '_thumb': None}
+                                    '_reading': None, '_thumb': None, '_reading_strength': ()}
         return row
+
+    @staticmethod
+    def _strength(state, observations, detail):
+        def score(name):
+            value = getattr(detail, name, None)
+            return float(value) if type(value) in (int, float) and math.isfinite(value) and 0 <= value <= 1 else 0.
+        # A multi-frame window outranks an isolated high-score suggestion.
+        # After three originals, prefer the least ambiguous character, then
+        # the mean fused score; extra observations break otherwise equal ties.
+        count = observations if type(observations) is int and observations >= 0 else 0
+        return (RANK[state], min(count, 3), score('minimum_character_score'), score('score'), count)
 
     @staticmethod
     def _thumbnail(crop):
@@ -91,7 +116,7 @@ class PassedVehicles:
             rows.append(item)
         return rows
 
-    def masked(self, limit=50):
+    def masked(self, limit=200):
         """Newest first, masked text only. A watchlist flag appears only for an accepted reading."""
         rows = []
         for row in list(reversed(self.rows.values()))[:limit]:

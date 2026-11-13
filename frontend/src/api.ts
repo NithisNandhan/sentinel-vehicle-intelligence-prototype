@@ -77,6 +77,8 @@ export interface RecognitionStatus {
   }[];
   /** Bounded recent tracks, newest first. The status route carries masked metadata only. */
   vehicles_seen?: {
+    /** Stable scene/track row identity when provided by the worker. */
+    key?: string;
     track_id: string;
     vehicle_class: string;
     confidence: number | null;
@@ -255,6 +257,7 @@ export interface RecognitionEvidence {
   video_position_ms: number | null;
   frame: string | null;
   vehicles: {
+    key?: string;
     track_id: string; vehicle_class: string; confidence: number | null;
     first_ms: number | null; last_ms: number | null; observations: number;
     state: RecognitionState; reading: string | null; thumb: string | null;

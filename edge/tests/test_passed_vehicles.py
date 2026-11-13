@@ -23,6 +23,46 @@ def display(track_id='5', status=READING, observations=1, masked=None):
 
 
 class PassedVehiclesTests(unittest.TestCase):
+    def test_stronger_fusion_window_survives_later_blurry_guesses_and_disappearance(self):
+        seen = PassedVehicles(keep_text=True)
+        def update(text, count, score, minimum):
+            item = display(status=UNCERTAIN, observations=count, masked=mask_plate(text))
+            if text != TEXT:
+                item['crop'].fill(0)
+            seen.update(0, count*500, [track()],
+                [item], {'5': text},
+                reading_details={'5': SimpleNamespace(score=score, minimum_character_score=minimum)})
+        update(TEXT, 3, .90, .80)
+        original_thumb = seen.engineering()[0]['thumb']
+        update('TS07FS8428', 7, .70, .40)
+        row = seen.engineering()[0]
+        self.assertEqual((row['reading'], row['observations'], row['thumb']), (TEXT, 7, original_thumb))
+        update('TS07FS8427', 8, .95, .89)
+        seen.update(0, 6000, [], [], {})
+        row = seen.engineering()[0]
+        self.assertEqual(row['reading'], 'TS07FS8427')
+        self.assertEqual(row['last_ms'], 4000)
+        self.assertNotIn('_reading_strength', json.dumps(seen.masked()))
+
+    def test_multi_frame_evidence_outranks_isolated_high_score_and_ties_do_not_flip_text(self):
+        seen = PassedVehicles(keep_text=True)
+        best = lambda score, minimum: {'5': SimpleNamespace(score=score, minimum_character_score=minimum)}
+        seen.update(0, 0, [track()], [display(observations=1)], {'5': 'TS07FS8428'}, reading_details=best(.99,.99))
+        seen.update(0, 500, [track()], [display(status=UNCERTAIN, observations=3)], {'5': TEXT}, reading_details=best(.88,.8))
+        seen.update(0, 1000, [track()], [display(status=UNCERTAIN, observations=3)], {'5': 'TS07FS8427'}, reading_details=best(.88,.8))
+        self.assertEqual(seen.engineering()[0]['reading'], TEXT)
+        seen.update(0, 1500, [track()], [display(status=ACCEPTED, observations=3)], {'5': TEXT}, reading_details=best(.9,.8))
+        seen.update(0, 2000, [track()], [display(status=UNCERTAIN, observations=8)], {'5': 'TS07FS8428'}, reading_details=best(.99,.99))
+        self.assertEqual(seen.engineering()[0]['state'], 'model_accepted')
+        self.assertEqual(seen.engineering()[0]['reading'], TEXT)
+
+    def test_two_hundred_vehicles_remain_listed_without_any_ocr_readings(self):
+        seen = PassedVehicles(keep_text=True)
+        for index in range(205):
+            seen.update(0, index*500, [track(str(index))], [], {})
+        self.assertEqual(len(seen.masked()), 200)
+        self.assertTrue(all(row['reading'] is None for row in seen.engineering()))
+
     def test_a_vehicle_is_listed_as_soon_as_it_appears_and_updates_as_evidence_arrives(self):
         seen = PassedVehicles(keep_text=True, hmac_key=KEY)
         seen.update(0, 1000, [track()], [], {})

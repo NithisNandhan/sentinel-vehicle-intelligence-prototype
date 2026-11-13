@@ -101,16 +101,19 @@ def observe_tracked(config,camera,model,detector,vehicle,state,stop, *, debug=Fa
             from .overlay import draw_plate_callout, draw_vehicle, scale_for
             scale = scale_for(view)
             boxes = {track.track_id:track.box for track in tracks}
-            plain,shown = {},{}
+            plain,shown,reading_details = {},{},{}
             for display in displays:
                 history = pipeline.histories.get(display['track_id'])
                 ranked = history.reader.candidates() if history is not None and history.reader.observation_count else []
                 plain[display['track_id']] = ranked[0].plate if ranked else None
+                if ranked:
+                    reading_details[display['track_id']] = ranked[0]
                 # The protected engineering view may show the full unverified
                 # hypothesis; any other viewer only ever gets the masked form.
                 shown[display['track_id']] = plain[display['track_id']] if debug else display['masked_plate']
             seen.update(pipeline.metrics['scene_resets'],
-                        frame.pts_ms-(recorded.recording.start_pts_ms if recorded else 0),tracks,displays,plain)
+                        frame.pts_ms-(recorded.recording.start_pts_ms if recorded else 0),tracks,displays,plain,
+                        reading_details=reading_details)
             for track in tracks:
                 draw_vehicle(view,track,scale,shown.get(track.track_id))
             for display in displays:

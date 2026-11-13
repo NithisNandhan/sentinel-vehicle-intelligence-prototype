@@ -112,14 +112,36 @@ def test_vehicles_seen_list_is_allowlisted_and_masked(client, monkeypatch):
     monkeypatch.setattr(recognition, "request_edge", lambda *args: value)
     response = client.get("/v1/recognition/status", headers=OPERATOR)
     rows = response.json()["vehicles_seen"]
-    assert len(rows) == 48   # Only the first 50 upstream rows are considered; the two invalid ones are dropped.
-    assert rows[0] == {"track_id": "5", "vehicle_class": "car", "confidence": 0.39, "first_ms": 1000, "last_ms": 2500,
+    assert len(rows) == 82   # Keep unread vehicles too; only the two invalid rows are dropped.
+    assert rows[0] == {"key": "0-5", "track_id": "5", "vehicle_class": "car", "confidence": 0.39, "first_ms": 1000, "last_ms": 2500,
                        "observations": 3, "state": "model_accepted", "masked_plate": "TS******29",
                        "watchlist": "possible_match"}
     # Unknown class, impossible numbers and an unmasked plate are replaced; an unaccepted row carries no flag.
-    assert rows[1] == {"track_id": "6", "vehicle_class": "vehicle", "confidence": None, "first_ms": None,
+    assert rows[1] == {"key": "6", "track_id": "6", "vehicle_class": "vehicle", "confidence": None, "first_ms": None,
                        "last_ms": None, "observations": 0, "state": "uncertain", "masked_plate": None, "watchlist": None}
     assert "TS07FS8429" not in response.text and "SECRET" not in response.text
+
+
+def test_vehicle_rows_and_evidence_keep_scene_keys_and_two_hundred_metadata_rows(client, monkeypatch):
+    value = processing()
+    value['vehicles_seen'] = [dict(key=f'1-{i}', track_id=str(i)) for i in range(220)]
+    monkeypatch.setattr(recognition, 'request_edge', lambda *args: value)
+    rows = client.get('/v1/recognition/status', headers=OPERATOR).json()['vehicles_seen']
+    assert len(rows) == 200 and rows[-1]['key'] == '1-199'
+    data = evidence_payload()
+    data['vehicles'] = [dict(key=f'1-{i}', track_id=str(i), reading='TS07FS8429', thumb='eA==') for i in range(220)]
+    monkeypatch.setattr(recognition, 'request_edge', lambda *args: data)
+    import app.security
+    enabled = Settings(edge_api_key='test-edge-key', operator_api_key='test-operator-key',
+                       watchlist_hmac_key='test-hmac-key', recognition_gateway_url='http://edge:7780',
+                       dashboard_recorded_evidence=True)
+    monkeypatch.setattr(recognition, 'get_settings', lambda: enabled)
+    monkeypatch.setattr(app.security, 'get_settings', lambda: enabled)
+    response = client.get('/v1/recognition/evidence', headers=OPERATOR)
+    assert response.status_code == 200
+    rows = response.json()['vehicles']
+    assert len(rows) == 200 and rows[-1]['key'] == '1-199'
+    assert rows[29]['thumb'] == 'eA==' and rows[30]['thumb'] is None
 
 
 def evidence_payload():
@@ -145,7 +167,7 @@ def test_evidence_view_for_a_recording_passes_only_validated_fields(client, monk
     data = response.json()
     assert data["frame"] == "QUJD" and data["video_position_ms"] == 1500
     assert data["vehicles"][0]["reading"] == "TS07FS8429" and data["vehicles"][0]["thumb"] == "QUJD"
-    assert data["vehicles"][1] == {"track_id": "6", "vehicle_class": "vehicle", "confidence": None, "first_ms": None,
+    assert data["vehicles"][1] == {"key": None, "track_id": "6", "vehicle_class": "vehicle", "confidence": None, "first_ms": None,
                                    "last_ms": None, "observations": 0, "state": "unreadable", "reading": None,
                                    "thumb": None, "watchlist": None}
     assert "SECRET" not in response.text and "path" not in data

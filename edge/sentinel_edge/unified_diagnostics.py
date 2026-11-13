@@ -147,10 +147,9 @@ def _retained_view(snapshot, session_id, camera_id, track_id):
         latest = passed_track_identity(snapshot, track_id)
         if latest is None or latest['key'] != key:
             return None
-        if (candidate['track'].get('recognition_state') == 'model_accepted'
-                and (not _plate(candidate['track'].get('best_reading'))
-                     or latest['state'] != 'model_accepted'
-                     or latest['reading'] != candidate['track'].get('best_reading'))):
+        if (not _plate(candidate['track'].get('best_reading'))
+                or latest['state'] != candidate['track'].get('recognition_state')
+                or latest['reading'] != candidate['track'].get('best_reading')):
             return None
     return candidate
 
@@ -172,23 +171,32 @@ def diagnostic_view(snapshot, models, session_id, track_id, *, enabled):
     selected = next((row for row in (tracks if isinstance(tracks, list) else [])[:512]
                      if isinstance(row, dict) and row.get("track_id") == track_id), None)
     retained, cached = None, _retained_view(snapshot, session_id, camera_id, track_id)
-    prefer_accepted = False
+    prefer_retained = False
     if selected is not None and cached is not None and cached.get('_passed_key') is not None:
         old = cached['track']
         best = selected.get('best_guess') if isinstance(selected.get('best_guess'), dict) else {}
         has_images = any(isinstance(row, dict) and (_png(row.get('image'), 80_000)
                                                    or _png(row.get('working_image'), 80_000))
                          for row in (selected.get('frames') if isinstance(selected.get('frames'), list) else [])[:8])
-        prefer_accepted = (old.get('recognition_state') == 'model_accepted'
-            and (selected.get('recognition_state') != 'model_accepted' or not _plate(best.get('plate'))
+        prefer_retained = (bool(_plate(old.get('best_reading')))
+            and (selected.get('recognition_state') != old.get('recognition_state')
+                 or best.get('plate') != old.get('best_reading')
                  or (not has_images and best.get('plate') == old.get('best_reading')
                      and any(frame.get('image') for frame in old.get('frames', []) if isinstance(frame, dict)))))
-    if cached is not None and (selected is None or prefer_accepted):
+    if cached is not None and (selected is None or prefer_retained):
         retained = cached
         selected = dict(cached['track'])
         selected['best_guess'] = dict(plate=selected.get('best_reading'), score=selected.get('model_score'))
     if selected is None:
         raise DiagnosticUnavailable(404, "Track evidence is no longer available")
+    chosen = passed_track_identity(snapshot, track_id)
+    current_best = selected.get('best_guess') if isinstance(selected.get('best_guess'), dict) else {}
+    if (chosen is not None and chosen['reading']
+            and (current_best.get('plate') != chosen['reading']
+                 or selected.get('recognition_state') != chosen['state'])):
+        # Bounded RAM can evict an old winning window. Never quietly show a
+        # different, weaker window as evidence for the retained panel answer.
+        raise DiagnosticUnavailable(404, 'The selected reading evidence is no longer retained')
     reasons = [_label(item) for item in (selected.get("gate_reasons") if isinstance(selected.get("gate_reasons"), list) else [])[:24]]
     reasons = [item for item in reasons if item]
     if retained is not None:

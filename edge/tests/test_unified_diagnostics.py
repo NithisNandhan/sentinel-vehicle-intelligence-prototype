@@ -118,6 +118,15 @@ class UnifiedDiagnosticTests(unittest.TestCase):
 
 
 class AlignedEvidenceTests(unittest.TestCase):
+    def test_all_bounded_vehicle_metadata_is_kept_without_multiplying_thumbnail_budget(self):
+        from sentinel_edge.live_detection_viewer import dashboard_view
+        data = fixture()
+        data['debug']['passed'] = [dict(key=f'0-{i}', track_id=str(i), reading=None, thumb='eA==') for i in range(220)]
+        view = dashboard_view(data)
+        self.assertEqual(len(view['vehicles']), 200)
+        self.assertEqual(view['vehicles'][-1]['key'], '0-199')
+        self.assertEqual(sum(bool(row['thumb']) for row in view['vehicles']), 30)
+
     def test_original_and_overlay_share_source_pts_and_aspect_ratio(self):
         import cv2
         import numpy as np

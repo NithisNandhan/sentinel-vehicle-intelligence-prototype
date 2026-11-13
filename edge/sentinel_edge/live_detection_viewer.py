@@ -97,14 +97,13 @@ class LiveState:
                 if key not in ('frames', 'seen_pts_ms', 'vehicle_box')},
                 sort_keys=True, separators=(',', ':')).encode()).digest()
             previous = self._retained_diagnostics.get(track_id)
-            if (previous is not None and previous[2][0] and passed is not None
-                    and previous[4] == passed_key and passed['state'] == 'model_accepted'
+            if (previous is not None and passed is not None
+                    and previous[4] == passed_key and passed['state'] == previous[6]
                     and previous[5] is not None and passed['reading'] == previous[5]
-                    and (clean_track['recognition_state'] != 'model_accepted'
-                         or not clean_track.get('best_reading')
-                         or (not rich and previous[2][1]
-                             and clean_track['best_reading'] == previous[5]))):
-                # The operator row still describes this exact prior acceptance.
+                    and (clean_track['recognition_state'] != previous[6]
+                         or clean_track.get('best_reading') != previous[5]
+                         or (not rich and previous[2][1]))):
+                # The running row still selects this exact stronger window.
                 # Keep its whole coherent DTO when the rolling OCR window ages
                 # out. The diagnostic adapter explicitly labels this archive.
                 self._retained_diagnostics.move_to_end(track_id)
@@ -122,7 +121,7 @@ class LiveState:
                 continue
             priority = (clean_track['recognition_state'] == 'model_accepted', rich)
             self._retained_diagnostics[track_id] = (payload, size, priority, signature,
-                                                    passed_key, clean_track.get('best_reading'))
+                                                    passed_key, clean_track.get('best_reading'), clean_track['recognition_state'])
             self._retained_diagnostic_bytes += size
             while (len(self._retained_diagnostics) > self.diagnostic_max_tracks
                    or self._retained_diagnostic_bytes > self.diagnostic_max_bytes):
@@ -407,7 +406,7 @@ def load_models(config, cache, checkpoint, *, detector_profile=None, training_ro
     return reader, PlateDetectorExperiment(), YOLO(str(config.model_cache_dir/'yolov8n.pt'))
 
 
-def dashboard_view(snapshot, width=1280, rows=30, *, mode='overlays'):
+def dashboard_view(snapshot, width=1280, rows=200, *, mode='overlays'):
     """Analysed frame (shrunk for transport) and vehicles seen, for a recording only."""
     import cv2
     import numpy as np
@@ -422,9 +421,12 @@ def dashboard_view(snapshot, width=1280, rows=30, *, mode='overlays'):
             image = cv2.resize(image, (width, round(image.shape[0]*width/image.shape[1])), interpolation=cv2.INTER_AREA)
         ok, data = cv2.imencode('.jpg', image, [cv2.IMWRITE_JPEG_QUALITY, 78]) if image is not None else (False, None)
         frame = base64.b64encode(data).decode('ascii') if ok else None
+    vehicles = [dict(row, thumb=row.get('thumb') if index < 30 else None)
+                for index, row in enumerate(snapshot.get('debug', {}).get('passed', [])[:min(rows, 200)])
+                if isinstance(row, dict)]
     return {'source_mode': 'recorded', 'session_id': snapshot.get('session_id'), 'status': snapshot.get('status'),
             'video_position_ms': snapshot.get('video_position_ms'), 'frame': frame or None,
-            'vehicles': snapshot.get('debug', {}).get('passed', [])[:rows]}
+            'vehicles': vehicles}
 
 
 def model_identity(reader, detector_profile=None, *, detector=None, vehicle_model=None):

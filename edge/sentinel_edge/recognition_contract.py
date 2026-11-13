@@ -40,7 +40,7 @@ def operator_snapshot(snapshot):
     result['vehicles_seen'] = [
         {key: row.get(key) for key in ('key', 'track_id', 'vehicle_class', 'confidence', 'first_ms', 'last_ms',
                                        'observations', 'state', 'masked_plate', 'watchlist')}
-        for row in snapshot.get('vehicles_seen', [])[:50] if isinstance(row, dict)]
+        for row in snapshot.get('vehicles_seen', [])[:200] if isinstance(row, dict)]
     status = result.get('status', 'unavailable')
     if status in ('paused', 'unavailable', 'completed'):
         result['recognition_state'] = status

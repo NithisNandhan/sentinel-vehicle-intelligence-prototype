@@ -4,6 +4,7 @@ import { imageData } from './Inspector';
 import {
   failureMessage, formatVideoTime, framePlaceholderTitle, retainEvidence, processingHeading, recognitionCount, recognitionIsFresh, recognitionIsRunning,
   recognitionLabel, recognitionTone, sessionLabel, sourceDescription, sourceLabel, staleLimit,
+  vehicleEvidence, vehicleIsInspectable, vehicleReadingLabel,
 } from './recognition';
 
 const status: RecognitionStatus = {
@@ -136,5 +137,76 @@ describe('frame retention while evidence polls fail', () => {
     expect(retainEvidence(old, evidence('session-a', 'CCCC'), 'session-b')).toBeNull();
     const fresh = evidence('session-b');
     expect(retainEvidence(old, fresh, 'session-b')).toBe(fresh);
+  });
+});
+
+describe('vehicle rows before and after a plate reading', () => {
+  const row: NonNullable<RecognitionStatus['vehicles_seen']>[number] = {
+    key: '0-12', track_id: '12', vehicle_class: 'car', confidence: .8,
+    first_ms: 100, last_ms: 100, observations: 0, state: 'reading',
+    masked_plate: null, watchlist: null,
+  };
+  const visual: RecognitionEvidence['vehicles'][number] = {
+    ...row, reading: 'GJ01AB1234', thumb: null,
+  };
+
+  it('gives a newly tracked vehicle a visible placeholder immediately without waiting for OCR', () => {
+    expect(vehicleEvidence(row, null)).toBeUndefined();
+    expect(vehicleReadingLabel(row, undefined, 'processing')).toBe('Reading plate…');
+    expect(row.observations).toBe(0);
+    expect(row.masked_plate).toBeNull();
+  });
+
+  it('updates the same row when a reading arrives and keeps it visible after EOF', () => {
+    const evidence: RecognitionEvidence = {
+      source_mode: 'recorded', session_id: 's-1', video_position_ms: 500, frame: null, vehicles: [visual],
+    };
+    const matched = vehicleEvidence(row, evidence);
+    expect(matched).toBe(visual);
+    expect(vehicleReadingLabel(row, matched, 'processing')).toBe('GJ01AB1234');
+    expect(vehicleReadingLabel(row, matched, 'completed')).toBe('GJ01AB1234');
+    expect(row.key).toBe('0-12');
+    expect(row.state).toBe('reading'); // Displaying text never changes acceptance.
+  });
+
+  it('keeps no-text vehicles at EOF with a clear missing-reading label', () => {
+    expect(vehicleReadingLabel(row, undefined, 'completed')).toBe('No plate reading');
+    expect(vehicleReadingLabel(row, undefined, 'paused')).toBe('Plate reading paused');
+  });
+
+  it('uses the existing masked reading if full recorded evidence is unavailable', () => {
+    expect(vehicleReadingLabel({ ...row, masked_plate: 'GJ******34' }, undefined, 'completed')).toBe('GJ******34');
+    expect(recognitionLabel('model_accepted')).toBe('Model-accepted · unverified');
+  });
+
+  it('uses the scene-aware row key so a reused track ID cannot borrow another scene reading', () => {
+    const evidence: RecognitionEvidence = {
+      source_mode: 'recorded', session_id: 's-1', video_position_ms: 500, frame: null,
+      vehicles: [{ ...visual, key: '1-12', reading: 'OTHER' }, visual],
+    };
+    expect(vehicleEvidence(row, evidence)).toBe(visual);
+    expect(vehicleEvidence({ ...row, key: '2-12' }, evidence)).toBeUndefined();
+    expect(vehicleReadingLabel(row, vehicleEvidence({ ...row, key: '2-12' }, evidence), 'processing')).toBe('Reading plate…');
+    const legacy = { ...visual, key: undefined };
+    expect(vehicleEvidence(row, { ...evidence, vehicles: [legacy] })).toBe(legacy);
+  });
+
+  it('only opens the newest scene row for a track-ID-only Inspector', () => {
+    const newest = { ...row, key: '1-12' };
+    const otherTrack = { ...row, key: '0-13', track_id: '13' };
+    const rows = [newest, otherTrack, row];
+    expect(vehicleIsInspectable(newest, rows)).toBe(true);
+    expect(vehicleIsInspectable(row, rows)).toBe(false);
+    expect(vehicleIsInspectable(otherTrack, rows)).toBe(true);
+    expect(vehicleIsInspectable(row, [])).toBe(false);
+  });
+
+  it('keeps legacy unique rows inspectable and disables older unkeyed duplicates', () => {
+    const newest = { ...row, key: undefined };
+    const older = { ...row, key: undefined };
+    expect(vehicleIsInspectable(newest, [newest])).toBe(true);
+    expect(vehicleIsInspectable(newest, [newest, older])).toBe(true);
+    expect(vehicleIsInspectable(older, [newest, older])).toBe(false);
+    expect(vehicleIsInspectable(row, [newest, row])).toBe(false);
   });
 });

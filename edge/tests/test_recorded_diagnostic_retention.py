@@ -25,6 +25,33 @@ def evidence(track_id='204', state='model_accepted'):
 
 
 class RecordedDiagnosticRetentionTests(unittest.TestCase):
+    def test_selected_uncertain_window_stays_coherent_when_current_guess_weakens(self):
+        state = self.state()
+        passed = [dict(key='0-204', track_id='204', state='uncertain', reading='GJ01AB1234')]
+        self.publish(state, [evidence(state='uncertain')], passed=passed)
+        weaker = evidence(state='uncertain')
+        weaker['best_guess']['plate'] = 'GJ01AB1235'
+        weaker['frames'][0]['text'] = 'GJ01AB1235'
+        self.publish(state, [weaker], passed=passed, video_position_ms=900)
+        view = self.view(state)
+        self.assertEqual(view['video_position_ms'], 500)
+        self.assertEqual(view['track']['best_reading'], 'GJ01AB1234')
+        self.assertEqual(view['track']['frames'][0]['text'], 'GJ01AB1234')
+        self.assertIn('Archived recorded evidence', view['track']['gate_reasons'][-1])
+        passed[0]['reading'] = 'GJ01AB1235'
+        self.publish(state, [weaker], passed=passed, video_position_ms=900)
+        self.assertEqual(self.view(state)['track']['best_reading'], 'GJ01AB1235')
+
+    def test_evicted_stronger_window_does_not_borrow_current_weaker_evidence(self):
+        state = self.state()
+        passed = [dict(key='0-204', track_id='204', state='uncertain', reading='GJ01AB1234')]
+        self.publish(state, [evidence(state='uncertain')], passed=passed)
+        state._clear_diagnostics()
+        weaker = evidence(state='uncertain')
+        weaker['best_guess']['plate'] = 'GJ01AB1235'
+        self.publish(state, [weaker], passed=passed, video_position_ms=900)
+        self.assert_unavailable(state, '204')
+
     def setUp(self):
         self.now = [1000.]
 
@@ -220,6 +247,11 @@ class RecordedDiagnosticRetentionTests(unittest.TestCase):
                 degraded = evidence(state='unreadable')
                 degraded.update(best_guess=None, candidates=[], frames=[], observations=0)
                 self.publish(state, [degraded], passed=[newest, original], video_position_ms=900)
+                if newest['reading']:
+                    # The selected new answer has no matching retained window;
+                    # don't present a different active window as its evidence.
+                    self.assert_unavailable(state, '204')
+                    continue
                 view = self.view(state)
                 self.assertEqual(view['video_position_ms'], 900)
                 self.assertEqual(view['track']['recognition_state'], 'unreadable')
