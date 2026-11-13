@@ -45,6 +45,9 @@ Push-Location $projectRoot
 try {
     $env:RECORDED_DETECTOR_PROFILE = $DetectorProfile
     $env:SENTINEL_CPU_THREADS = "$CpuThreads"
+    # Device selection applies to the optional text detector too. A CPU launch
+    # must not inherit a GPU-only text stage from an older local .env.
+    $env:SENTINEL_TEXT_DETECTOR_DEVICE = $Device
     $env:SENTINEL_RECORDED_UNPACED = if ($Unpaced) { 'true' } else { 'false' }
     $buildArgs = @('--build')
     if ($SkipBuild) { $buildArgs = @() }
@@ -59,6 +62,13 @@ try {
         }
         & $dockerExecutable @composeArgs run --rm --no-deps -T -e "RECORDED_DETECTOR_PROFILE=$DetectorProfile" --entrypoint python recorded-analysis /workspace/tools/run_ocr_research.py /workspace/tools/check_gpu_runtime.py
         if ($LASTEXITCODE -ne 0) { throw 'GPU preflight failed; current session was not replaced. Use -Device cpu or repair NVIDIA/WSL support.' }
+    } else {
+        if (!$SkipBuild) {
+            & $dockerExecutable @composeArgs build recorded-analysis
+            if ($LASTEXITCODE -ne 0) { throw 'CPU image build failed; current session was not replaced.' }
+        }
+        & $dockerExecutable @composeArgs run --rm --no-deps -T -e "RECORDED_DETECTOR_PROFILE=$DetectorProfile" --entrypoint python recorded-analysis /workspace/tools/run_ocr_research.py /workspace/tools/check_model_runtime.py --device cpu --detector-profile $DetectorProfile
+        if ($LASTEXITCODE -ne 0) { throw 'CPU model preflight failed; current session was not replaced. Check the restored model/runtime assets.' }
     }
     # The API is rebuilt with the service: an older API would reject recorded events.
     & $dockerExecutable @composeArgs up -d @buildArgs api dashboard recorded-analysis

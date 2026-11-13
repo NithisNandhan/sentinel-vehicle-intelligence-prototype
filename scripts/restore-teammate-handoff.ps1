@@ -3,7 +3,8 @@ param(
     [switch]$SkipTraining,
     [switch]$SkipBenchmarks,
     [switch]$SkipModels,
-    [switch]$SkipCentral
+    [switch]$SkipCentral,
+    [switch]$ModelsOnly
 )
 $ErrorActionPreference = 'Stop'
 $projectRoot = Split-Path -Parent $PSScriptRoot
@@ -11,7 +12,10 @@ Set-Location -LiteralPath $projectRoot
 $assets = (Resolve-Path -LiteralPath $AssetsPath).Path
 $tools = Join-Path $projectRoot 'tools'
 $restored = Join-Path $projectRoot 'data\handoff-restored'
-if (-not (Test-Path -LiteralPath (Join-Path $projectRoot '.env'))) {
+if ($ModelsOnly -and $SkipModels) {
+    throw '-ModelsOnly cannot be combined with -SkipModels.'
+}
+if (-not $ModelsOnly -and -not (Test-Path -LiteralPath (Join-Path $projectRoot '.env'))) {
     throw 'Run scripts/init-env.ps1 first. Do not copy the original laptop credentials.'
 }
 function Run-Docker {
@@ -19,12 +23,22 @@ function Run-Docker {
     & docker @DockerArgs
     if ($LASTEXITCODE -ne 0) { throw 'Docker handoff step failed. Existing data has not been deliberately overwritten.' }
 }
-if (-not $SkipCentral) {
+if (-not $ModelsOnly -and -not $SkipCentral) {
     $apiContainer = & docker compose ps -q api
     if ($apiContainer) { throw 'Restore central events before starting the API, on a fresh installation only.' }
 }
-Run-Docker -DockerArgs @('compose','--profile','offline','build','api','dashboard','demo-simulator')
-$helper = 'sentinel-prototype-api:latest'
+if ($ModelsOnly) {
+    # Plain Python suffices for extraction: no app build, database or secrets.
+    foreach ($name in @('model-cache', 'alpr-cache')) {
+        if (-not (Test-Path -LiteralPath (Join-Path $assets "$name.manifest.json"))) {
+            throw "Missing manifest: $name"
+        }
+    }
+    $helper = 'python:3.11-slim'
+} else {
+    Run-Docker -DockerArgs @('compose','--profile','offline','build','api','dashboard','demo-simulator')
+    $helper = 'sentinel-prototype-api:latest'
+}
 function Restore-Archive {
     param([string]$Name, [string]$Volume)
     $manifest = Join-Path $assets "$Name.manifest.json"
@@ -46,6 +60,12 @@ function Restore-Archive {
 if (-not $SkipModels) {
     Restore-Archive -Name 'model-cache' -Volume 'sentinel-prototype_model_cache'
     Restore-Archive -Name 'alpr-cache' -Volume 'sentinel-prototype_alpr_cache'
+}
+if ($ModelsOnly) {
+    Write-Host 'Model/runtime archives restored into empty model-cache and alpr-cache volumes.'
+    Write-Host 'No events, training data, presentations or application services were restored or started.'
+    Write-Host 'Next: initialise local settings, register permitted footage and run scripts/start-recorded-analysis.ps1 -Device cpu.'
+    return
 }
 if (-not $SkipTraining) {
     Restore-Archive -Name 'detector-training' -Volume 'sentinel_detector_training'
@@ -77,5 +97,5 @@ if (-not $SkipCentral) {
     Run-Docker -DockerArgs @('compose','up','-d','api','dashboard','mediamtx')
 }
 Write-Host "Handoff restored. Supplemental files: $restored"
-Write-Host 'Operator dashboard: http://127.0.0.1:5173/ (unlock with your new local operator key)'
-Write-Host 'Recorded-video dashboard integration is the next task; no Sentinel credentials were restored.'
+Write-Host 'Operator dashboard: http://127.0.0.1:5173/ (trusted local access; no manual unlock)'
+Write-Host 'Recorded-video analysis is available: register permitted footage, start scripts/start-recorded-analysis.ps1 -Device cpu, then choose the recording and Start analysis.'

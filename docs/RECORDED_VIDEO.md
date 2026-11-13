@@ -6,8 +6,10 @@ multi-frame fusion, reconstruction and acceptance gate are the same code. Only
 the source of frames changes, and everything it produces is labelled
 `recorded`.
 
-This document describes what is built. It makes no accuracy claim. No
-measurement on real recorded footage has been made yet.
+This document describes the recorded-source workflow. Later measured checks are
+linked from the [current handoff](CURRENT_HANDOFF_20261113.md) and
+[GPU validation](RECORDED_GPU_VALIDATION.md); they do not establish general CCTV
+recognition accuracy.
 
 ## What you need
 

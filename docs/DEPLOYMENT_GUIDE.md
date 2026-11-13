@@ -1,5 +1,9 @@
 # Deployment guide
 
+This guide records the earlier candidate-profile implementation and its test
+boundaries. For current source selection, restoration and recorded-video setup,
+start with [the current handoff](CURRENT_HANDOFF_20261113.md).
+
 Nothing here was run against Docker in the build container (no daemon). Commands are the repository's existing ones plus
 the new settings; the Python/Node test commands were run.
 

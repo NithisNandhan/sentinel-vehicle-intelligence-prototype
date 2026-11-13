@@ -32,7 +32,12 @@ RECORDED_STALE_SECONDS = 30
 
 
 class LiveState:
-    def __init__(self, clock=time.monotonic):
+    def __init__(self, clock=time.monotonic, *, recorded_diagnostics=False,
+                 diagnostic_max_tracks=32, diagnostic_max_bytes=16*1024*1024):
+        from collections import OrderedDict
+        if (type(diagnostic_max_tracks) is not int or not 1 <= diagnostic_max_tracks <= 32
+                or type(diagnostic_max_bytes) is not int or not 1 <= diagnostic_max_bytes <= 16*1024*1024):
+            raise ValueError('Recorded diagnostic retention exceeds its RAM budget')
         self.clock = clock
         self.lock = threading.RLock()
         self.camera_id = None
@@ -49,6 +54,84 @@ class LiveState:
         # Opt-in (SENTINEL_STRICT_PLAYBACK): refuse pause/resume on a finished run
         # instead of silently doing nothing.
         self.strict_playback = False
+        # Explicit recorded-only opt-in. Encoded, allowlisted diagnostic DTOs
+        # are immutable copies, never tracker state, thumbnails or disk files.
+        self.recorded_diagnostics = bool(recorded_diagnostics)
+        self.diagnostic_max_tracks = diagnostic_max_tracks
+        self.diagnostic_max_bytes = diagnostic_max_bytes
+        self._retained_diagnostics = OrderedDict()
+        self._retained_diagnostic_bytes = 0
+
+    def _clear_diagnostics(self):
+        self._retained_diagnostics.clear()
+        self._retained_diagnostic_bytes = 0
+
+    def _retain_diagnostics(self, value):
+        if not self.recorded_diagnostics or self.camera_id not in self.recordings or not self.session_id:
+            self._clear_diagnostics()
+            return
+        from .unified_diagnostics import DiagnosticUnavailable, diagnostic_view, passed_track_identity
+        debug = value.get('debug')
+        tracks = debug.get('tracks') if isinstance(debug, dict) else None
+        snapshot = dict(value, source_mode='recorded', session_id=self.session_id)
+        # Oldest first so the most recently seen entries survive a full cache.
+        for track in reversed((tracks if isinstance(tracks, list) else [])[:512]):
+            if not isinstance(track, dict):
+                continue
+            track_id = track.get('track_id')
+            try:
+                view = diagnostic_view(snapshot, {}, self.session_id, track_id, enabled=True)
+            except DiagnosticUnavailable:
+                continue
+            clean_track = view['track']
+            passed = passed_track_identity(snapshot, track_id)
+            passed_key = passed['key'] if passed is not None else None
+            view['_passed_key'] = passed_key
+            rich = any(frame.get('image') or frame.get('working_image') for frame in clean_track['frames'])
+            rich |= bool((clean_track.get('reconstruction') or {}).get('image'))
+            # describe_track limits image-bearing active histories. A metadata-
+            # identical update without images adds no newer OCR evidence. Keep
+            # the earlier whole DTO and its truthful capture time, not a mixture
+            # of old crops and a new reading. Any changed evidence replaces it.
+            signature = hashlib.sha256(json.dumps({key: item for key, item in clean_track.items()
+                if key not in ('frames', 'seen_pts_ms', 'vehicle_box')},
+                sort_keys=True, separators=(',', ':')).encode()).digest()
+            previous = self._retained_diagnostics.get(track_id)
+            if (previous is not None and previous[2][0] and passed is not None
+                    and previous[4] == passed_key and passed['state'] == 'model_accepted'
+                    and previous[5] is not None and passed['reading'] == previous[5]
+                    and (clean_track['recognition_state'] != 'model_accepted'
+                         or not clean_track.get('best_reading')
+                         or (not rich and previous[2][1]
+                             and clean_track['best_reading'] == previous[5]))):
+                # The operator row still describes this exact prior acceptance.
+                # Keep its whole coherent DTO when the rolling OCR window ages
+                # out. The diagnostic adapter explicitly labels this archive.
+                self._retained_diagnostics.move_to_end(track_id)
+                continue
+            if previous is not None and previous[2][1] and not rich and previous[3] == signature:
+                if previous[4] == passed_key:
+                    self._retained_diagnostics.move_to_end(track_id)
+                    continue
+            payload = json.dumps(view, allow_nan=False, separators=(',', ':'))
+            size = len(payload.encode('utf-8'))
+            previous = self._retained_diagnostics.pop(track_id, None)
+            if previous is not None:
+                self._retained_diagnostic_bytes -= previous[1]
+            if size > self.diagnostic_max_bytes:
+                continue
+            priority = (clean_track['recognition_state'] == 'model_accepted', rich)
+            self._retained_diagnostics[track_id] = (payload, size, priority, signature,
+                                                    passed_key, clean_track.get('best_reading'))
+            self._retained_diagnostic_bytes += size
+            while (len(self._retained_diagnostics) > self.diagnostic_max_tracks
+                   or self._retained_diagnostic_bytes > self.diagnostic_max_bytes):
+                # Preserve accepted rows where possible, then use oldest-update
+                # eviction. Exhaustion remains an explicit missing-evidence 404.
+                lowest = min(entry[2] for entry in self._retained_diagnostics.values())
+                victim = next(key for key, entry in self._retained_diagnostics.items() if entry[2] == lowest)
+                old_size = self._retained_diagnostics.pop(victim)[1]
+                self._retained_diagnostic_bytes -= old_size
 
     def _selectable(self, camera_id):
         return camera_id in self.allowed_ids or camera_id in self.recordings
@@ -61,13 +144,18 @@ class LiveState:
 
     def authorise_recordings(self, recordings):
         with self.lock:
+            previous = self.recordings.get(self.camera_id)
             self.recordings = dict(recordings)
             if self.camera_id and not self._selectable(self.camera_id):
                 self.select(None)
+            elif self.camera_id and self.recordings.get(self.camera_id) != previous:
+                # Reusing a catalogue ID for a changed source is a new run too.
+                self._begin(self.camera_id)
 
     def _begin(self, camera_id, start_ms=0):
         """Start a new capture generation; the old one stops and its evidence goes."""
         self.capture_stop.set()
+        self._clear_diagnostics()
         self.capture_stop = threading.Event()
         self.camera_id = camera_id
         self.start_ms = start_ms
@@ -137,6 +225,7 @@ class LiveState:
             if (self.camera_id == value.get('camera_id') and
                     (capture_stop is None or capture_stop is self.capture_stop)):
                 self.value = value
+                self._retain_diagnostics(value)
 
     def heartbeat(self, camera_id):
         with self.lock:
@@ -147,6 +236,7 @@ class LiveState:
     def snapshot(self, *, engineering=False):
         with self.lock:
             result = dict(self.value)
+            result.pop('_retained_recorded_diagnostics', None)
             recording = self.recordings.get(self.camera_id)
             limit = RECORDED_STALE_SECONDS if recording else LIVE_STALE_SECONDS
             if not engineering:
@@ -170,6 +260,11 @@ class LiveState:
                               time_basis=recording.public()['time_basis'])
                 if self.paused.is_set() and result.get('status') in ('processing', 'connecting'):
                     result['status'] = 'paused'
+            if not self.recorded_diagnostics or not recording:
+                self._clear_diagnostics()
+            elif engineering and result.get('frame_age_seconds', 0.) <= limit:
+                result['_retained_recorded_diagnostics'] = {
+                    key: value[0] for key, value in self._retained_diagnostics.items()}
             return result
 
     def operator_snapshot(self):
@@ -527,7 +622,7 @@ def serve(config, cache, checkpoint, port=7780, lifetime=1800, bind_host='127.0.
         raise ValueError('Explicit CPU/GPU device required')
     if recordings_dir is not None and not detector_profile:
         raise ValueError('Recorded analysis needs a tracked detector profile')
-    state, shutdown = LiveState(), threading.Event()
+    state, shutdown = LiveState(recorded_diagnostics=dashboard_evidence), threading.Event()
     state.strict_playback = os.getenv('SENTINEL_STRICT_PLAYBACK', '').lower() == 'true'
     identity = {}
     library = None

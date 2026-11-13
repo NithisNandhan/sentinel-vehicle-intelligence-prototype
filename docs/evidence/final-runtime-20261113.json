@@ -1,0 +1,235 @@
+{
+  "schema_version": 1,
+  "date": "2026-11-13",
+  "source_baseline_commit": "a9bc5a0e7172763030d6c7b98d5b4e6e36383096",
+  "notice": "Measured integration evidence with working-tree fixes; not a full-video recognition accuracy score. No plate strings, images or credentials included.",
+  "gpu_first_run": {
+    "session_id": "s-20261113T043933-fcdc83b4",
+    "status": "completed",
+    "decoded_frames": 928,
+    "analysed_frames": 62,
+    "plate_crops": 184,
+    "unique_model_accepted_unverified": 3,
+    "last_sample_position_ms": 30500,
+    "recording_duration_ms": 30933,
+    "outbox_depth": 0,
+    "pause_resume": {
+      "same_session_preserved": true,
+      "paused_sample_count": 46,
+      "paused_position_ms": 22500,
+      "stable_across_two_checks": true
+    },
+    "recognition_accuracy": null,
+    "notice": "Three model-accepted identifiers are not three independently verified correct plates."
+  },
+  "human_reference_check": {
+    "session_id": "s-20261113T043933-fcdc83b4",
+    "central_sightings": 3,
+    "unique_identifiers": 3,
+    "matching_reviewed_reference_numbers": [
+      16,
+      17
+    ],
+    "identifiers_not_in_reviewed_reference_set": 1,
+    "central_alerts": 0,
+    "all_sources_recorded": true,
+    "notice": "Only18reviewedreferences available; an identifier outside that set is not automatically incorrect."
+  },
+  "cpu_baseline": {
+    "schema_version": 1,
+    "check": "full_recorded_inference_eof_not_accuracy",
+    "completed_eof": true,
+    "recording_sha256": "3ebc885f748271564703c658ba3e04b12b36ed56fa03d15dc47013c41e8e4f54",
+    "recording_duration_ms": 20500,
+    "decoded_frames": 615,
+    "last_decoded_pts_ms": 20467,
+    "published_samples": 41,
+    "source_discontinuities": 0,
+    "backward_pts": 0,
+    "duplicate_pts": 0,
+    "profile": "general",
+    "device": "cpu",
+    "models": {
+      "ocr_model": "awiros-ctc-adapted",
+      "ocr_checkpoint_sha256": "c2ba896d994b174071c95ace0f5ffc8a61cec3fc6eecce8f0bc5feb7dec4456d",
+      "ocr_device": "cpu",
+      "detector_profile": "general",
+      "vehicle_model": "yolo26s",
+      "vehicle_model_sha256": "646f8bc3fe0a656803d95c294f7852321748cb29d13466a1af8862e2db384a1b",
+      "plate_model": "parent",
+      "plate_model_sha256": "746fdd358ec110418775d7c9d8d07910d48b1a21471f92bf4421f6510d6daade",
+      "plate_device": "cpu",
+      "vehicle_device": "cpu",
+      "detector_device": "cpu"
+    },
+    "load_seconds": 11.425,
+    "inference_seconds": 10.608,
+    "counts": {
+      "analysed_frames": 41,
+      "unique_model_accepted_unverified": 0
+    },
+    "last_sample_position_ms": 20000,
+    "central_events_sent": 0,
+    "notice": "Unpaced permitted recording; models execute on declared device. Model accepts are unverified; no strings/images saved."
+  },
+  "cpu_quality_dashboard": {
+    "session_id": "s-20261113T051736-ce2d9dfa",
+    "status": "completed",
+    "profile": "general_quality",
+    "device": "cpu",
+    "recording_sha256": "6b7064605b3d4d12c6c1da4566cbcec1cd2e3e3bd7b77814865fe9df22045f65",
+    "decoded_frames": 928,
+    "analysed_frames": 62,
+    "plate_crops": 181,
+    "unique_model_accepted_unverified": 3,
+    "last_sample_position_ms": 30500,
+    "outbox_depth": 0,
+    "central_sightings": 3,
+    "unique_central_identifiers": 3,
+    "source_modes": [
+      "recorded"
+    ],
+    "end_to_end_upper_bound_seconds": 581,
+    "timing_notice": "Session creation to first observed completion includes startup and polling delay."
+  },
+  "inspector_after_eof": [
+    {
+      "track_id": "280",
+      "http": 200,
+      "has_reading": true,
+      "native_images": 5,
+      "archived": false,
+      "capture_position_ms": 30500
+    },
+    {
+      "track_id": "243",
+      "http": 200,
+      "has_reading": true,
+      "native_images": 6,
+      "archived": true,
+      "capture_position_ms": 26000
+    },
+    {
+      "track_id": "204",
+      "http": 200,
+      "has_reading": true,
+      "native_images": 6,
+      "archived": true,
+      "capture_position_ms": 27500
+    }
+  ],
+  "recorded_demo_alert": {
+    "id": 16,
+    "status": "resolved",
+    "audit_actions": [
+      "acknowledged",
+      "resolved"
+    ],
+    "survived_api_restart": true,
+    "demo_watchlist_entry_id": 2,
+    "demo_watchlist_active": false
+  },
+  "synthetic_recovery": {
+    "kind": "seeded-watchlist-replay",
+    "data": "SYNTHETIC scripted passages; not real-world validation",
+    "metrics": {
+      "cases": 8,
+      "events_queued": 11,
+      "events_redelivered_for_idempotency": 11,
+      "missed_confirmed_alerts": {
+        "count": 0,
+        "of": 2
+      },
+      "false_confirmed_alerts": {
+        "count": 0,
+        "of": 6
+      },
+      "duplicate_alerts": 0,
+      "alerts_changed_by_redelivery": 0,
+      "delivery_failures": 0,
+      "queued_while_central_down": 11,
+      "outbox_depth_at_end": 0,
+      "dead_letters": 0,
+      "alerts_total": 2,
+      "reviews_pending": 0,
+      "alerts_from_pending_reviews": 0,
+      "result_states_persisted": {
+        "confirmed": 3,
+        "partial": 3,
+        "unreadable": 2
+      },
+      "result_events_expected": 8,
+      "result_events_persisted": 8,
+      "partial_matching": {
+        "enabled": false,
+        "review_recall": "not applicable",
+        "review_precision": "not applicable",
+        "false_review_leads": "not applicable"
+      },
+      "per_case": [
+        {
+          "id": "watched-clean",
+          "expected_state": "confirmed",
+          "actual_states": [
+            "confirmed"
+          ]
+        },
+        {
+          "id": "watched-clean-2",
+          "expected_state": "confirmed",
+          "actual_states": [
+            "confirmed"
+          ]
+        },
+        {
+          "id": "unwatched-clean",
+          "expected_state": "confirmed",
+          "actual_states": [
+            "confirmed"
+          ]
+        },
+        {
+          "id": "watched-partial",
+          "expected_state": "partial",
+          "actual_states": [
+            "partial"
+          ]
+        },
+        {
+          "id": "unwatched-partial",
+          "expected_state": "partial",
+          "actual_states": [
+            "partial"
+          ]
+        },
+        {
+          "id": "partial-false-lead",
+          "expected_state": "partial",
+          "actual_states": [
+            "partial"
+          ]
+        },
+        {
+          "id": "unreadable",
+          "expected_state": "unreadable",
+          "actual_states": [
+            "unreadable"
+          ]
+        },
+        {
+          "id": "length-disputed-watched",
+          "expected_state": null,
+          "actual_states": [
+            "unreadable"
+          ]
+        }
+      ]
+    }
+  },
+  "regressions": {
+    "passed": 201,
+    "skipped": 1,
+    "skip_reason": "Central schema dependencies unavailable inside the CPU worker image; API router tests passed separately."
+  },
+  "gpu_runtime_fault": "After earlier successful GPU runs, WSL NVIDIA hook reported no adapters. CPU fallback activated; GPU is not currently ready."
+}

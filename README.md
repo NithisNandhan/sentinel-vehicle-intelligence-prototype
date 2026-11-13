@@ -6,6 +6,15 @@ The current prototype combines **Analyse, Alerts, and Watchlist** with a per-tra
 
 **Status:** the recorded-video pipeline and unified dashboard are implemented, with documented interface, integration, and runtime checks. Reliable recognition across varied CCTV scenes remains under evaluation. This is a trusted local-computer prototype, not a finished public surveillance service.
 
+**Current source:** use `codex/enable-text-cropping` for the latest tested work;
+the GitHub default branch is an older integration point. See the
+[current handoff checklist](docs/CURRENT_HANDOFF_20261113.md) for the source/model
+restore boundaries and CPU-only setup.
+
+The [13 November validation record](docs/FINAL_VALIDATION_20261113.md) covers
+complete recorded runs, the Inspector retention fix, actual CPU model execution,
+alert/audit persistence, recovery checks and the current GPU/WSL limitation.
+
 ## Architecture
 
 ```mermaid
@@ -61,6 +70,7 @@ One shared recognition session continues across dashboard navigation. Full image
 | Unified dashboard validation, 30 October 2026 | 103 backend tests, 31 frontend tests, 87 focused worker tests, and 15 browser workflow checks passed; one worker test skipped | Interface, access controls, and session behavior; browser checks use synthetic fixtures |
 | Bounded CPU/GPU comparison, 15 October 2026 | Three sampled frames took 13.592 seconds on CPU and 4.573 seconds on GPU, a 2.97× aggregate inference speedup | One permitted Polish-plate clip on an RTX 3050 Laptop GPU; not full-video FPS or end-to-end latency |
 | Experimental Indian OCR output-layer adaptation | Whole-plate exact reads remained 9/10 before and after adaptation; character errors fell from 2/92 to 1/92 | Ten held-out still-image registrations for this pilot, not general CCTV accuracy |
+| Protected native-view plate search, 12 November 2026 | Reference detections increased 10/18 to 11/18 and exact readings 7/18 to 8/18 | 149 automatic vehicle regions at 14 selected Mumbai timestamps; single-frame development diagnostic, with extra compute and unmatched predictions |
 
 The completed GPU replay accepted **zero identifiers** on that foreign-plate clip. The OCR pilot's temporal acceptance result also remained unchanged: 13 correct accepts, no wrong accepts, and 8 abstentions across 21 degraded conditions from **one vehicle passage**. These conditions are not 21 independent vehicles.
 
@@ -75,7 +85,7 @@ Requirements: **Git, Windows PowerShell, Docker Desktop with Linux containers/WS
 ### 1. Clone and initialise local settings
 
 ```powershell
-git clone https://github.com/NithisNandhan/sentinel-vehicle-intelligence-prototype.git
+git clone --branch codex/enable-text-cropping https://github.com/NithisNandhan/sentinel-vehicle-intelligence-prototype.git
 cd sentinel-vehicle-intelligence-prototype
 .\scripts\check-prereqs.ps1
 .\scripts\init-env.ps1
@@ -87,22 +97,26 @@ The initialisation script generates local database, service, and HMAC keys in th
 
 **A clone does not include the recognition models or prepared OCR runtime.** The recorded worker does not download them automatically. Follow the [handoff asset guide](docs/TEAMMATE_HANDOFF.md) and use the published [handoff release](https://github.com/NithisNandhan/sentinel-vehicle-intelligence-prototype/releases/tag/handoff-2026-10-07).
 
-For the selected restore below, download **every manifest and matching multipart file** for these four bundles into `data/handoff-assets/`:
+For a new recorded-video installation, download **every manifest and matching
+multipart file** for these two bundles into `data/handoff-assets/`:
 
 - `model-cache`
 - `alpr-cache`
-- `saved-events`
-- `presentation-assets`
 
-The restore script requires the last two bundles as well, even when training and benchmark data are skipped. It verifies archive hashes and uses non-overwrite guards. Use a fresh installation; do not apply this restore over an existing populated database. If the model volumes and local configuration are already restored, skip this step.
+The model-only restore verifies archive hashes and refuses to overwrite populated
+model volumes. It does not import historical events or require presentation,
+training or benchmark archives. If the model volumes and local configuration
+are already restored, skip this step.
 
 ```powershell
-.\scripts\restore-teammate-handoff.ps1 -AssetsPath .\data\handoff-assets -SkipTraining -SkipBenchmarks
+.\scripts\restore-teammate-handoff.ps1 -AssetsPath .\data\handoff-assets -ModelsOnly
 ```
 
-The restore imports historical metadata into the empty database. Newly generated HMAC keys do not match the archived keyed identifiers: old alerts remain viewable, but new plaintext inputs cannot reproduce those historical identifiers. Add your own permitted test entries for a new run.
-
-The release captures an older system snapshot. Some handoff text and restore completion messages describe the earlier two-interface/unlock workflow; use the single-dashboard instructions below for the current interface.
+The model release is an older snapshot that contains the currently used parent
+plate, vehicle and adapted OCR weights. Current source comes from the branch
+above. Importing historical events is optional and uses the legacy full restore;
+new HMAC keys cannot reproduce archived identifiers. Start with fresh local
+watchlist entries for a new run.
 
 ### 3. Register footage you have permission to use
 
@@ -129,6 +143,14 @@ $env:DASHBOARD_RECORDED_EVIDENCE = 'true'
 Open **http://127.0.0.1:5173/**, select your registered recording, and press **Start analysis**. There is no manual unlock step. Omit `-SkipBuild` on the first launch; use it only when the required images are already built.
 
 For a compatible NVIDIA setup, replace `-Device cpu` with `-Device gpu`. GPU mode validates actual model execution before switching the service and refuses unavailable GPU providers. CPU decoding, reconstruction, and other work can still limit overall speed.
+
+The optional `-DetectorProfile general_quality -Unpaced` profile preserves
+original detections and searches extra native views. It uses the same cached
+weights, costs more processing time, and produces more candidates for review.
+Its selected-frame results are in the
+[quality-search report](docs/PLATE_QUALITY_ADAPTATION_20261112.md). The default
+`general` profile remains the rollback option; CPU quality-profile speed is not
+established by those GPU measurements.
 
 Use the dashboard's **Stop** control to end the analysis session. To stop the recorded worker container:
 
@@ -161,7 +183,8 @@ Worker model checks and browser fixture tests have additional runtime requiremen
 
 - Evaluate varied, independently labelled recordings with vehicle/scene separation and a frozen held-out split.
 - Measure full-video runtime, wrong accepted readings, abstentions, and vehicle/plate coverage; improve the stage supported by that evidence.
-- Address the rejected-event retry behavior, which can block the delivery queue when the central API rejects an event.
+- Validate dead-letter handling and recovery in the complete deployed workflow;
+  permanently rejected events are moved aside by the implemented outbox logic.
 - Extend recorded-session health reporting and complete a fresh end-to-end release/handoff check.
 
 The current dashboard processes one recording at a time. Maps, route search, regional statistics, and live-catalogue navigation are outside this interface. Historical live-camera adapters remain in the repository but are not part of this quick start. No production-scale or general live-recognition claim is made.

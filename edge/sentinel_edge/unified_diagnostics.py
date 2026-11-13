@@ -110,6 +110,51 @@ def _reconstruction(value):
             "candidates": _candidates(value.get("candidates"))}
 
 
+def passed_track_identity(snapshot, track_id):
+    """Newest run-list row for an ID, including its scene-segment identity.
+
+    The engineering running list is newest-first. Its reading is used only to
+    authorize a previously observed accepted DTO, never to create OCR evidence.
+    """
+    debug = snapshot.get('debug')
+    rows = debug.get('passed') if isinstance(debug, dict) else None
+    row = next((item for item in (rows if isinstance(rows, list) else [])[:512]
+                if isinstance(item, dict) and item.get('track_id') == track_id), None)
+    if row is None:
+        return None
+    key = row.get('key')
+    if not isinstance(key, str) or not IDENTIFIER.fullmatch(key):
+        return None
+    return dict(key=key, reading=_plate(row.get('reading')), state=row.get('state'))
+
+
+def _retained_view(snapshot, session_id, camera_id, track_id):
+    cache = snapshot.get('_retained_recorded_diagnostics')
+    payload = cache.get(track_id) if isinstance(cache, dict) else None
+    if not isinstance(payload, str) or len(payload) > MAX_DIAGNOSTICS_BYTES:
+        return None
+    try:
+        candidate = json.loads(payload)
+    except (ValueError, TypeError):
+        return None
+    if (not isinstance(candidate, dict) or candidate.get('source_mode') != 'recorded'
+            or candidate.get('session_id') != session_id or candidate.get('camera_id') != camera_id
+            or not isinstance(candidate.get('track'), dict)
+            or candidate['track'].get('track_id') != track_id):
+        return None
+    key = candidate.get('_passed_key')
+    if key is not None:
+        latest = passed_track_identity(snapshot, track_id)
+        if latest is None or latest['key'] != key:
+            return None
+        if (candidate['track'].get('recognition_state') == 'model_accepted'
+                and (not _plate(candidate['track'].get('best_reading'))
+                     or latest['state'] != 'model_accepted'
+                     or latest['reading'] != candidate['track'].get('best_reading'))):
+            return None
+    return candidate
+
+
 def diagnostic_view(snapshot, models, session_id, track_id, *, enabled):
     """Fresh allowlisted DTO for one requested track. No upstream dict escapes."""
     if not enabled or snapshot.get("source_mode") != "recorded":
@@ -126,10 +171,32 @@ def diagnostic_view(snapshot, models, session_id, track_id, *, enabled):
     tracks = debug.get("tracks") if isinstance(debug, dict) else None
     selected = next((row for row in (tracks if isinstance(tracks, list) else [])[:512]
                      if isinstance(row, dict) and row.get("track_id") == track_id), None)
+    retained, cached = None, _retained_view(snapshot, session_id, camera_id, track_id)
+    prefer_accepted = False
+    if selected is not None and cached is not None and cached.get('_passed_key') is not None:
+        old = cached['track']
+        best = selected.get('best_guess') if isinstance(selected.get('best_guess'), dict) else {}
+        has_images = any(isinstance(row, dict) and (_png(row.get('image'), 80_000)
+                                                   or _png(row.get('working_image'), 80_000))
+                         for row in (selected.get('frames') if isinstance(selected.get('frames'), list) else [])[:8])
+        prefer_accepted = (old.get('recognition_state') == 'model_accepted'
+            and (selected.get('recognition_state') != 'model_accepted' or not _plate(best.get('plate'))
+                 or (not has_images and best.get('plate') == old.get('best_reading')
+                     and any(frame.get('image') for frame in old.get('frames', []) if isinstance(frame, dict)))))
+    if cached is not None and (selected is None or prefer_accepted):
+        retained = cached
+        selected = dict(cached['track'])
+        selected['best_guess'] = dict(plate=selected.get('best_reading'), score=selected.get('model_score'))
     if selected is None:
         raise DiagnosticUnavailable(404, "Track evidence is no longer available")
     reasons = [_label(item) for item in (selected.get("gate_reasons") if isinstance(selected.get("gate_reasons"), list) else [])[:24]]
     reasons = [item for item in reasons if item]
+    if retained is not None:
+        reasons = reasons[:23]
+        reasons.append('Archived recorded evidence at source position '
+            + str(_integer(retained.get('video_position_ms'))) + ' ms; this is a prior '
+            + ('model-accepted' if selected.get('recognition_state') == 'model_accepted' else 'diagnostic')
+            + ' snapshot, not independent verification or a new OCR observation')
     frames, image_omitted = [], False
     for row in (selected.get("frames") if isinstance(selected.get("frames"), list) else [])[:8]:
         if not isinstance(row, dict):
@@ -166,11 +233,14 @@ def diagnostic_view(snapshot, models, session_id, track_id, *, enabled):
              "gate_reasons": reasons, "frames": frames, "candidates": _candidates(selected.get("candidates")),
              "reconstruction": _reconstruction(selected.get("reconstruction"))}
     model_view = {key: (_label(value, 128) or None) for key, value in models.items() if key in _MODELS}
-    stages = debug.get("stage_ms") if isinstance(debug.get("stage_ms"), dict) else {}
+    stages = (retained.get('stage_ms') if retained is not None else
+              debug.get("stage_ms") if isinstance(debug, dict) else {})
+    stages = stages if isinstance(stages, dict) else {}
     stage_view = {key: number for key, value in stages.items()
                   if key in _STAGES and (number := _number(value)) is not None and number >= 0}
     result = {"schema_version": "1.0", "source_mode": "recorded", "session_id": session_id,
-              "camera_id": camera_id, "video_position_ms": _integer(snapshot.get("video_position_ms")),
+              "camera_id": camera_id, "video_position_ms": _integer(
+                  retained.get('video_position_ms') if retained is not None else snapshot.get("video_position_ms")),
               "models": model_view, "stage_ms": stage_view, "track": track}
     if len(json.dumps(result, allow_nan=False).encode()) > MAX_DIAGNOSTICS_BYTES:
         raise DiagnosticUnavailable(503, "Diagnostic display budget exceeded")
